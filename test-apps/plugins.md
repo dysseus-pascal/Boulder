@@ -414,12 +414,15 @@ What a plugin has to work with:
   Needs `Location`; refused, it calls your error callback. Watches end with the session.
 - **`localStorage`** for state, shared with your app's PKJS. A plugin is started fresh for each
   request, so don't keep state in variables.
+- **`Pebble.secureStorage`** for credentials (tokens, API keys): `await getItem(key)`,
+  `setItem(key, value)` and `removeItem(key)`, encrypted by the phone's keystore. Private to your
+  plugin (PKJS can't read it) and deleted when the app is removed.
 - **`Pebble.refreshSources(["finance/stock"])`** when data changes outside a request (for example,
   the user added a ticker on the settings page).
 - **`Pebble.oauth`** for sign-in with OAuth providers, without the plugin ever holding a client
   secret. Declare the connector in the manifest (`"oauth": { "todoist": {} }`), then
   `await Pebble.oauth.authorize("todoist")` for a token and
-  `Pebble.oauth.refresh("todoist", broker_refresh)` to renew it. The connector has to be registered
+  `Pebble.oauth.refresh("todoist", broker_refresh)` to renew it; keep both in `Pebble.secureStorage`. The connector has to be registered
   with the Pebble app store (see the `todoist/` example).
 - Nothing else: unlike PKJS, a plugin has no WebView APIs.
 

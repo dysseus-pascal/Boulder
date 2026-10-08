@@ -34,6 +34,7 @@ import io.rebble.libpebblecommon.disk.pbw.toLockerEntry
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.permissions.AppPermissionStatus
 import io.rebble.libpebblecommon.permissions.AppPermissions
+import io.rebble.libpebblecommon.storage.pluginSecureStorage
 import io.rebble.libpebblecommon.permissions.InstallReview
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
 import io.rebble.libpebblecommon.permissions.isLegacy
@@ -90,6 +91,7 @@ class Locker(
     private val coroutineScope: LibPebbleCoroutineScope,
     private val settings: Settings,
     private val permissions: AppPermissions,
+    private val appContext: AppContext,
 ) : LockerApi, AppFileReader {
     private val lockerEntryDao = database.lockerEntryDao()
     private val timelinePinDao = database.timelinePinDao()
@@ -205,7 +207,10 @@ class Locker(
         }
     }
 
-    override suspend fun removeApp(id: Uuid): Boolean {
+    override suspend fun removeApp(id: Uuid): Boolean = removeApp(id, keepSecrets = false)
+
+    /** [keepSecrets] for an app that is about to be reinstalled. */
+    suspend fun removeApp(id: Uuid, keepSecrets: Boolean): Boolean {
         val lockerEntry = lockerEntryDao.getEntry(id)
         if (lockerEntry == null) {
             logger.e { "removeApp: not found: $id" }
@@ -223,6 +228,7 @@ class Locker(
         }
         lockerEntryDao.markForDeletion(id)
         timelinePinDao.markAllForDeletionByParentIdsWithReminders(listOf(id), timelineReminderDao)
+        if (!keepSecrets) deletePluginSecrets(listOf(id))
         if (lockerEntry.sideloaded) {
             logger.d { "Requesting locker sync after removing sideloaded app" }
             // If it was sideloaded, trigger a resync (in case the same app is in the locker).
@@ -321,7 +327,18 @@ class Locker(
         logger.d { "deleting: $toDelete" }
         lockerEntryDao.markAllForDeletion(toDelete)
         timelinePinDao.markAllForDeletionByParentIdsWithReminders(toDelete, timelineReminderDao)
+        deletePluginSecrets(toDelete)
         performCacheCleanup()
+    }
+
+    private suspend fun deletePluginSecrets(ids: List<Uuid>) = ids.forEach { id ->
+        try {
+            pluginSecureStorage(appContext, id).destroy()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.w(e) { "Couldn't delete secrets for $id" }
+        }
     }
 
     /**

@@ -1,7 +1,7 @@
 {
   "name": "notion",
   "author": "Pebble",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "pebble": {
     "displayName": "Notion",
     "uuid": "c7ad904e-40d5-4cb5-8f13-1d1d3c6a7e21",

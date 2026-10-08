@@ -1,7 +1,7 @@
 {
   "name": "hue",
   "author": "Pebble",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "pebble": {
     "displayName": "Hue",
     "uuid": "6f9c1a44-3d1e-4b8a-9c2f-0d5e7a1b3c40",

@@ -5,7 +5,8 @@
 // everything this plugin needs and is still served by current bridge firmware.
 //
 // Pairing is the bridge's physical link button: POST /api returns error type 101 until the
-// button has been pressed, then hands back a username that is persisted in localStorage.
+// button has been pressed, then hands back a username (the bridge's API key), kept in
+// Pebble.secureStorage.
 
 var LINK_BUTTON_NOT_PRESSED = 101;
 
@@ -24,13 +25,14 @@ async function http(url, options) {
 }
 
 var STORE_KEY = 'hue';
+var USERNAME_KEY = 'hue_username';
 
 function state() {
   var s;
   try { s = JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { s = {}; }
   // `hidden` is the set of room ids the user switched off in the config page. They stay on the
   // bridge; this plugin just stops exposing them.
-  return { ip: s.ip || null, username: s.username || null, hidden: s.hidden || [] };
+  return { ip: s.ip || null, hidden: s.hidden || [] };
 }
 
 function saveState(next) {
@@ -55,17 +57,17 @@ async function bridgeIp() {
   var current = state();
   if (current.ip) return current.ip;
   var ip = await discoverBridge();
-  if (ip) saveState({ ip: ip, username: current.username });
+  if (ip) saveState({ ip: ip });
   return ip;
 }
 
 async function api(path, method, body) {
-  var current = state();
   var ip = await bridgeIp();
   if (!ip) return { ok: false, error: 'no bridge found on this network' };
-  if (!current.username) return { ok: false, error: 'not paired' };
+  var username = await Pebble.secureStorage.getItem(USERNAME_KEY);
+  if (!username) return { ok: false, error: 'not paired' };
   var response = await http(
-    'http://' + ip + '/api/' + current.username + path,
+    'http://' + ip + '/api/' + username + path,
     { method: method || 'GET', body: body ? JSON.stringify(body) : null }
   );
   if (!response.ok) return { ok: false, error: response.error || ('HTTP ' + response.status) };
@@ -92,7 +94,8 @@ async function pair() {
     return { ok: false, code: code, message: first.error.description };
   }
   if (first && first.success && first.success.username) {
-    saveState({ ip: ip, username: first.success.username });
+    await Pebble.secureStorage.setItem(USERNAME_KEY, first.success.username);
+    saveState({ ip: ip });
     return { ok: true, text: 'Paired with bridge at ' + ip + '.' };
   }
   return { ok: false, code: 'UNKNOWN', message: 'unexpected pairing response' };
@@ -285,11 +288,11 @@ Pebble.registerConfigHandler(async function (message, respond) {
   var current = state();
   switch (message && message.type) {
     case 'status':
-      respond({ ip: current.ip, paired: !!current.username });
+      respond({ ip: current.ip, paired: !!(await Pebble.secureStorage.getItem(USERNAME_KEY)) });
       return;
     case 'discover': {
       var ip = await discoverBridge();
-      if (ip) saveState({ ip: ip, username: current.username });
+      if (ip) saveState({ ip: ip });
       respond({ ip: ip });
       return;
     }
@@ -334,7 +337,8 @@ Pebble.registerConfigHandler(async function (message, respond) {
       return;
     }
     case 'forget':
-      saveState({ ip: null, username: null });
+      await Pebble.secureStorage.removeItem(USERNAME_KEY);
+      saveState({ ip: null });
       Pebble.refreshSources(LIGHT_SOURCES);
       respond({ paired: false, ip: null });
       return;

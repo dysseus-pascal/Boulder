@@ -1,7 +1,7 @@
 {
   "name": "todoist",
   "author": "Pebble",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "pebble": {
     "displayName": "Todoist",
     "uuid": "0d520cba-326c-4a22-a269-d1ab1ae38977",

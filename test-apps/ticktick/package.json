@@ -1,7 +1,7 @@
 {
   "name": "ticktick",
   "author": "Pebble",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "pebble": {
     "displayName": "TickTick",
     "uuid": "b1740936-c2e8-4dd6-b4cf-a85058109ac0",

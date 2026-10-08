@@ -1,7 +1,7 @@
 // Todoist API v1 reminder destination.
 //
 // CoreApp's trusted HostedOAuth bridge performs sign-in and keeps Todoist's developer secret out
-// of this PBW. User tokens stay in this plugin UUID's private localStorage.
+// of this PBW. User tokens are kept in Pebble.secureStorage.
 
 var API_ROOT = 'https://api.todoist.com/api/v1';
 var TOKEN_KEY = 'todoist_access_token';
@@ -12,36 +12,42 @@ var MAX_PROJECT_PAGES = 10;
 var PROJECT_PAGE_SIZE = 200;
 var REMINDER_SOURCES = ['reminders/list', 'reminders/configured'];
 
-function accessToken() {
-  return String(localStorage.getItem(TOKEN_KEY) || '').trim();
+async function secureItem(key) {
+  return String(await Pebble.secureStorage.getItem(key) || '').trim();
 }
 
-function saveTokenBundle(bundle) {
+function accessToken() {
+  return secureItem(TOKEN_KEY);
+}
+
+async function saveTokenBundle(bundle) {
   var token = String(bundle && bundle.access_token || '').trim();
   if (!token) throw new Error('Todoist returned no access token.');
-  localStorage.setItem(TOKEN_KEY, token);
+  await Pebble.secureStorage.setItem(TOKEN_KEY, token);
   var brokerRefresh = String(bundle.broker_refresh || '').trim();
-  if (brokerRefresh) localStorage.setItem(BROKER_REFRESH_KEY, brokerRefresh);
-  else localStorage.removeItem(BROKER_REFRESH_KEY);
+  if (brokerRefresh) await Pebble.secureStorage.setItem(BROKER_REFRESH_KEY, brokerRefresh);
+  else await Pebble.secureStorage.removeItem(BROKER_REFRESH_KEY);
   var expiresIn = Number(bundle.expires_in || 0);
   if (isFinite(expiresIn) && expiresIn > 0) {
     localStorage.setItem(EXPIRES_AT_KEY, String(Date.now() + expiresIn * 1000));
-  } else localStorage.removeItem(EXPIRES_AT_KEY);
+  } else {
+    localStorage.removeItem(EXPIRES_AT_KEY);
+  }
 }
 
-function clearTokens() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(BROKER_REFRESH_KEY);
+async function clearTokens() {
+  await Pebble.secureStorage.removeItem(TOKEN_KEY);
+  await Pebble.secureStorage.removeItem(BROKER_REFRESH_KEY);
   localStorage.removeItem(EXPIRES_AT_KEY);
 }
 
 async function ensureAccessToken() {
-  var token = accessToken();
+  var token = await accessToken();
   var expiresAt = Number(localStorage.getItem(EXPIRES_AT_KEY) || 0);
   if (token && (!expiresAt || Date.now() < expiresAt - 60000)) return token;
-  var brokerRefresh = String(localStorage.getItem(BROKER_REFRESH_KEY) || '').trim();
+  var brokerRefresh = await secureItem(BROKER_REFRESH_KEY);
   if (!brokerRefresh) return token;
-  saveTokenBundle(await Pebble.oauth.refresh('todoist', brokerRefresh));
+  await saveTokenBundle(await Pebble.oauth.refresh('todoist', brokerRefresh));
   return accessToken();
 }
 
@@ -120,8 +126,8 @@ function booleanReading(value) {
   };
 }
 
-function respondConfigured(respond) {
-  var configured = accessToken().length > 0;
+async function respondConfigured(respond) {
+  var configured = (await accessToken()).length > 0;
   respond.data({
     validUntilMs: Date.now() + 60 * 1000,
     instances: [{
@@ -193,14 +199,14 @@ async function loadProjects(tokenOverride, limitPages) {
 
 Pebble.registerSourceHandler(async function (request, respond) {
   if (request.category === 'reminders' && request.item === 'configured') {
-    respondConfigured(respond);
+    await respondConfigured(respond);
     return;
   }
   if (request.category !== 'reminders' || request.item !== 'list') {
     respond.error('INVALID_REQUEST', 'Unsupported Todoist source.');
     return;
   }
-  if (!accessToken()) {
+  if (!(await accessToken())) {
     respond.error('AUTH_REQUIRED', 'Connect Todoist in the plugin gear page.');
     return;
   }
@@ -289,7 +295,7 @@ Pebble.registerActionHandler(async function (request, respond) {
     respond.error('INVALID_REQUEST', 'Unsupported Todoist action.');
     return;
   }
-  if (!accessToken()) {
+  if (!(await accessToken())) {
     respond.error('AUTH_REQUIRED', 'Connect Todoist in the plugin gear page.');
     return;
   }
@@ -368,9 +374,11 @@ Pebble.registerActionHandler(async function (request, respond) {
 
 Pebble.registerConfigHandler(async function (message, respond) {
   switch (message && message.type) {
-    case 'status':
-      respond({ configured: accessToken().length > 0, ready: accessToken().length > 0 });
+    case 'status': {
+      var connected = (await accessToken()).length > 0;
+      respond({ configured: connected, ready: connected });
       return;
+    }
 
     case 'connect': {
       var bundle;
@@ -391,7 +399,7 @@ Pebble.registerConfigHandler(async function (message, respond) {
         }
         return;
       }
-      try { saveTokenBundle(bundle); }
+      try { await saveTokenBundle(bundle); }
       catch (error) {
         respond({ error: error.message || 'Todoist returned no access token.' });
         return;
@@ -402,7 +410,7 @@ Pebble.registerConfigHandler(async function (message, respond) {
     }
 
     case 'testConnection': {
-      if (!accessToken()) {
+      if (!(await accessToken())) {
         respond({ error: 'Connect Todoist first.', configured: false });
         return;
       }
@@ -422,7 +430,7 @@ Pebble.registerConfigHandler(async function (message, respond) {
     }
 
     case 'unlink':
-      clearTokens();
+      await clearTokens();
       Pebble.refreshSources(REMINDER_SOURCES);
       respond({ configured: false, ready: false });
       return;

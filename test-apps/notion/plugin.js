@@ -1,10 +1,12 @@
 // Notion note destination plugin.
 //
-// CoreApp's trusted HostedOAuth bridge performs sign-in. This uses Notion's additive page
+// CoreApp's trusted HostedOAuth bridge performs sign-in; credentials are kept in
+// Pebble.secureStorage. This uses Notion's additive page
 // and block APIs only: create mode creates one child page per request, while append mode inserts a
 // new paragraph at the configured start/end position without retrieving or replacing page content.
 
 var STORE_KEY = 'notion';
+var SECRETS_KEY = 'notion_auth';
 var API_ROOT = 'https://api.notion.com/v1';
 var NOTION_VERSION = '2026-03-11';
 var DESTINATION_SOURCES = ['notes/destination', 'notes/configured'];
@@ -115,6 +117,34 @@ function normalizeCompletedReceipts(value, nowMs) {
   }).slice(0, MAX_COMPLETED_RECEIPTS);
 }
 
+// Credentials are read once per session (see loadSecrets) so that state() can stay synchronous.
+var secrets = { token: null, brokerRefresh: null };
+
+async function loadSecrets() {
+  try { secrets = JSON.parse(await Pebble.secureStorage.getItem(SECRETS_KEY)) || secrets; }
+  catch (error) {}
+}
+
+async function saveSecrets(changes) {
+  secrets = {
+    token: typeof changes.token === 'string' && changes.token ? changes.token : null,
+    brokerRefresh: typeof changes.brokerRefresh === 'string' && changes.brokerRefresh ?
+      changes.brokerRefresh : null,
+  };
+  if (secrets.token || secrets.brokerRefresh) {
+    await Pebble.secureStorage.setItem(SECRETS_KEY, JSON.stringify(secrets));
+  } else {
+    await Pebble.secureStorage.removeItem(SECRETS_KEY);
+  }
+}
+
+function persist(value) {
+  var stored = Object.assign({}, value);
+  delete stored.token;
+  delete stored.brokerRefresh;
+  localStorage.setItem(STORE_KEY, JSON.stringify(stored));
+}
+
 function state() {
   var raw = null;
   var saved;
@@ -124,9 +154,8 @@ function state() {
   } catch (error) { saved = {}; }
   var storedReceipts = JSON.stringify(Array.isArray(saved.completedReceipts) ? saved.completedReceipts : []);
   var result = emptyState();
-  result.token = typeof saved.token === 'string' && saved.token ? saved.token : null;
-  result.brokerRefresh = typeof saved.brokerRefresh === 'string' && saved.brokerRefresh ?
-    saved.brokerRefresh : null;
+  result.token = secrets.token;
+  result.brokerRefresh = secrets.brokerRefresh;
   result.expiresAt = isFinite(Number(saved.expiresAt)) && Number(saved.expiresAt) > 0 ?
     Number(saved.expiresAt) : null;
   result.authGeneration = typeof saved.authGeneration === 'string' ? saved.authGeneration : null;
@@ -147,7 +176,7 @@ function state() {
   // normalized state directly: calling saveState() here would recurse back through state().
   if (raw !== null && (migratedCompletedMutation ||
       storedReceipts !== JSON.stringify(result.completedReceipts))) {
-    localStorage.setItem(STORE_KEY, JSON.stringify(result));
+    persist(result);
   }
   return result;
 }
@@ -158,7 +187,7 @@ function saveState(changes) {
   next.destination = normalizeDestination(next.destination, null);
   next.mutation = normalizeMutation(next.mutation);
   next.completedReceipts = normalizeCompletedReceipts(next.completedReceipts);
-  localStorage.setItem(STORE_KEY, JSON.stringify(next));
+  persist(next);
   return next;
 }
 
@@ -179,6 +208,7 @@ async function currentAuthState() {
   if (!current.brokerRefresh) return current;
   var refreshed = tokenChanges(await Pebble.oauth.refresh('notion', current.brokerRefresh));
   if (!refreshed.brokerRefresh) refreshed.brokerRefresh = current.brokerRefresh;
+  await saveSecrets(refreshed);
   return saveState(refreshed);
 }
 
@@ -212,8 +242,9 @@ function stateWithAuthGeneration() {
   return current;
 }
 
-function clearState() {
+async function clearState() {
   var previous = state();
+  await saveSecrets({});
   var cleared = emptyState();
   // Retain only a fresh, non-secret tombstone so late callbacks cannot restore credentials.
   cleared.authGeneration = randomUuid();
@@ -223,7 +254,7 @@ function clearState() {
     cleared.mutation = previous.mutation;
   }
   cleared.completedReceipts = previous.completedReceipts;
-  localStorage.setItem(STORE_KEY, JSON.stringify(cleared));
+  persist(cleared);
   return cleared;
 }
 
@@ -635,7 +666,8 @@ function failureCouldHaveMutated(result) {
   return result.status === 0 || result.status >= 500;
 }
 
-Pebble.registerSourceHandler(function (request, respond) {
+Pebble.registerSourceHandler(async function (request, respond) {
+  await loadSecrets();
   var isConfiguredSource = request.category === 'notes' && request.item === 'configured';
   if (!isConfiguredSource && (request.category !== 'notes' || request.item !== 'destination')) {
     respond.error('PLUGIN_UNAVAILABLE', 'Unknown source ' + request.category + '/' + request.item + '.');
@@ -668,6 +700,7 @@ Pebble.registerSourceHandler(function (request, respond) {
 });
 
 Pebble.registerActionHandler(async function (request, respond) {
+  await loadSecrets();
   if (request.action !== 'create_note') {
     respond.error('PLUGIN_UNAVAILABLE', 'Unknown action ' + request.action + '.');
     return;
@@ -839,6 +872,7 @@ Pebble.registerActionHandler(async function (request, respond) {
 });
 
 Pebble.registerConfigHandler(async function (message, respond) {
+  await loadSecrets();
   var current = state();
   switch (message && message.type) {
     case 'status':
@@ -883,6 +917,7 @@ Pebble.registerConfigHandler(async function (message, respond) {
         respond({ error: checked.error, authRequired: checked.status === 401 || checked.status === 403 });
         return;
       }
+      await saveSecrets(oauthChanges);
       var next = saveState({
         token: oauthChanges.token,
         brokerRefresh: oauthChanges.brokerRefresh,
@@ -1022,7 +1057,7 @@ Pebble.registerConfigHandler(async function (message, respond) {
 
     case 'disconnect':
     case 'unlink':
-      clearState();
+      await clearState();
       Pebble.refreshSources(DESTINATION_SOURCES);
       var disconnected = { configured: false, ready: false };
       var disconnectedPending = mutationNotice(state().mutation);

@@ -17,6 +17,7 @@ import io.rebble.libpebblecommon.js.GEOLOCATION_JS
 import io.rebble.libpebblecommon.js.WEBSOCKET_JS
 import io.rebble.libpebblecommon.permissions.NetworkAccess
 import io.rebble.libpebblecommon.permissions.RunningApps
+import io.rebble.libpebblecommon.storage.pluginSecureStorage
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -178,6 +179,8 @@ class JsPlugin(
     /** Wired only when the plugin declares an `oauth` connector and the host has an OAuth API. */
     private val oauth = oauthApi?.takeIf { manifest.oauth.isNotEmpty() }
 
+    private val secureStorage = pluginSecureStorage(appContext, pluginUuid)
+
     private fun newSession(): Session {
         logger.d { "newSession(): $pluginUuid $name" }
         // XHR drives the JS side by evaluating statements that must land in order — readyState
@@ -209,10 +212,14 @@ class JsPlugin(
         val oauthBridge = oauth?.let {
             PluginOAuthJsBridge(scope, { js -> evals.trySend(js) }, pluginUuid.toString(), manifest.oauth.keys, it)
         }
+        val secureStorageBridge = PluginSecureStorageJsBridge(scope, { js -> evals.trySend(js) }, secureStorage)
         val geolocation = EngineGeolocation(scope, { js -> evals.trySend(js) }, pluginUuid)
-        val interfaces = listOfNotNull(Bridge(), xhr, webSockets, localStorage, geolocation, oauthBridge)
+        val interfaces = listOfNotNull(Bridge(), xhr, webSockets, localStorage, geolocation, oauthBridge, secureStorageBridge)
         val engine = JsEngine(appContext, scope, name, interfaces)
-        return Session(engine, xhr, webSockets, localStorage, geolocation, oauthBridge, evals, scope.launch { for (js in evals) engine.eval(js) })
+        return Session(
+            engine, xhr, webSockets, localStorage, geolocation, oauthBridge, secureStorageBridge, evals,
+            scope.launch { for (js in evals) engine.eval(js) },
+        )
     }
 
     private inner class Session(
@@ -222,6 +229,7 @@ class JsPlugin(
         private val localStorage: JsEngineLocalStorage,
         private val geolocation: EngineGeolocation,
         private val oauthBridge: PluginOAuthJsBridge?,
+        private val secureStorageBridge: PluginSecureStorageJsBridge,
         private val evals: Channel<String>,
         private val pump: Job,
     ) {
@@ -235,6 +243,7 @@ class JsPlugin(
             engine.eval(GEOLOCATION_JS)
             engine.eval(PLUGIN_HOST_JS)
             oauthBridge?.let { engine.eval(PluginOAuthJsBridge.INSTALL_JS) }
+            engine.eval(PluginSecureStorageJsBridge.INSTALL_JS)
             engine.eval(script())
         }
 
@@ -246,6 +255,7 @@ class JsPlugin(
             webSockets.close()
             geolocation.close()
             oauthBridge?.close()
+            secureStorageBridge.close()
             engine.stop()
         }
     }

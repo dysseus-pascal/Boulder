@@ -6,6 +6,7 @@ import io.rebble.libpebblecommon.WatchConfigFlow
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerWrapper
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -32,6 +33,7 @@ class BundledAppInstaller(
     private val watchConfig: WatchConfigFlow,
     private val settings: Settings,
     private val scope: LibPebbleCoroutineScope,
+    private val locker: Locker,
 ) {
     private val logger = Logger.withTag("BundledAppInstaller")
 
@@ -78,7 +80,7 @@ class BundledAppInstaller(
             SystemFileSystem.sink(path).buffered().use { it.write(pbw) }
             // The pbw's version label doesn't move between builds, so removing it first is what
             // makes the watch treat this as a new app and fetch the new binary.
-            if (installed) libPebble.removeApp(app.uuid)
+            if (installed) locker.removeApp(app.uuid, keepSecrets = true)
             val ok = libPebble.sideloadApp(path, loadOnWatch = false)
             logger.i { "installed ${app.fileName}: $ok" }
             if (!ok) return@forEach

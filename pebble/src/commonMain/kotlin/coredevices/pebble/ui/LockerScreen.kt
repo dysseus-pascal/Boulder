@@ -1094,7 +1094,7 @@ private fun NativePlugin.builtInIcon(): ImageVector = when (name) {
 private fun BuiltInPluginCarousel(plugins: List<NativePlugin>) {
     Column {
         Text(
-            "Built-in Plugins",
+            "My Plugins",
             fontSize = 24.sp,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
         )

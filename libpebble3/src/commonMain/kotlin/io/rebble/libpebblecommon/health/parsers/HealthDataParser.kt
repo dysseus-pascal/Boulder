@@ -31,7 +31,6 @@ data class ParsedHealthData(
  * - Version 12 - adds heart rate weight
  * - Firmware 4.3 (version 13) - adds heart rate zone
  * - Firmware 4.4 (version 14) - adds SpO2 (spo2_percent + spo2_quality)
- * - Newer versions only append fields - read as version 14
  *
  * Boulder: jedes Item und jede Minute wird aus einem eigenen Teilpuffer gelesen,
  * die Minute in der Laenge, die der Kopf nennt (sample_size). Ein Item, das sich
@@ -96,9 +95,7 @@ private fun leseSchrittItem(
     val recordLength = kopf.getUByte().toInt()
     val recordNum = kopf.getUByte().toInt()
 
-    // Eine neuere Fassung haengt nur Felder an (activity_algorithm.h, ALG_DLS_MINUTES_RECORD_VERSION):
-    // gelesen wird ihr bekannter Anfang, die Felder von Fassung 14.
-    val mindestens = MINUTE_BYTES[version] ?: MINUTE_BYTES.getValue(VERSION_FW_4_4).takeIf { version > VERSION_FW_4_4 }
+    val mindestens = MINUTE_BYTES[version]
     if (mindestens == null) {
         val grund = "Unsupported health steps record version=$version, skipping packet $i of $packetCount"
         logger.w { grund }
@@ -243,12 +240,10 @@ fun parseOverlayData(payload: ByteArray, itemSize: UShort, verworfen: (String) -
         val rawType = buffer.getUShort().toInt()
         val type = OverlayType.fromValue(rawType)
 
-        // Firmware clears bit 0 of the version for layout changes that aren't append-only
-        val compatibleVersion = (version.toInt() and 1) != 0
-        if (type == null || !compatibleVersion) {
+        if (type == null) {
             val remaining = itemSize.toInt() - 6 // already consumed 6 bytes
             if (remaining > 0) buffer.getBytes(remaining)
-            val grund = "Unsupported overlay type=$rawType version=$version, skipping packet $i"
+            val grund = "Unknown overlay type: $rawType, skipping packet $i"
             logger.w { grund }
             verworfen(grund)
             continue

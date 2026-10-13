@@ -45,14 +45,14 @@ die Regeln von Gravel, mit diesen Abweichungen:
   beheben: das Leeren macht die alte Fassung.
 - Firmware kommt aus den Releases von `dysseus-pascal/boulder-firmware`
   (`vX.Y.Z-bN`, siehe `GithubReleases.kt`).
-- Gravel-Stand: 0.3.4. Remote `upstream` ist Gravel
-  (`david-cant-code/pebble-app-degoogled`). Boulder teilt keine Git-Geschichte mit
-  ihm: neue Gravel-Fassungen kommen als Patch (`git diff <alt> <neu> | git apply -3`).
-  Nicht uebernommen wird Gravels Firmware-Auswahl (Changelog-Liste, Build-Picker,
-  Firmware-Kanal): sie boete Core-Builds an und ersetzte die Boulder-Firmware.
-  Neue Oberflaechentexte sagen "Boulder", nicht "Gravel".
+- Gravel-Stand: 0.3.3, der letzte. Boulder baut nicht mehr auf Gravel auf, weil
+  Gravel selbst ein Fork ist: keine Gravel-Fassungen mehr nachziehen (Entscheid vom
+  13.10.2026). Herkunft ist Gravel (`david-cant-code/pebble-app-degoogled`), ohne
+  gemeinsame Git-Geschichte. Nicht uebernommen wurde Gravels Firmware-Auswahl
+  (Changelog-Liste, Build-Picker, Firmware-Kanal): sie boete Core-Builds an und
+  ersetzte die Boulder-Firmware. Neue Oberflaechentexte sagen "Boulder", nicht "Gravel".
 - Texte nur in den Sprachen, die Gravel hat (derzeit Englisch).
-- Der Gravel-Teil unten ist Gravels Original, damit Patches billig bleiben. Was
+- Der Gravel-Teil unten ist Gravels Original (Stand 0.3.3); seine Regeln gelten weiter. Was
   dort F-Droid, `FdroidGuardrailsTest`, `version.properties` und `changelogs/`
   betrifft, gibt es in Boulder nicht.
 - Neue Eintraege in Health Connect bekommen den Zeitzonenversatz (`versatz(t)`

@@ -49,6 +49,11 @@ actual fun KieselsportScreen(topBarParams: TopBarParams, nav: NavBarNav) {
 }
 
 @Composable
+actual fun ZieleScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+    Text("Health is only available on Android.")
+}
+
+@Composable
 actual fun ProtokollScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     Text("Only available on Android.")
 }

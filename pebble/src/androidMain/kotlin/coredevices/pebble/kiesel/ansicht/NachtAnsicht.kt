@@ -37,6 +37,7 @@ import coredevices.pebble.R
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Gesundheitsdaten
 import coredevices.pebble.kiesel.Gesundheitsrechnung
+import coredevices.pebble.kiesel.Gesundheitsziele
 import coredevices.pebble.kiesel.Fenster
 import coredevices.pebble.kiesel.naechteSchnitt
 import coredevices.pebble.kiesel.Schlafurteil
@@ -105,7 +106,7 @@ internal fun NachtInhalt(d: Gesundheitsdaten.NachtDetail, blaettern: (Long) -> U
         // DIE DAUER GROSS: wer die Nacht oeffnet, will zuerst wissen, wie lang sie war.
         Kasten {
             Column(Modifier.padding(INNEN), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                val urteil = Gesundheitsrechnung.schlafurteil(n.schlafMinuten)
+                val urteil = Gesundheitsrechnung.schlafurteil(n.schlafMinuten, Gesundheitsziele.ziele(LocalContext.current).schlafMin)
                 // Das Urteil als Unterzeile des Hauptwerts in einem Ton, der Schrift traegt -
                 // das Pastell der Phase, das es vorher trug, kam hell auf 2,3:1.
                 Hauptwert(

@@ -103,6 +103,8 @@ internal data class GesundheitsStand(
     val wasserZiel: Drinktervall.Ziel?,
     val supplemente: SupCycle.Stand?,
     val koffein: List<Pair<Instant, Double>>,
+    /** Schritt- und Schlafziel aus "Goals" (Boulder 0.53), wie die Uhr sie bekommt. */
+    val ziele: Gesundheitsziele.Ziele = Gesundheitsziele.Ziele(),
     /** Drinktervall auf der Uhr: nur dann Wasser und Koffein (siehe [UhrApps]). */
     val mitDrinktervall: Boolean = true,
     /** SupCycle auf der Uhr: nur dann die Praeparate. */
@@ -191,6 +193,7 @@ internal interface Gesundheitsquelle {
     suspend fun maxpuls(ruhe: Int): Int
     fun wasserZiel(): Drinktervall.Ziel?
     fun supplemente(): SupCycle.Stand?
+    fun ziele(): Gesundheitsziele.Ziele = Gesundheitsziele.Ziele()
     /** Der Name eines Getraenks, das nur sein Koffein nennt. */
     val koffeinName: String
 }
@@ -232,6 +235,7 @@ private class Telefonquelle(private val context: Context, private val api: Healt
     override suspend fun maxpuls(ruhe: Int) = Herzgrenzen.maxpuls(context, ruhe)
     override fun wasserZiel() = Drinktervall.ziel(context)
     override fun supplemente() = SupCycle.heute(context)
+    override fun ziele() = Gesundheitsziele.ziele(context)
     override val koffeinName: String get() = context.getString(R.string.ks_h_koffein_n)
 }
 
@@ -481,6 +485,7 @@ internal object Gesundheitsdaten {
             wasserZiel = q.wasserZiel(),
             supplemente = q.supplemente(),
             koffein = koffein.sortedBy { it.first },
+            ziele = q.ziele(),
             mitDrinktervall = UhrApps.hat(apps, Drinktervall.UUID),
             mitSupCycle = UhrApps.hat(apps, SupCycle.UUID),
             eintraege = eintraege.sortedByDescending { it.zeit },

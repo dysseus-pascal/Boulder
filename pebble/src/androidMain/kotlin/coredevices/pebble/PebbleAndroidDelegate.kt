@@ -2,6 +2,7 @@ package coredevices.pebble
 
 import android.content.Context
 import coredevices.pebble.kiesel.GesundheitWidget
+import coredevices.pebble.kiesel.Gesundheitsziele
 import coredevices.pebble.kiesel.Kieselstrasse
 import coredevices.pebble.kiesel.Rechtefrage
 import kotlinx.coroutines.CoroutineScope
@@ -9,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import coredevices.util.Permission
+import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.flow.Flow
@@ -17,6 +19,7 @@ import kotlinx.coroutines.flow.map
 class PebbleAndroidDelegate(
     private val libPebble: LibPebble,
     private val context: Context,
+    private val healthDataApi: HealthDataApi,
 ) {
     // Boulder: die Sammler unten leben so lange wie der Prozess. Jedes Oeffnen
     // der App ruft hierher - ohne die Sperre kam jedes Mal ein weiterer dazu.
@@ -39,6 +42,8 @@ class PebbleAndroidDelegate(
         CoroutineScope(SupervisorJob() + Dispatchers.Main).launch { Rechtefrage.beimStart(context) }
         // Boulder: Schritte und Naechte taeglich festschreiben, bevor das Housekeeping sie nach 90 Tagen loescht.
         coredevices.pebble.kiesel.Tagesarchiv.plane(context)
+        // Boulder: die Ziele aus "Goals" wieder in der Datenbank Health, falls sie neu ist.
+        Gesundheitsziele.beimStart(context, healthDataApi)
     }
 
     /**

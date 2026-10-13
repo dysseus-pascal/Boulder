@@ -179,9 +179,10 @@ private fun groessen(gruppe: String, context: Context): List<Groesse> {
     val dauerKurz: (Double) -> String = { dauer(it).zahl }
     val ganz: (Double) -> String = { Formate.zahl(it, 0) }
     fun mit(einheit: String?): (Double) -> Formate.Angabe = { Formate.menge(it, einheit) }
+    val ziele = Gesundheitsziele.ziele(context)
     return when (gruppe) {
         "schlaf" -> listOf(
-            Groesse(Spalte.SCHLAF, R.string.ks_h_schlaf_n, ziel = Gesundheitsziele.SCHLAF_MIN.toDouble(), angabe = dauer, kurz = dauerKurz),
+            Groesse(Spalte.SCHLAF, R.string.ks_h_schlaf_n, ziel = ziele.schlafMin.toDouble(), angabe = dauer, kurz = dauerKurz),
             Groesse(Spalte.TIEF, R.string.ks_tr_n_tief, angabe = dauer, kurz = dauerKurz),
         )
         "herz" -> listOf(
@@ -196,7 +197,7 @@ private fun groessen(gruppe: String, context: Context): List<Groesse> {
             Groesse(Spalte.KOFFEIN, R.string.ks_h_koffein_n, angabe = mit("mg"), kurz = ganz),
         )
         else -> listOf(
-            Groesse(Spalte.SCHRITTE, R.string.ks_h_schritte, ziel = Gesundheitsziele.SCHRITTE.toDouble(), angabe = mit(null), kurz = { Formate.schritteKurz(it) }),
+            Groesse(Spalte.SCHRITTE, R.string.ks_h_schritte, ziel = ziele.schritte.toDouble(), angabe = mit(null), kurz = { Formate.schritteKurz(it) }),
             Groesse(Spalte.AKTIV, R.string.ks_h_aktiv, angabe = dauer, kurz = dauerKurz),
         )
     }

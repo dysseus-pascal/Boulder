@@ -17,6 +17,7 @@ import coredevices.pebble.kiesel.ansicht.SicherungAnsicht
 import coredevices.pebble.kiesel.ansicht.StackAnsicht
 import coredevices.pebble.kiesel.ansicht.TrendAnsicht
 import coredevices.pebble.kiesel.ansicht.WasserAnsicht
+import coredevices.pebble.kiesel.ansicht.ZieleAnsicht
 import org.jetbrains.compose.resources.stringResource
 import androidx.compose.ui.res.stringResource as androidString
 
@@ -131,6 +132,10 @@ private fun EinfacheSeite(topBarParams: TopBarParams, titelId: Int, inhalt: @Com
 @Composable
 actual fun KieselsportScreen(topBarParams: TopBarParams, nav: NavBarNav) =
     EinfacheSeite(topBarParams, R.string.ks_n_einstellungen) { KieselsportAnsicht() }
+
+@Composable
+actual fun ZieleScreen(topBarParams: TopBarParams, nav: NavBarNav) =
+    EinfacheSeite(topBarParams, R.string.ks_z_titel) { ZieleAnsicht() }
 
 @Composable
 actual fun ProtokollScreen(topBarParams: TopBarParams, nav: NavBarNav) =

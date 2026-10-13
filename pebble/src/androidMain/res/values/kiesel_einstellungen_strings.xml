@@ -22,4 +22,10 @@
     <string name="ks_e_kartenlinks">Map links to OsmAnd</string>
     <string name="ks_e_kartenlinks_text">Google Maps and geo: links open in OsmAnd</string>
     <string name="ks_e_nachtexport_keine">No night in the last 3 days</string>
+    <!-- Goals (Boulder 0.53): Schritt- und Schlafziel, auch fuer die Uhr (BoulderZiele). -->
+    <string name="ks_z_titel">Goals</string>
+    <string name="ks_z_zeile">%1$s steps · %2$s sleep</string>
+    <string name="ks_z_schritte">Steps per day</string>
+    <string name="ks_z_schlaf">Sleep per night</string>
+    <string name="ks_z_text">Health, the trends and the widget measure against these goals. With Boulder firmware V2 the watch uses them too.</string>
 </resources>

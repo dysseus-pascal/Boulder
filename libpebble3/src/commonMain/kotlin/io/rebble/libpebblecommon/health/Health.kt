@@ -297,6 +297,10 @@ class Health(
 
     override suspend fun setzeNachtHrvWennLeer(beginnUtc: Long, hrv: Int): Boolean = nachtDao.setzeHrvWennLeer(beginnUtc, hrv) > 0
 
+    override suspend fun setzeZiele(schritte: Int, schlafMin: Int) {
+        healthStatDao.insertOrReplace(BoulderZiele.zeile(schritte, schlafMin))
+    }
+
     override suspend fun getAverageSpo2(start: Long, end: Long): Double? =
         spo2Dao.getAverageSpo2(start, end)
 

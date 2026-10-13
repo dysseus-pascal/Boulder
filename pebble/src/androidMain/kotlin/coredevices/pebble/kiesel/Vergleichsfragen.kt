@@ -22,17 +22,10 @@ import java.time.LocalDate
  */
 internal object Vergleichsfragen {
 
-    /**
-     * Unter sieben Stunden - was Health "Very short night" nennt (eine Stunde
-     * unter dem Schlafziel). "Short night" heisst dort schon 7 bis 8 h; die
-     * Fragen sagen darum "very short", damit Wort und Grenze dieselben sind.
-     */
-    const val SEHR_KURZ_MIN = Gesundheitsziele.SCHLAF_MIN - 60
     /** Spaet ist nach 23 Uhr: 300 min ab 18 Uhr des Vortags, wie die Spalte [Spalte.EINSCHLAFEN]. */
     const val SPAET_AB = 300.0
     /** Ein aktiver Tag erreicht das Aktivziel. */
     val AKTIV_MIN = Gesundheitsziele.AKTIV_MIN.toDouble()
-    val SCHRITTE_VIEL = Gesundheitsziele.SCHRITTE.toDouble()
     const val KOFFEIN_VIEL = 200.0
 
     enum class Art { HRV_KURZ, RUHE_AKTIV, RUHE_SPAET, HRV_SCHRITTE, RUHE_WOCHENENDE, TIEF_KOFFEIN, SCHLAF_AKTIV, SCHRITTE_KURZ, KOFFEIN_KURZ }
@@ -47,7 +40,7 @@ internal object Vergleichsfragen {
         val naechte: Boolean,
         val mitKoffein: Boolean = false,
         /** Fuer den Tag des Zielwerts: Gruppe A (true), B (false) oder keine (null). */
-        val zuordnung: (Reihen) -> (LocalDate) -> Boolean?,
+        val zuordnung: (Reihen, Gesundheitsziele.Ziele) -> (LocalDate) -> Boolean?,
     ) {
         val gruppe: String get() = ziel.gruppe
     }
@@ -56,46 +49,50 @@ internal object Vergleichsfragen {
 
     private fun wochenende(t: LocalDate) = t.dayOfWeek == DayOfWeek.SATURDAY || t.dayOfWeek == DayOfWeek.SUNDAY
 
+    // "Very short" ist, was Health "Very short night" nennt ([Gesundheitsziele.Ziele.sehrKurzMin]) - "short"
+    // heisst dort schon die Stunde darueber. Viele Schritte sind das Schrittziel. Beide aus "Goals" (z).
     val FRAGEN: List<Frage> = listOf(
         // Dieselbe Nacht: sehr kurz geschlafen, und die HRV dieser Nacht.
-        Frage(Art.HRV_KURZ, Spalte.HRV, true, true) { d ->
-            val s = wert(d, Spalte.SCHLAF); { t -> s[t]?.let { it < SEHR_KURZ_MIN } }
+        Frage(Art.HRV_KURZ, Spalte.HRV, true, true) { d, z ->
+            val s = wert(d, Spalte.SCHLAF); { t -> s[t]?.let { it < z.sehrKurzMin } }
         },
         // Der Tag davor bewegt, und der Ruhepuls der Nacht danach.
-        Frage(Art.RUHE_AKTIV, Spalte.RUHEPULS, false, true) { d ->
+        Frage(Art.RUHE_AKTIV, Spalte.RUHEPULS, false, true) { d, _ ->
             val a = wert(d, Spalte.AKTIV); { t -> a[t.minusDays(1)]?.let { it >= AKTIV_MIN } }
         },
-        Frage(Art.RUHE_SPAET, Spalte.RUHEPULS, false, true) { d ->
+        Frage(Art.RUHE_SPAET, Spalte.RUHEPULS, false, true) { d, _ ->
             val e = wert(d, Spalte.EINSCHLAFEN); { t -> e[t]?.let { it > SPAET_AB } }
         },
-        Frage(Art.HRV_SCHRITTE, Spalte.HRV, true, true) { d ->
-            val s = wert(d, Spalte.SCHRITTE); { t -> s[t.minusDays(1)]?.let { it >= SCHRITTE_VIEL } }
+        Frage(Art.HRV_SCHRITTE, Spalte.HRV, true, true) { d, z ->
+            val s = wert(d, Spalte.SCHRITTE); { t -> s[t.minusDays(1)]?.let { it >= z.schritte } }
         },
-        Frage(Art.RUHE_WOCHENENDE, Spalte.RUHEPULS, false, true) { _ ->
+        Frage(Art.RUHE_WOCHENENDE, Spalte.RUHEPULS, false, true) { _, _ ->
             { t -> wochenende(t) }
         },
         // Der Kaffee des Vortags, und der Tiefschlaf der Nacht danach.
-        Frage(Art.TIEF_KOFFEIN, Spalte.TIEF, true, true, mitKoffein = true) { d ->
+        Frage(Art.TIEF_KOFFEIN, Spalte.TIEF, true, true, mitKoffein = true) { d, _ ->
             val k = wert(d, Spalte.KOFFEIN); { t -> k[t.minusDays(1)]?.let { it >= KOFFEIN_VIEL } }
         },
-        Frage(Art.SCHLAF_AKTIV, Spalte.SCHLAF, true, true) { d ->
+        Frage(Art.SCHLAF_AKTIV, Spalte.SCHLAF, true, true) { d, _ ->
             val a = wert(d, Spalte.AKTIV); { t -> a[t.minusDays(1)]?.let { it >= AKTIV_MIN } }
         },
         // Ein Tag nach sehr kurzer Nacht: wie viel man sich dann bewegt.
-        Frage(Art.SCHRITTE_KURZ, Spalte.SCHRITTE, true, false) { d ->
-            val s = wert(d, Spalte.SCHLAF); { t -> s[t]?.let { it < SEHR_KURZ_MIN } }
+        Frage(Art.SCHRITTE_KURZ, Spalte.SCHRITTE, true, false) { d, z ->
+            val s = wert(d, Spalte.SCHLAF); { t -> s[t]?.let { it < z.sehrKurzMin } }
         },
-        Frage(Art.KOFFEIN_KURZ, Spalte.KOFFEIN, false, false, mitKoffein = true) { d ->
-            val s = wert(d, Spalte.SCHLAF); { t -> s[t]?.let { it < SEHR_KURZ_MIN } }
+        Frage(Art.KOFFEIN_KURZ, Spalte.KOFFEIN, false, false, mitKoffein = true) { d, z ->
+            val s = wert(d, Spalte.SCHLAF); { t -> s[t]?.let { it < z.sehrKurzMin } }
         },
     )
 
     /** Die Fragen einer Trendseite; die mit Koffein nur, wenn Drinktervall protokolliert. */
     fun fuer(gruppe: String, mitKoffein: Boolean): List<Frage> = FRAGEN.filter { it.gruppe == gruppe && (mitKoffein || !it.mitKoffein) }
 
-    fun rechne(d: Reihen, gruppe: String, heute: LocalDate, mitKoffein: Boolean): List<Pair<Frage, Auswertung.Gruppenvergleich>> =
+    fun rechne(
+        d: Reihen, gruppe: String, heute: LocalDate, mitKoffein: Boolean, ziele: Gesundheitsziele.Ziele,
+    ): List<Pair<Frage, Auswertung.Gruppenvergleich>> =
         // Bis wohin gezaehlt wird, sagt die Zielspalte: Nachtwerte bis heute, Tageswerte nur bis gestern.
-        fuer(gruppe, mitKoffein).map { f -> f to Auswertung.vergleich(d[f.ziel].orEmpty(), f.ziel.grenze(heute), f.zuordnung(d)) }
+        fuer(gruppe, mitKoffein).map { f -> f to Auswertung.vergleich(d[f.ziel].orEmpty(), f.ziel.grenze(heute), f.zuordnung(d, ziele)) }
 
     /**
      * Ob eine Frage schon Wochenende gegen Werktag fuer [spalte] vergleicht.

@@ -29,7 +29,7 @@
     <string name="ks_trn_richtung">4 weeks vs 4 before: %1$s</string>
     <string name="ks_trn_erreicht">%1$d/%2$d nights ≥ %3$s</string>
     <string name="ks_trn_supp_schnitt">%1$s taken</string>
-    <!-- What makes a difference: "very short" wie das Urteil auf Health (unter 7 h). -->
+    <!-- What makes a difference: "very short" wie das Urteil auf Health (eine Stunde unter dem Schlafziel). -->
     <string name="ks_trv_hrv_kurz">HRV after very short nights</string>
     <string name="ks_trv_schritte_kurz">Steps after very short nights</string>
     <string name="ks_trv_koffein_kurz">Caffeine after very short nights</string>

@@ -565,6 +565,8 @@ class FakeLibPebble : LibPebble {
     override suspend fun getNachtHrv(beginnUtc: Long) = emptyList<io.rebble.libpebblecommon.database.entity.NachtHrvEntity>()
     // Die Vorschau hat keine Naechte: nichts zu aendern.
     override suspend fun setzeNachtHrvWennLeer(beginnUtc: Long, hrv: Int) = false
+
+    override suspend fun setzeZiele(schritte: Int, schlafMin: Int) {}
     override suspend fun getAverageSpo2(start: Long, end: Long): Double? = null
     override suspend fun getLatestSpo2Reading(): LatestSpo2? = null
     override suspend fun getActivitySessions(start: Long, end: Long) = emptyList<OverlayDataEntity>()

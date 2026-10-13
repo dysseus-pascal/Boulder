@@ -38,6 +38,10 @@ expect fun SicherungScreen(topBarParams: TopBarParams, nav: NavBarNav)
 @Composable
 expect fun KieselsportScreen(topBarParams: TopBarParams, nav: NavBarNav)
 
+// Boulder 0.53: Schritt- und Schlafziel, auch fuer die Uhr - aus den Einstellungen (Health).
+@Composable
+expect fun ZieleScreen(topBarParams: TopBarParams, nav: NavBarNav)
+
 @Composable
 expect fun ProtokollScreen(topBarParams: TopBarParams, nav: NavBarNav)
 

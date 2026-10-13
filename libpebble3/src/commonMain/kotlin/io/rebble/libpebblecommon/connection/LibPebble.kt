@@ -259,6 +259,13 @@ interface HealthDataApi {
      */
     suspend fun setzeNachtHrvWennLeer(beginnUtc: Long, hrv: Int): Boolean
 
+    /**
+     * Boulder: die Ziele fuer Schritte und Schlaf zur Uhr ([io.rebble.libpebblecommon.health.BoulderZiele]).
+     * Der Satz liegt in der Datenbank Health und geht mit ihr zur Uhr, auch spaeter,
+     * wenn sie jetzt nicht verbunden ist; derselbe Wert noch einmal geht nicht erneut.
+     */
+    suspend fun setzeZiele(schritte: Int, schlafMin: Int)
+
     /** Returns the average SpO2 percent for readings in the range, or null if none. */
     suspend fun getAverageSpo2(start: Long, end: Long): Double?
 

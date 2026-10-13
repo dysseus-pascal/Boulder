@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import coredevices.pebble.R
 import coredevices.pebble.kiesel.Auswertung
 import coredevices.pebble.kiesel.Formate
+import coredevices.pebble.kiesel.Gesundheitsziele
 import coredevices.pebble.kiesel.Reihen
 import coredevices.pebble.kiesel.Spalte
 import coredevices.pebble.kiesel.Vergleichsfragen
@@ -57,29 +58,38 @@ import kotlin.math.roundToLong
 /**
  * Die Worte einer Frage: der Titel und die Namen ihrer Gruppen A und B.
  * [uhrzeit] setzt eine Uhrzeit in die Namen ("Asleep after 11:00 PM") -
- * fest "23:00" stand auch bei 12 Stunden da.
+ * fest "23:00" stand auch bei 12 Stunden da. [zahl] setzt die Schwelle nach
+ * den Zielen ein ("After 10,000+ steps", "Under 7:00 h"), wie die Frage sie rechnet.
  */
-private class Texte(val frage: Int, val nameA: Int, val nameB: Int, val uhrzeit: LocalTime? = null)
+private class Texte(val frage: Int, val nameA: Int, val nameB: Int, val uhrzeit: LocalTime? = null, val zahl: String? = null)
 
 /** Spaet ab 23 Uhr - aus der Schwelle der Frage (Minuten ab 18 Uhr), damit Name und Rechnung nicht auseinanderlaufen. */
 private val SPAET_UHRZEIT: LocalTime = LocalTime.of(18, 0).plusMinutes(Vergleichsfragen.SPAET_AB.toLong())
 
-private fun texte(art: Vergleichsfragen.Art): Texte = when (art) {
-    Vergleichsfragen.Art.HRV_KURZ -> Texte(R.string.ks_trv_hrv_kurz, R.string.ks_v_unter_7, R.string.ks_v_ab_7)
+private fun texte(art: Vergleichsfragen.Art, ziele: Gesundheitsziele.Ziele): Texte = when (art) {
+    Vergleichsfragen.Art.HRV_KURZ -> Texte(R.string.ks_trv_hrv_kurz, R.string.ks_v_unter_kurz, R.string.ks_v_ab_kurz, zahl = sehrKurz(ziele))
     // "Quieter day" hiess auf Health die Pulsbelastung - hier zaehlen nur Schritt-Aktivminuten, also sagt die Gruppe das.
     Vergleichsfragen.Art.RUHE_AKTIV -> Texte(R.string.ks_v_ruhe_aktiv, R.string.ks_v_aktiver_tag, R.string.ks_v_ruhiger_tag)
     Vergleichsfragen.Art.RUHE_SPAET -> Texte(R.string.ks_v_ruhe_spaet, R.string.ks_trv_nach, R.string.ks_trv_vor, SPAET_UHRZEIT)
-    Vergleichsfragen.Art.HRV_SCHRITTE -> Texte(R.string.ks_v_hrv_schritte, R.string.ks_v_viele_schritte, R.string.ks_v_weniger_schritte)
+    Vergleichsfragen.Art.HRV_SCHRITTE -> Texte(
+        R.string.ks_v_hrv_schritte, R.string.ks_v_viele_schritte, R.string.ks_v_weniger_schritte, zahl = Formate.zahl(ziele.schritte.toLong()),
+    )
     Vergleichsfragen.Art.RUHE_WOCHENENDE -> Texte(R.string.ks_v_ruhe_wochenende, R.string.ks_v_wochenende, R.string.ks_v_unter_woche)
     Vergleichsfragen.Art.TIEF_KOFFEIN -> Texte(R.string.ks_v_tief_koffein, R.string.ks_v_viel_koffein, R.string.ks_v_wenig_koffein)
     Vergleichsfragen.Art.SCHLAF_AKTIV -> Texte(R.string.ks_v_schlaf_aktiv, R.string.ks_v_aktiver_tag, R.string.ks_v_ruhiger_tag)
-    Vergleichsfragen.Art.SCHRITTE_KURZ -> Texte(R.string.ks_trv_schritte_kurz, R.string.ks_v_unter_7, R.string.ks_v_ab_7)
-    Vergleichsfragen.Art.KOFFEIN_KURZ -> Texte(R.string.ks_trv_koffein_kurz, R.string.ks_v_unter_7, R.string.ks_v_ab_7)
+    Vergleichsfragen.Art.SCHRITTE_KURZ -> Texte(R.string.ks_trv_schritte_kurz, R.string.ks_v_unter_kurz, R.string.ks_v_ab_kurz, zahl = sehrKurz(ziele))
+    Vergleichsfragen.Art.KOFFEIN_KURZ -> Texte(R.string.ks_trv_koffein_kurz, R.string.ks_v_unter_kurz, R.string.ks_v_ab_kurz, zahl = sehrKurz(ziele))
 }
 
-/** Der Name einer Gruppe, mit der Uhrzeit im Format des Telefons, wo die Frage eine hat. */
+private fun sehrKurz(ziele: Gesundheitsziele.Ziele) = Formate.dauer(ziele.sehrKurzMin.toLong())
+
+/** Titel oder Name einer Gruppe, mit Uhrzeit (im Format des Telefons) oder Schwelle, wo die Frage eine hat. */
 @Composable
-private fun Texte.name(id: Int): String = uhrzeit?.let { stringResource(id, Formate.uhrzeit(LocalContext.current, it)) } ?: stringResource(id)
+private fun Texte.name(id: Int): String = when {
+    uhrzeit != null -> stringResource(id, Formate.uhrzeit(LocalContext.current, uhrzeit))
+    zahl != null -> stringResource(id, zahl)
+    else -> stringResource(id)
+}
 
 /** Die Einheit der Zielgroesse neben der Zahl; Schritte haben keine, Dauern bringt [Formate.dauerTeile] mit. */
 private fun einheit(ziel: Spalte): String? = when (ziel) {
@@ -104,8 +114,8 @@ private fun achsZahl(ziel: Spalte, w: Double): String =
 private fun unterschied(ziel: Spalte, u: Double): Formate.Angabe =
     if (dauer(ziel)) Formate.dauerUnterschied(u) else Formate.Angabe(Formate.vorzeichen(u), einheit(ziel))
 
-private class Ergebnis(val frage: Vergleichsfragen.Frage, val v: Auswertung.Gruppenvergleich) {
-    val texte = texte(frage.art)
+private class Ergebnis(val frage: Vergleichsfragen.Frage, val v: Auswertung.Gruppenvergleich, ziele: Gesundheitsziele.Ziele) {
+    val texte = texte(frage.art, ziele)
 }
 
 /**
@@ -121,8 +131,9 @@ internal fun Vergleiche(
     d: Reihen, gruppe: String, heute: LocalDate, mitKoffein: Boolean,
     ausstehend: List<Pair<String, String>> = emptyList(), zwischen: @Composable () -> Unit = {},
 ) {
-    val ergebnisse = remember(d, gruppe, heute, mitKoffein) {
-        Vergleichsfragen.rechne(d, gruppe, heute, mitKoffein).map { (f, v) -> Ergebnis(f, v) }
+    val ziele = Gesundheitsziele.ziele(LocalContext.current)
+    val ergebnisse = remember(d, gruppe, heute, mitKoffein, ziele) {
+        Vergleichsfragen.rechne(d, gruppe, heute, mitKoffein, ziele).map { (f, v) -> Ergebnis(f, v, ziele) }
     }
     val fertig = ergebnisse.filter { it.v.genug }
     // Wartend ist, was schon Tage in beiden Gruppen hat - ganz ohne Daten waere es nur Laerm.
@@ -141,7 +152,7 @@ internal fun Vergleiche(
     zwischen()
     val zeilen = wartend.map { e ->
         val n = minOf(e.v.a.size, e.v.b.size)
-        stringResource(e.texte.frage) to
+        e.texte.name(e.texte.frage) to
             stringResource(if (e.frage.naechte) R.string.ks_v_von_naechte else R.string.ks_v_von_tage, n, Auswertung.VERGLEICH_MINDESTENS)
     } + ausstehend
     if (zeilen.isNotEmpty()) {
@@ -186,7 +197,7 @@ private fun Vergleichseintrag(e: Ergebnis, oeffne: () -> Unit) {
     val wirkung = wirkungFarbe(e)
     Column(Modifier.fillMaxWidth().clickable(onClick = oeffne).padding(bottom = 14.dp)) {
         Zeile(
-            stringResource(w.frage),
+            w.name(w.frage),
             unter = if (v.klar) null else stringResource(R.string.ks_v_kein_unterschied),
             minHoehe = 48.dp, chevron = true,
             rechts = if (v.klar) { { Text(zahlMitEinheit(unterschied(f.ziel, v.unterschied)), color = wirkung, maxLines = 1) } } else null,
@@ -238,7 +249,7 @@ private fun Vergleichsblatt(e: Ergebnis, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         // Ohne eigenen Seitenrand: Detailkopf, Kopf und Zeile bringen ihre 14 dp mit - doppelt eingerueckt stand das Blatt schief.
         Column(Modifier.navigationBarsPadding().padding(bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Detailkopf(stringResource(w.frage))
+            Detailkopf(w.name(w.frage))
             Column(Modifier.padding(horizontal = INNEN), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 // Wie ein Hauptwert, aber die Zahl im Urteil - Hauptwert kennt keine Zahlfarbe.
                 Text(

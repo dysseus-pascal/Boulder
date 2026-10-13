@@ -83,7 +83,7 @@ internal fun Gesundheitsrechnung.tageszeit(uhrzeit: LocalTime): Tageszeit = when
     else -> Tageszeit.ABEND
 }
 
-internal fun Gesundheitsrechnung.schlafurteil(minuten: Int, ziel: Int = Gesundheitsziele.SCHLAF_MIN): Schlafurteil = when {
+internal fun Gesundheitsrechnung.schlafurteil(minuten: Int, ziel: Int): Schlafurteil = when {
     minuten >= ziel -> Schlafurteil.AUSGERUHT
     minuten >= ziel - 60 -> Schlafurteil.KURZ
     else -> Schlafurteil.SEHR_KURZ
@@ -105,7 +105,7 @@ internal fun Gesundheitsrechnung.tagesSatz(stand: GesundheitsStand, jetzt: Local
     }
     return Tagessatzdaten(
         tageszeit = tageszeit(jetzt.toLocalTime()),
-        urteil = n?.let { schlafurteil(it.schlafMinuten) },
+        urteil = n?.let { schlafurteil(it.schlafMinuten, stand.ziele.schlafMin) },
         schlafMinuten = n?.schlafMinuten,
         ruhe = n?.let { ruhepulsUrteil(it.ruhepuls, stand.ruhepulsWoche) },
         durchgeschlafen = wach != null && wach < Gesundheitsziele.DURCHGESCHLAFEN_MIN,

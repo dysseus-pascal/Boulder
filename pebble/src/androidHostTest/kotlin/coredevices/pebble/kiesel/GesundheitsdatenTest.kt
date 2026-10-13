@@ -183,7 +183,7 @@ class GesundheitsdatenTest {
     private fun widgetteil(s: GesundheitsStand) = listOf(
         s.schritte, s.aktivMinuten, s.meter, vergleichbar(s.nacht), s.ruhepulsWoche, s.wocheSchlaf,
         s.wasserMl, s.glaeser, s.wasserZiel, s.supplemente, s.koffein, s.mitDrinktervall, s.mitSupCycle,
-        s.eintraege, s.glasEintraege, s.gestern, s.gesternGlaeser,
+        s.eintraege, s.glasEintraege, s.gestern, s.gesternGlaeser, s.ziele,
     )
 
     private object Woerter : Texte {

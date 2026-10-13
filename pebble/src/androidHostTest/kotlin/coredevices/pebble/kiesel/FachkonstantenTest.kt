@@ -42,8 +42,9 @@ class FachkonstantenTest {
 
     @Test
     fun ziele() {
-        assertEquals(10_000L, Gesundheitsziele.SCHRITTE)
-        assertEquals(480, Gesundheitsziele.SCHLAF_MIN)
+        // Die Vorgabe ohne Einstellung unter "Goals" - dieselbe wie auf der Uhr (BoulderZiele).
+        assertEquals(10_000, Gesundheitsziele.Ziele().schritte)
+        assertEquals(480, Gesundheitsziele.Ziele().schlafMin)
         assertEquals(30, Gesundheitsziele.AKTIV_MIN)
         assertEquals(10, Gesundheitsziele.DURCHGESCHLAFEN_MIN)
         assertEquals(8, Gesundheitsziele.WASSER_GLAESER)
@@ -66,7 +67,7 @@ class FachkonstantenTest {
         assertEquals(1.25, Auswertung.MEDIAN_STREUT)
         assertEquals(5, Auswertung.VERGLEICH_MINDESTENS)
         assertEquals(3, Auswertung.SEITE_MINDESTENS)
-        assertEquals(Gesundheitsziele.SCHLAF_MIN - 60, Vergleichsfragen.SEHR_KURZ_MIN)
+        assertEquals(7 * 60, Gesundheitsziele.Ziele().sehrKurzMin, "eine Stunde unter dem Schlafziel")
     }
 
     @Test

@@ -191,7 +191,7 @@ private val MINUS: ImageVector by lazy {
  * gross; der Wert steht fett mit kleiner Einheit wie jede Zahl der App.
  */
 @Composable
-private fun Stufer(
+internal fun Stufer(
     titel: String,
     werte: List<Int>,
     aktuell: Int,

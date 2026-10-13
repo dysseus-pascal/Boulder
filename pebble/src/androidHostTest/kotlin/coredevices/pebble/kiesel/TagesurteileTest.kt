@@ -27,11 +27,12 @@ class TagesurteileTest {
         schritte: Long = 3860, nacht: Nacht? = nacht(500), puls: List<Pair<Long, Int>> = listOf(1L to 68),
         ruhepulsWoche: List<Int> = emptyList(), tagesherz: List<Gesundheitsrechnung.Tagesherz> = emptyList(),
         supplemente: SupCycle.Stand? = null, mitSupCycle: Boolean = true,
+        ziele: Gesundheitsziele.Ziele = Gesundheitsziele.Ziele(),
     ) = GesundheitsStand(
         schritte = schritte, aktivMinuten = 22, meter = 2700.0, wocheSchritte = emptyList(), nacht = nacht,
         ruhepulsWoche = ruhepulsWoche, wocheSchlaf = emptyList(), puls = puls, spo2 = emptyList(),
         wasserMl = 0, glaeser = emptyList(), wasserZiel = null, supplemente = supplemente,
-        koffein = emptyList(), letzteDaten = null, tagesherz = tagesherz, mitSupCycle = mitSupCycle,
+        koffein = emptyList(), letzteDaten = null, tagesherz = tagesherz, mitSupCycle = mitSupCycle, ziele = ziele,
     )
 
     private val tag = LocalDate.of(2026, 10, 2)
@@ -48,10 +49,25 @@ class TagesurteileTest {
 
     @Test
     fun schlafurteil_nach_den_schwellen() {
-        assertEquals(Schlafurteil.AUSGERUHT, g.schlafurteil(480))
-        assertEquals(Schlafurteil.KURZ, g.schlafurteil(479))
-        assertEquals(Schlafurteil.KURZ, g.schlafurteil(420))
-        assertEquals(Schlafurteil.SEHR_KURZ, g.schlafurteil(419))
+        assertEquals(Schlafurteil.AUSGERUHT, g.schlafurteil(480, 480))
+        assertEquals(Schlafurteil.KURZ, g.schlafurteil(479, 480))
+        assertEquals(Schlafurteil.KURZ, g.schlafurteil(420, 480))
+        assertEquals(Schlafurteil.SEHR_KURZ, g.schlafurteil(419, 480))
+        // Mit 7:00 h unter "Goals" verschieben sich beide Grenzen - wie bh_schlafurteil auf der Uhr.
+        assertEquals(Schlafurteil.AUSGERUHT, g.schlafurteil(420, 420))
+        assertEquals(Schlafurteil.KURZ, g.schlafurteil(360, 420))
+        assertEquals(Schlafurteil.SEHR_KURZ, g.schlafurteil(359, 420))
+    }
+
+    @Test
+    fun ziele_aus_goals_gelten_im_satz_und_im_widget() {
+        val eigen = Gesundheitsziele.Ziele(schritte = 8_000, schlafMin = 420)
+        // 7:10 h: bei 8 h "short", mit 7 h unter "Goals" ausgeruht - wie die Uhr mit demselben Ziel.
+        assertEquals(Schlafurteil.KURZ, satz(stand(nacht = nacht(430)), um(13)).urteil)
+        assertEquals(Schlafurteil.AUSGERUHT, satz(stand(nacht = nacht(430), ziele = eigen), um(13)).urteil)
+        val blick = Widgetlage.blick(stand(ziele = eigen), um(13), ZoneId.systemDefault(), null, null, imperial = false) { "Slot $it" }
+        assertEquals(8_000.0, blick.schritteZiel)
+        assertEquals(420.0, blick.schlafZielMin)
     }
 
     @Test

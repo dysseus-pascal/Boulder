@@ -50,7 +50,8 @@ internal fun Schrittwoche(s: GesundheitsStand, trend: () -> Unit) {
     // Die Schrift der Bilder (labelSmall) auch fuer Zahlen und Tage um die Saeulen.
     val stil = MaterialTheme.typography.labelSmall.copy(color = grau)
     val titel = stringResource(R.string.ks_d_schritte_woche)
-    val zielText = stringResource(R.string.ks_h_ziel_zahl, Formate.schritteKurz(Gesundheitsziele.SCHRITTE))
+    val zielSchritte = s.ziele.schritte.toLong()
+    val zielText = stringResource(R.string.ks_h_ziel_zahl, Formate.schritteKurz(zielSchritte))
     // Fuer TalkBack die Woche in einem Satz, mit den genauen Zahlen statt "9.9k".
     val satz = "$titel, $zielText: " + s.wocheSchritte.joinToString(", ") { (tag, n) -> Formate.wochentagLang(tag.dayOfWeek) + " " + Formate.zahl(n) }
     Kasten {
@@ -59,7 +60,7 @@ internal fun Schrittwoche(s: GesundheitsStand, trend: () -> Unit) {
             Modifier.fillMaxWidth().clickable(onClick = trend).semantics { contentDescription = satz }.padding(start = 10.dp, end = 10.dp, bottom = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            val spitze = maxOf(Gesundheitsziele.SCHRITTE, s.wocheSchritte.maxOfOrNull { it.second } ?: 0L).toFloat()
+            val spitze = maxOf(zielSchritte, s.wocheSchritte.maxOfOrNull { it.second } ?: 0L).toFloat()
             s.wocheSchritte.forEachIndexed { i, (tag, schritte) ->
                 val letzte = i == s.wocheSchritte.lastIndex
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -69,13 +70,13 @@ internal fun Schrittwoche(s: GesundheitsStand, trend: () -> Unit) {
                         if (schritte > 0) Formate.schritteKurz(schritte) else "", Modifier.wrapContentWidth(unbounded = true),
                         style = stil, fontWeight = FontWeight.Normal, maxLines = 1, softWrap = false,
                     )
-                    val gruen = if (schritte >= Gesundheitsziele.SCHRITTE) voll else blass
+                    val gruen = if (schritte >= zielSchritte) voll else blass
                     // Mit der Schrift hoeher: die Zielbeschriftung steht im Bild und soll die Saeule nicht verdraengen.
                     Canvas(Modifier.fillMaxWidth().height(hoeheMitSchrift(64.dp))) {
                         drawRoundRect(leer, Offset.Zero, size, CornerRadius(4.dp.toPx()))
                         val h = size.height * (schritte / spitze)
                         if (h > 0) drawRoundRect(gruen, Offset(0f, size.height - h), Size(size.width, h), CornerRadius(4.dp.toPx()))
-                        val ziel = size.height * (1 - Gesundheitsziele.SCHRITTE / spitze)
+                        val ziel = size.height * (1 - zielSchritte / spitze)
                         // Halb in die Luecke zur Nachbarsaeule: so laeuft die Linie durch und liest sich nicht als gestrichelt.
                         drawLine(grau, Offset(-3.dp.toPx(), ziel), Offset(size.width + 3.dp.toPx(), ziel), 1.5.dp.toPx())
                         // Die Beschriftung rechts am Linienende wie in den Trends, ueber der Linie, wenn

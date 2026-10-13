@@ -142,7 +142,7 @@ internal object Widgetlage {
             jetzt = jetzt,
             schlafEnde = n?.aufwachen?.atZone(zone)?.toLocalDateTime(),
             schlafMin = n?.schlafMinuten?.toDouble(),
-            schlafZielMin = Gesundheitsziele.SCHLAF_MIN.toDouble(),
+            schlafZielMin = s.ziele.schlafMin.toDouble(),
             schlafWocheMin = Statistik.mittel(woche),
             erholsamAnteil = n?.let { Gesundheitsrechnung.erholsamAnteil(it.phasen) },
             ruhepuls = n?.ruhepuls?.toDouble(),
@@ -154,7 +154,7 @@ internal object Widgetlage {
             trainingKm = training?.km,
             trainingBeginn = training?.beginn,
             schritte = s.schritte.toDouble(),
-            schritteZiel = Gesundheitsziele.SCHRITTE.toDouble(),
+            schritteZiel = s.ziele.schritte.toDouble(),
             aktivMin = s.aktivMinuten.toDouble(),
             aktivZiel = Gesundheitsziele.AKTIV_MIN.toDouble(),
             // Ohne Drinktervall keine Wasserkachel und keine Mahnung (UhrApps).

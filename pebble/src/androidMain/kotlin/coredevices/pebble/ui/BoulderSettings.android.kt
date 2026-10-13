@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import coredevices.pebble.R
 import coredevices.pebble.health.frageAlleAkteRechte
 import coredevices.pebble.kiesel.Formate
+import coredevices.pebble.kiesel.Gesundheitsziele
 import coredevices.pebble.kiesel.Herzgrenzen
 import coredevices.pebble.kiesel.KieselEinstellungen
 import coredevices.pebble.kiesel.Kieselstrasse
@@ -75,6 +76,7 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
     val appSeite = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
 
     val k = remember(neu) { KieselEinstellungen.stand(context) }
+    val ziele = remember(neu) { Gesundheitsziele.ziele(context) }
     // Der Maximalpuls, mit dem gerechnet wird: ohne Einstellung der nach dem Alter, nicht die 190 der Uhr.
     val maximum by produceState<Herzgrenzen.Maximum?>(null, neu) { value = Herzgrenzen.maximum(context, null) }
     val zuletzt = Sichern.zuletzt(context)
@@ -92,6 +94,16 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
             keywords = "health connect permissions water supplements sleep",
             badge = if (mahnung.rechte) "!" else null,
             action = { scope.launch { frageAlleAkteRechte(context); neu++ } },
+        ),
+        basicSettingsActionItem(
+            title = stringResource(R.string.ks_z_titel),
+            description = stringResource(
+                R.string.ks_z_zeile, Formate.zahl(ziele.schritte.toLong()), Formate.dauer(ziele.schlafMin.toLong()),
+            ),
+            topLevelType = TopLevelType.Phone,
+            section = Section.Health,
+            keywords = "goals target steps sleep",
+            action = gehe(PebbleNavBarRoutes.ZieleRoute),
         ),
         // Gravels "Imperial Units" steht nur bei eingeschaltetem Tracking da, wirkt seit
         // Formate aber auf Sport und Widget. Ist er verborgen, steht derselbe Schalter

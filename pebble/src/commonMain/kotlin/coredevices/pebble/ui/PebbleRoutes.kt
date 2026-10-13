@@ -123,6 +123,9 @@ object PebbleNavBarRoutes {
     data object KieselsportRoute : NavBarRoute
 
     @Serializable
+    data object ZieleRoute : NavBarRoute
+
+    @Serializable
     data object ProtokollRoute : NavBarRoute
 
     @Serializable
@@ -296,6 +299,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composableWithAnimations<PebbleNavBarRoutes.KieselsportRoute>(viewModel) {
         KieselsportScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.ZieleRoute>(viewModel) {
+        ZieleScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.ProtokollRoute>(viewModel) {
         ProtokollScreen(topBarParams, nav)

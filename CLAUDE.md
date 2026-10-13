@@ -45,7 +45,7 @@ die Regeln von Gravel, mit diesen Abweichungen:
   beheben: das Leeren macht die alte Fassung.
 - Firmware kommt aus den Releases von `dysseus-pascal/boulder-firmware`
   (`vX.Y.Z-bN`, siehe `GithubReleases.kt`).
-- Gravel-Stand: 0.3.3. Remote `upstream` ist Gravel
+- Gravel-Stand: 0.3.4. Remote `upstream` ist Gravel
   (`david-cant-code/pebble-app-degoogled`). Boulder teilt keine Git-Geschichte mit
   ihm: neue Gravel-Fassungen kommen als Patch (`git diff <alt> <neu> | git apply -3`).
   Nicht uebernommen wird Gravels Firmware-Auswahl (Changelog-Liste, Build-Picker,

@@ -76,6 +76,7 @@ fun MyCollectionScreen(
         showScaled = sharedViewModel.showScaled.value,
         limit = 700,
         firmwareBuild = sharedViewModel.firmwareBuild.value,
+        ohneBedrock = sharedViewModel.ohneBedrock.value,
     )
     if (lockerEntries == null) {
         return

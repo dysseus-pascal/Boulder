@@ -2,6 +2,7 @@ package coredevices.pebble.firmware
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.days
@@ -238,6 +239,21 @@ class FirmwareReleaseSelectionTest {
         assertEquals(0, b1.compareTo(b1dev))
         // Eine neuere offizielle Grundlage bleibt neuer als jede Boulder-Nummer darauf.
         assertTrue(ReleaseTagVersion.from("v4.39.0")!! > b2)
+    }
+
+    @Test
+    fun boulderV2IstEineBoulderFassungAbPebble439() {
+        // Die erste Generation blieb auf v4.38 und zaehlt bis b26; V2 zaehlt weiter.
+        assertFalse(ReleaseTagVersion.from("v4.38.4-b26")!!.boulderV2)
+        assertTrue(ReleaseTagVersion.from("v4.41.0-b27")!!.boulderV2)
+        assertTrue(ReleaseTagVersion.from("v4.41.0-b27-3-gabcdef12")!!.boulderV2)
+        assertTrue(ReleaseTagVersion.from("v4.39.0-b30")!!.boulderV2)
+        assertTrue(ReleaseTagVersion.from("v5.0.0-b31")!!.boulderV2)
+        // Ohne "-bN": Pebbles eigene Fassung oder ein Entwicklungsbau, keine V2.
+        assertFalse(ReleaseTagVersion.from("v4.41.0")!!.boulderV2)
+        assertFalse(ReleaseTagVersion.from("v4.41.0-54-gb6a4b3df")!!.boulderV2)
+        // Jede V2-Fassung ist neuer als die erste Generation, auch mit kleinerer Nummer.
+        assertTrue(ReleaseTagVersion.from("v4.41.0-b1")!! > ReleaseTagVersion.from("v4.38.4-b26")!!)
     }
 
     @Test

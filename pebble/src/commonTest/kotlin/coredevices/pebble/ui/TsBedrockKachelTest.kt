@@ -53,6 +53,18 @@ class TsBedrockKachelTest {
     }
 
     @Test
+    fun boulderV2OhneKachel() {
+        // V2 hat Bedrock nicht mehr: weg wie auf einer anderen Uhr, ohne Hinweis auf eine Firmware.
+        val v2 = SystemApps.TimeStyleBedrock.wrap(0).asCommonApp(WatchType.EMERY, null, null, null, ohneBedrock = true)
+        assertFalse(v2.isCompatible)
+        assertFalse(v2.hasSettings())
+        assertFalse(system(v2).firmwareFehlt)
+        assertNull(v2.firmwareHinweis())
+        assertFalse(v2.imLockerZeigen(showIncompatible = false, showScaled = true))
+        assertEquals("Not Compatible with Pebble Time 2", v2.aufDerUhrText("Pebble Time 2", laeuft = false))
+    }
+
+    @Test
     fun aktivesZifferblattStehtAuchImKarussell() {
         // Der Fall vom Telefon des Nutzers: "nach Nutzung sortiert", Bedrock aktiv und
         // darum VORN - Gravel liess genau diesen Eintrag weg.

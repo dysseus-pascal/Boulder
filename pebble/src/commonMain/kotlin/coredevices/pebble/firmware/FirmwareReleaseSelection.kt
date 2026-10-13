@@ -40,6 +40,13 @@ data class ReleaseTagVersion(
      */
     val isFactoryLine: Boolean get() = componentCount >= 4
 
+    /**
+     * Boulder V2: eine Boulder-Fassung auf Pebbles v4.39 oder neuer. Die erste
+     * Generation blieb bis b26 auf v4.38; V2 zaehlt die b-Nummern weiter, die
+     * Nummer allein trennt die beiden also nicht.
+     */
+    val boulderV2: Boolean get() = boulder > 0 && (major > 4 || (major == 4 && minor >= 39))
+
     /** Suffixes are ignored: main-line release tags carry none, and recovery
      * suffixes on watch-reported versions are handled via isRecovery flags.
      * Boulder: nur die Nummer nach "-b" zaehlt mit, nach allen Ziffern. */

@@ -27,10 +27,19 @@ const val TS_BEDROCK_SCHRIFTEN_AB_BUILD = 24
 
 /**
  * Die Nummer N aus "v4.38.4-bN". Null, wenn es keine gibt: ein Entwicklungsbau
- * ohne "-bN" oder eine fremde Fassung - beides gilt als "unbekannt".
+ * ohne "-bN" oder eine fremde Fassung - beides gilt als "unbekannt". Null auch
+ * fuer Boulder V2, die das Zifferblatt nicht mehr hat ([tsOhneBedrock]).
  */
 fun tsFirmwareBuild(laufendeFassung: String?): Int? =
-    laufendeFassung?.let { ReleaseTagVersion.from(it) }?.boulder?.takeIf { it > 0 }
+    laufendeFassung?.let { ReleaseTagVersion.from(it) }?.takeUnless { it.boulderV2 }?.boulder?.takeIf { it > 0 }
+
+/**
+ * Boulder V2 hat TimeStyle Bedrock nicht mehr; das Original kommt aus dem
+ * Store. Dann fehlt die Kachel wie auf einer Uhr ohne emery, statt mit dem
+ * Hinweis auf eine Firmware dazustehen, die es nicht mehr bringt.
+ */
+fun tsOhneBedrock(laufendeFassung: String?): Boolean =
+    laufendeFassung?.let { ReleaseTagVersion.from(it) }?.boulderV2 == true
 
 /**
  * Was die Uhr mit TimeStyle Bedrock kann. UNBEKANNT GILT ALS NICHT FAEHIG:

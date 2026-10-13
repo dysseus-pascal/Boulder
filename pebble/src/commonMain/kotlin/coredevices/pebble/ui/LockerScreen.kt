@@ -100,6 +100,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.locker.AppType
 import io.rebble.libpebblecommon.locker.SystemApps
 import coredevices.pebble.timestyle.tsFirmwareBuild
+import coredevices.pebble.timestyle.tsOhneBedrock
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.CompletableDeferred
@@ -155,6 +156,8 @@ class SharedLockerViewModel : ViewModel() {
     // Boulder: der Build der Boulder-Firmware ("-bN") der zuletzt verbundenen Uhr; null = unbekannt.
     // Er entscheidet, ob TimeStyle Bedrock kompatibel ist und Einstellungen hat.
     val firmwareBuild = mutableStateOf<Int?>(null)
+    // Boulder V2 hat TimeStyle Bedrock nicht mehr (tsOhneBedrock): dann fehlt die Kachel ganz.
+    val ohneBedrock = mutableStateOf(false)
     val showWatchTypeDropdown = mutableStateOf(false)
     private val haveSetWatchType = mutableStateOf(false)
 
@@ -175,6 +178,7 @@ class SharedLockerViewModel : ViewModel() {
             haveSetWatchType.value = true
         }
         firmwareBuild.value = tsFirmwareBuild(lastConnectedWatch?.runningFwVersion)
+        ohneBedrock.value = tsOhneBedrock(lastConnectedWatch?.runningFwVersion)
         showWatchTypeDropdown.value = lastConnectedWatch !is ConnectedPebbleDevice
     }
 }
@@ -414,8 +418,11 @@ fun LockerScreen(
             showScaled = sharedViewModel.showScaled.value,
             limit = 25,
             firmwareBuild = sharedViewModel.firmwareBuild.value,
+            ohneBedrock = sharedViewModel.ohneBedrock.value,
         )
-        val activeWatchface = loadActiveWatchface(sharedViewModel.watchType.value, sharedViewModel.firmwareBuild.value)
+        val activeWatchface = loadActiveWatchface(
+            sharedViewModel.watchType.value, sharedViewModel.firmwareBuild.value, sharedViewModel.ohneBedrock.value,
+        )
         if (lockerEntries == null || activeWatchface == null || currentHearts == null) {
             // Don't render the screen at all until we've read the locker from db
             // (otherwise scrolling can get really confused while it's momentarily empty)

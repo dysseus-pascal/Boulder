@@ -169,6 +169,7 @@ fun loadLockerEntries(
     limit: Int,
     // Boulder: der Build der zuletzt verbundenen Uhr (SharedLockerViewModel) - fuer TimeStyle Bedrock.
     firmwareBuild: Int? = null,
+    ohneBedrock: Boolean = false,
 ): List<CommonApp>? {
     val libPebble = rememberLibPebble()
     val lockerQuery = remember(
@@ -196,10 +197,11 @@ fun loadLockerEntries(
         showIncompatible,
         showScaled,
         firmwareBuild,
+        ohneBedrock,
     ) {
         entries?.mapNotNull {
             val appstoreSource = it.findStoreSource(firestoreLockerContents, appstoreSources)
-            val app = it.asCommonApp(watchType, appstoreSource, categories[appstoreSource], firmwareBuild)
+            val app = it.asCommonApp(watchType, appstoreSource, categories[appstoreSource], firmwareBuild, ohneBedrock)
             app.takeIf { a -> a.imLockerZeigen(showIncompatible, showScaled) }
         }
     }
@@ -217,21 +219,21 @@ fun CommonApp.isHearted(): Boolean? {
 }
 
 @Composable
-fun loadActiveWatchface(watchType: WatchType, firmwareBuild: Int? = null): CommonApp? {
+fun loadActiveWatchface(watchType: WatchType, firmwareBuild: Int? = null, ohneBedrock: Boolean = false): CommonApp? {
     val libPebble = rememberLibPebble()
-    val fallback = loadLockerEntry(KICKSTART_APP_UUID, watchType, firmwareBuild)
+    val fallback = loadLockerEntry(KICKSTART_APP_UUID, watchType, firmwareBuild, ohneBedrock)
     val lockerEntry by libPebble.activeWatchface.collectAsState()
-    return lockerEntry?.load(watchType, firmwareBuild) ?: fallback
+    return lockerEntry?.load(watchType, firmwareBuild, ohneBedrock) ?: fallback
 }
 
 @Composable
-fun loadLockerEntry(uuid: Uuid?, watchType: WatchType, firmwareBuild: Int? = null): CommonApp? {
+fun loadLockerEntry(uuid: Uuid?, watchType: WatchType, firmwareBuild: Int? = null, ohneBedrock: Boolean = false): CommonApp? {
     if (uuid == null) {
         return null
     }
     val libPebble = rememberLibPebble()
     val lockerEntry by libPebble.getLockerApp(uuid).collectAsState(null)
-    return lockerEntry?.load(watchType, firmwareBuild)
+    return lockerEntry?.load(watchType, firmwareBuild, ohneBedrock)
 }
 
 @Composable
@@ -256,17 +258,17 @@ fun CommonApp.inMyCollection(): Boolean {
 }
 
 @Composable
-private fun LockerWrapper.load(watchType: WatchType, firmwareBuild: Int?): CommonApp? {
+private fun LockerWrapper.load(watchType: WatchType, firmwareBuild: Int?, ohneBedrock: Boolean): CommonApp? {
     val appstoreSources = appstoreSources()
     val firestoreLockerContents = firestoreLockerContents()
     val categories = appstoreCategories(properties.type, appstoreSources)
     if (appstoreSources == null || categories == null) {
         return null
     }
-    return remember(this, watchType, appstoreSources, firestoreLockerContents, firmwareBuild) {
+    return remember(this, watchType, appstoreSources, firestoreLockerContents, firmwareBuild, ohneBedrock) {
         val appstoreSource = findStoreSource(firestoreLockerContents, appstoreSources)
         logger.v { "appstoreSource = $appstoreSource" }
-        asCommonApp(watchType, appstoreSource, categories[appstoreSource], firmwareBuild)
+        asCommonApp(watchType, appstoreSource, categories[appstoreSource], firmwareBuild, ohneBedrock)
     }
 }
 
@@ -498,6 +500,8 @@ fun LockerWrapper.asCommonApp(
     appstoreSource: AppstoreSource?,
     categories: List<StoreCategory>?,
     firmwareBuild: Int? = null,
+    // Boulder V2 (tsOhneBedrock): kein Hinweis auf eine Firmware, die es nicht mehr bringt.
+    ohneBedrock: Boolean = false,
 ): CommonApp {
     val compatiblePlatform = findCompatiblePlatform(watchType)
     val anyPlatform = properties.platforms.firstOrNull()
@@ -521,7 +525,7 @@ fun LockerWrapper.asCommonApp(
                 app = systemApp,
                 order = properties.order,
                 einstellbar = timeStyle && faehigkeit.einstellungen,
-                firmwareFehlt = timeStyle && compatiblePlatform.isCompatible() && !faehigkeit.kachel,
+                firmwareFehlt = timeStyle && compatiblePlatform.isCompatible() && !faehigkeit.kachel && !ohneBedrock,
             )
         },
         type = properties.type,

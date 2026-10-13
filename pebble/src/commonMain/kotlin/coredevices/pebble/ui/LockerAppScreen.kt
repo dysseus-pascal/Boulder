@@ -209,7 +209,9 @@ fun LockerAppScreen(topBarParams: TopBarParams, uuid: Uuid?, navBarNav: NavBarNa
         var showRemoveConfirmDialog = remember { mutableStateOf(false) }
         var loadingToWatch by remember { mutableStateOf(false) }
 
-        val lockerEntry = loadLockerEntry(uuid, sharedViewModel.watchType.value, sharedViewModel.firmwareBuild.value)
+        val lockerEntry = loadLockerEntry(
+            uuid, sharedViewModel.watchType.value, sharedViewModel.firmwareBuild.value, sharedViewModel.ohneBedrock.value,
+        )
         val entry = remember(lockerEntry, viewModel.selectedStoreEntry) {
             lockerEntry ?: viewModel.selectedStoreEntry
         }

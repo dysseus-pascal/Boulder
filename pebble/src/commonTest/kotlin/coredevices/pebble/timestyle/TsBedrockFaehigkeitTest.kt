@@ -46,6 +46,12 @@ class TsBedrockFaehigkeitTest {
         assertNull(tsFirmwareBuild("v4.38.4-5-gabcdef12"))
         assertNull(tsFirmwareBuild("kaputt"))
         assertNull(tsFirmwareBuild(null))
+        // Boulder V2 zaehlt weiter, hat das Zifferblatt aber nicht mehr.
+        assertNull(tsFirmwareBuild("v4.41.0-b27"))
+        assertTrue(tsOhneBedrock("v4.41.0-b27"))
+        assertFalse(tsOhneBedrock("v4.38.4-b26"))
+        assertFalse(tsOhneBedrock("v4.41.0"))
+        assertFalse(tsOhneBedrock(null))
     }
 
     private class Probe(gespeichert: String?, val gesehen: MutableMap<String, String> = mutableMapOf()) {
@@ -121,6 +127,17 @@ class TsBedrockFaehigkeitTest {
         val p = Probe("01aa", mutableMapOf("S1" to "23"))
         assertFalse(p.neu.verbunden("S1", "v4.38.4-b24"))
         assertEquals(emptyList(), p.gesetzt)
+    }
+
+    @Test
+    fun zurueckVonV2EinmalNeuGesetzt() = runTest {
+        // V2 kennt tsBedrock nicht, der Eintrag gilt dort trotzdem als synchron. Zurueck auf b26
+        // muss er neu raus, wie nach offizieller Firmware.
+        val p = Probe("01aa", mutableMapOf("S1" to "26"))
+        assertFalse(p.neu.verbunden("S1", "v4.41.0-b27"))
+        assertEquals("0", p.gesehen["S1"])
+        assertTrue(p.neu.verbunden("S1", "v4.38.4-b26"))
+        assertEquals(listOf("01aa"), p.gesetzt)
     }
 
     // Spezifikation 2.6: "zuletzt gesehener Build < 23 ODER UNBEKANNT" - die

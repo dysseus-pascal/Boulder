@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.touchlab.kermit.Logger
 import coredevices.pebble.Platform
+import coredevices.pebble.firmware.VerifiedFirmwareInstaller
 import coredevices.pebble.services.AppStoreHomeResult
 import coredevices.pebble.services.LanguagePackRepository
 import coredevices.pebble.services.PebbleWebServices
@@ -79,6 +80,7 @@ import coredevices.pebble.ui.WatchOnboardingFinished
 import coredevices.pebble.ui.allCollectionUuids
 import coredevices.pebble.ui.asCommonApp
 import coredevices.pebble.ui.connectedWatch
+import coredevices.pebble.ui.installStateFor
 import coredevices.pebble.ui.languagePackInstalled
 import coredevices.pebble.ui.launchApp
 import coredevices.pebble.ui.rememberSettingsItemsState
@@ -193,16 +195,21 @@ fun WatchOnboardingScreen(
                             return@Scaffold
                         }
 
+                        // Boulder: nur ueber den geprueften Installer (sha256, Ed25519, Manifest).
+                        val forkInstaller: VerifiedFirmwareInstaller = koinInject()
                         LaunchedEffect(haveStartedFwupSinceLastConnection) {
                             if (!haveStartedFwupSinceLastConnection) {
                                 logger.d { "Starting firmware update from onboarding screen" }
                                 haveStartedFwupSinceLastConnection = true
                                 haveUpdatedFirmware = true
-                                connectedWatch.updateFirmware(firmwareUpdateAvailable)
+                                forkInstaller.install(connectedWatch, firmwareUpdateAvailable)
                             }
                         }
 
                         SectionText("Updating your watch to the latest version of PebbleOS...")
+                        // Boulder: Laden und Pruefen laufen vor Cores Fortschritt; ihre Phasen und Fehler hier.
+                        val forkInstallState by forkInstaller.installStateFor(connectedWatch)
+                        forkInstallState.describe()?.let { SectionText(it) }
                         Spacer(modifier = Modifier.height(15.dp))
                         val progress = (connectedWatch.firmwareUpdateState as? FirmwareUpdater.FirmwareUpdateStatus.InProgress)?.progress?.collectAsState()
                         if (progress != null) {

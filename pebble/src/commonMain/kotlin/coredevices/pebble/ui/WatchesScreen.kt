@@ -145,6 +145,7 @@ import coredevices.pebble.PebbleDeepLinkHandler
 import coredevices.pebble.PebbleFeatures
 import coredevices.pebble.account.PebbleAccount
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.firmware.VerifiedFirmwareInstaller
 import coredevices.pebble.firmware.isCoreDevice
 import coredevices.pebble.rememberLibPebble
 import coredevices.pebble.services.LanguagePack
@@ -2077,12 +2078,18 @@ fun WatchDetails(
             FirmwareUpdater.FirmwareUpdateStatus.NotInProgress.Idle()
         }
     }
+    // Boulder: der gepruefte Installer laedt und prueft, bevor libpebble3 beteiligt ist; seine
+    // Phasen zaehlen als laufendes Update (der Knopf verschwindet, Fehler stehen in der Zeile).
+    val forkInstaller = koinInject<VerifiedFirmwareInstaller>()
+    val forkInstallState by forkInstaller.installStateFor(watch)
     val firmwareUpdateInProgress =
-        firmwareUpdateState !is FirmwareUpdater.FirmwareUpdateStatus.NotInProgress
+        firmwareUpdateState !is FirmwareUpdater.FirmwareUpdateStatus.NotInProgress ||
+            forkInstallState.isActive
     val languagePackInstallState = (watch as? ConnectedPebble.LanguageState)?.languagePackInstallState ?: LanguagePackInstallState.Idle()
     Row {
         Text(
-            text = watch.stateText(firmwareUpdateState, languagePackInstallState, coreConfig),
+            text = watch.stateText(firmwareUpdateState, languagePackInstallState, coreConfig) +
+                forkInstallState.stateTextSuffix(),
             fontWeight = when {
                 watch.isActive() -> FontWeight.Bold
                 else -> FontWeight.Normal
@@ -2091,6 +2098,7 @@ fun WatchDetails(
             modifier = Modifier.padding(vertical = 3.dp),
         )
     }
+    ForkInstallProgressBar(forkInstallState)
     if (firmwareUpdateInProgress) {
         if (firmwareUpdateState is FirmwareUpdater.FirmwareUpdateStatus.InProgress) {
             val progress by firmwareUpdateState.progress.collectAsState()
@@ -2176,7 +2184,13 @@ fun WatchDetails(
                 confirmButton = {
                     TextButton(onClick = {
                         showFirmwareUpdateConfirmDialog = false
-                        firmwareUpdater.updateFirmware(firmwareUpdateAvailable)
+                        // Boulder: nur ueber den geprueften Installer (sha256, Ed25519, Manifest).
+                        val device = watch as? CommonConnectedDevice
+                        if (device == null) {
+                            logger.w { "Can't update firmware for $watch" }
+                        } else {
+                            forkInstaller.install(device, firmwareUpdateAvailable)
+                        }
                     }) { Text("Install") }
                 },
                 dismissButton = { TextButton(onClick = { showFirmwareUpdateConfirmDialog = false }) { Text("Cancel") } }

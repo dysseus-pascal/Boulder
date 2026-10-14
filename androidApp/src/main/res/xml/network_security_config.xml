@@ -15,4 +15,16 @@
             <certificates src="user" />
         </trust-anchors>
     </base-config>
+    <!-- Boulder: fuer GitHub (Release-Liste, Firmware-Paket, Signatur) nur die System-CAs. Die
+         base-config vertraut auch Nutzer-CAs, fuer selbst gehostete Watchapp-Server; ein
+         Zertifikat, das jemand dem Telefon unterschob, soll den Firmware-Download nicht mitlesen.
+         Der Asset-Download wird nach release-assets.githubusercontent.com umgeleitet, daher mit
+         Subdomains. -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">github.com</domain>
+        <domain includeSubdomains="true">githubusercontent.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
 </network-security-config>

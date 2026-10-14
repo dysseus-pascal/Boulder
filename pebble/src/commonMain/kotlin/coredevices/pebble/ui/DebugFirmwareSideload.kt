@@ -36,6 +36,7 @@ import coreapp.util.generated.resources.Res
 import coreapp.util.generated.resources.back
 import coredevices.pebble.rememberLibPebble
 import coredevices.ui.CoreLinearProgressIndicator
+import coredevices.pebble.firmware.VerifiedFirmwareInstaller
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
@@ -45,6 +46,7 @@ import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.forDevice
+import io.rebble.libpebblecommon.connection.CommonConnectedDevice
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
@@ -102,6 +104,9 @@ fun DebugFirmwareSideload(watchIdentifier: String, coreNav: CoreNav) {
     Box(modifier = Modifier.background(MaterialTheme.colorScheme.background)) {
         val libPebble = rememberLibPebble()
         val appContext = koinInject<AppContext>()
+        // Boulder: "Update FW" laeuft ueber den geprueften Installer; der Dateiwaehler unten bleibt
+        // ungeprueft (Werkzeug fuer Entwicklung, ausdruecklich vom Nutzer gewaehlt).
+        val forkInstaller = koinInject<VerifiedFirmwareInstaller>()
         val scope = rememberCoroutineScope()
         val watchFlow = remember(watchIdentifier) {
             libPebble.watches
@@ -228,7 +233,12 @@ fun DebugFirmwareSideload(watchIdentifier: String, coreNav: CoreNav) {
                                         setUpdateState(UiFirmwareUpdateStatus.Starting)
                                         doFirmwareUpdate {
                                             logger.d { "doFirmwareUpdate: $availableUpdate" }
-                                            updateFirmware(availableUpdate)
+                                            val device = this as? CommonConnectedDevice
+                                            if (device == null) {
+                                                logger.w { "Can't update firmware for $this" }
+                                            } else {
+                                                forkInstaller.install(device, availableUpdate)
+                                            }
                                         }
                                     } else {
                                         logger.d { "availableUpdate is null" }

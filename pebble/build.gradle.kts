@@ -114,12 +114,17 @@ kotlin {
                 implementation(libs.compass.autocomplete)
                 implementation(libs.compass.autocomplete.mobile)
                 implementation(project(":libindex"))
+                // Boulder: sha256 (HashingSink) im geprueften Firmware-Installer.
+                implementation(libs.okio)
             }
         }
 
         commonTest {
             dependencies {
                 implementation(libs.kotlin.test)
+                // Boulder: Firmware-Tests gegen ein nachgestelltes GitHub (MockEngine).
+                implementation(libs.ktor.client.mock)
+                implementation(libs.coroutines.test)
             }
         }
 

@@ -1,0 +1,274 @@
+package coredevices.pebble.firmware
+
+import CoreAppVersion
+import co.touchlab.kermit.Logger
+import io.ktor.client.HttpClient
+import io.ktor.client.call.NoTransformationFoundException
+import io.ktor.client.call.body
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.parameter
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.isSuccess
+import io.ktor.serialization.ContentConvertException
+import io.rebble.libpebblecommon.connection.FirmwareUpdateCheckResult
+import io.rebble.libpebblecommon.services.FirmwareVersion
+import io.rebble.libpebblecommon.services.WatchInfo
+import kotlinx.io.IOException
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlin.concurrent.Volatile
+import kotlin.time.Clock
+import kotlin.time.Instant
+
+/**
+ * Update checker for Core watches backed by GitHub releases - in Boulder
+ * those of the Boulder firmware (dysseus-pascal/boulder-firmware), formerly
+ * the public PebbleOS releases (fork builds ship no Memfault token, and cohorts rejects every
+ * Core hardware revision, so upstream has no working source for these
+ * watches here).
+ *
+ * Privacy: the request names no hardware, serial, or version; the asset is
+ * chosen client-side from the release list. Verification: the API declares a
+ * sha256 digest and exact size per asset, which are recorded in
+ * [FirmwareArtifactExpectations] for the installer to enforce; a release
+ * whose asset lacks a usable digest is treated as having no asset at all.
+ * Selection and comparison rules live in FirmwareReleaseSelection.kt.
+ */
+class GithubReleases(
+    private val httpClient: HttpClient,
+    private val expectations: FirmwareArtifactExpectations,
+    private val clock: Clock,
+    // Boulder: gegen die Zeile "Mindest-App" eines Releases (MindestApp).
+    private val appFassung: CoreAppVersion,
+) {
+    private val logger = Logger.withTag("GithubReleases")
+
+    // The channel is a parameter, not a constructor dependency, so one check
+    // uses one channel value throughout: the caller keys its result cache on
+    // the same value it passes here, and a mid-check toggle flip cannot make
+    // the selection disagree with the cache key.
+    suspend fun getLatestFirmware(
+        watch: WatchInfo,
+        channel: FirmwareUpdateChannel,
+    ): FirmwareUpdateCheckResult {
+        val runningRaw = watch.runningFwVersion.stringVersion
+        val running = ReleaseTagVersion.from(runningRaw)
+        if (running == null && !watch.runningFwVersion.isRecovery) {
+            // Fail closed: with an incomparable running version any offer
+            // could be a downgrade or a same-version loop. Recovery is exempt
+            // because it always gets an offer regardless of comparison.
+            logger.e { "Cannot parse running firmware version '$runningRaw'" }
+            return FirmwareUpdateCheckResult.UpdateCheckFailed(GENERIC_FAILURE)
+        }
+        val releases = when (val fetched = fetchReleases()) {
+            is Fetched.Failure -> return FirmwareUpdateCheckResult.UpdateCheckFailed(fetched.message)
+            is Fetched.Success -> fetched.releases
+        }
+        val revision = watch.platform.revision
+        val candidates = releases.mapNotNull { it.toCandidate(revision) }
+        // Was die Auswahl ohne Mindest-App naehme: nur noch, um den Stand "braucht
+        // neuere App" zu melden, wenn keine passende Firmware neuer ist.
+        val neueste = selectRelease(candidates.map { it.selectable }, channel, clock.now())
+        if (neueste == null) {
+            logger.w { "No selectable PebbleOS release for '$revision' among ${releases.size} releases" }
+            return FirmwareUpdateCheckResult.UpdateCheckFailed(GENERIC_FAILURE)
+        }
+        // Boulder: ZUERST NACH DER MINDEST-APP FILTERN, dann waehlen. Verlangt die
+        // neueste Firmware eine neuere App, bekommt die Uhr die neueste, die diese
+        // App lesen kann - sonst blieben Korrekturen davor bis zum App-Update liegen,
+        // und eine Uhr in Recovery bekaeme gar keine Firmware.
+        val passende = candidates.filter { c -> c.mindestApp?.let { MindestApp.erfuellt(appFassung.version, it) } ?: true }
+        val selected = selectRelease(passende.map { it.selectable }, channel, clock.now())
+        // Strictly newer only: equality must never re-offer (see
+        // ReleaseTagVersion), and a channel switch back from Early must never
+        // offer a downgrade. Recovery always gets an offer.
+        val anbietbar = { r: SelectableRelease ->
+            watch.runningFwVersion.isRecovery || running == null || r.version > running
+        }
+        if (selected == null || !anbietbar(selected)) {
+            // Keine passende ist neuer: der neutrale Stand nur, wenn eine neuere auf die App wartet.
+            val wartet = candidates.first { it.selectable == neueste }.mindestApp
+                ?.takeIf { anbietbar(neueste) && !MindestApp.erfuellt(appFassung.version, it) }
+            if (wartet != null) {
+                logger.w { "Release ${neueste.version.raw} needs Boulder $wartet, this app is ${appFassung.version}; no suitable newer release" }
+                return FirmwareUpdateCheckResult.BrauchtNeuereApp(wartet)
+            }
+            return FirmwareUpdateCheckResult.FoundNoUpdate
+        }
+        // Structural match: distinct releases cannot produce equal
+        // selectables (tags are unique per release), and equality still
+        // holds if selection ever returns a copy instead of the same
+        // instance.
+        val chosen = passende.first { it.selectable == selected }
+        val chosenTag = chosen.selectable.version.raw
+        candidates.first { it.selectable == neueste }.mindestApp
+            ?.takeIf { !MindestApp.erfuellt(appFassung.version, it) }
+            ?.let { logger.i { "Release ${neueste.version.raw} needs Boulder $it; offering $chosenTag instead" } }
+        val displayVersion = FirmwareVersion.from(
+            tag = chosenTag,
+            isRecovery = false,
+            gitHash = "",
+            // Display payload only. The offer decision above compares tags;
+            // feeding publishedAt into a FirmwareVersion comparison would
+            // re-offer equal versions on its timestamp tiebreak.
+            timestamp = chosen.selectable.publishedAt,
+            isDualSlot = false, // not used from here
+            isSlot0 = false, // not used from here
+        )
+        if (displayVersion == null) {
+            logger.e { "Couldn't build display version from '$chosenTag'" }
+            return FirmwareUpdateCheckResult.UpdateCheckFailed(GENERIC_FAILURE)
+        }
+        expectations.record(
+            checkNotNull(chosen.assetUrl),
+            ExpectedFirmwareArtifact(
+                sha256Hex = checkNotNull(chosen.digestHex),
+                sizeBytes = checkNotNull(chosen.assetSize),
+                versionTag = chosenTag,
+                signatur = Signaturquelle.Signiert(checkNotNull(chosen.signaturUrl), checkNotNull(chosen.assetName)),
+            ),
+        )
+        return FirmwareUpdateCheckResult.FoundUpdate(
+            version = displayVersion,
+            url = checkNotNull(chosen.assetUrl),
+            // Release bodies are empty upstream; the dialog and notification
+            // already carry the version string.
+            notes = "",
+        )
+    }
+
+    private sealed class Fetched {
+        data class Success(val releases: List<GithubReleaseDto>) : Fetched()
+        data class Failure(val message: String) : Fetched()
+    }
+
+    // Boulder: mit ETag antwortet GitHub ohne Aenderung 304 ohne Inhalt statt einiger
+    // 10 KB. Ohne Anmeldung zaehlt auch die 304 gegen die 60 Abfragen je Stunde.
+    private class Gemerkt(val etag: String, val releases: List<GithubReleaseDto>)
+
+    @Volatile
+    private var gemerkt: Gemerkt? = null
+
+    private suspend fun fetchReleases(): Fetched {
+        val vorher = gemerkt
+        val response = try {
+            httpClient.get(RELEASES_URL) {
+                parameter("per_page", PAGE_SIZE)
+                header("Accept", "application/vnd.github+json")
+                header("X-GitHub-Api-Version", GITHUB_API_VERSION)
+                vorher?.let { header(HttpHeaders.IfNoneMatch, it.etag) }
+            }
+        } catch (e: IOException) {
+            logger.w(e) { "Network error fetching PebbleOS releases" }
+            return Fetched.Failure(GENERIC_FAILURE)
+        }
+        if (response.status == HttpStatusCode.NotModified && vorher != null) {
+            return Fetched.Success(vorher.releases)
+        }
+        if (response.status == HttpStatusCode.Forbidden || response.status == HttpStatusCode.TooManyRequests) {
+            // Unauthenticated GitHub quota is per-IP and the in-app check
+            // cache keeps normal usage far below it, so this is transient.
+            logger.w { "PebbleOS release fetch rate limited: ${response.status}" }
+            return Fetched.Failure(RATE_LIMITED_FAILURE)
+        }
+        if (!response.status.isSuccess()) {
+            logger.w { "PebbleOS release fetch failed: ${response.status}" }
+            return Fetched.Failure(GENERIC_FAILURE)
+        }
+        return try {
+            val releases = response.body<List<GithubReleaseDto>>()
+            gemerkt = response.headers[HttpHeaders.ETag]?.let { Gemerkt(it, releases) }
+            Fetched.Success(releases)
+        } catch (e: NoTransformationFoundException) {
+            logger.w(e) { "Unexpected content fetching PebbleOS releases" }
+            Fetched.Failure(GENERIC_FAILURE)
+        } catch (e: ContentConvertException) {
+            logger.w(e) { "Malformed PebbleOS release list" }
+            Fetched.Failure(GENERIC_FAILURE)
+        }
+    }
+
+    private fun GithubReleaseDto.toCandidate(revision: String): Candidate? {
+        if (draft || prerelease) return null
+        val version = ReleaseTagVersion.from(tagName)
+        if (version == null) {
+            logger.w { "Skipping unparseable release tag '$tagName'" }
+            return null
+        }
+        val published = publishedAt?.let { raw -> runCatching { Instant.parse(raw) }.getOrNull() }
+            ?: return null
+        val asset = assets.firstOrNull { it.name == "normal_${revision}_${tagName}.pbz" }
+        val digestHex = normalizeSha256Hex(asset?.digest)
+        // Boulder: ohne die 64 Byte Signatur (FirmwareSignatur) ist das Release
+        // fuer die App keins - auch die alten, die vor der Signatur erschienen.
+        val signatur = asset?.let { a -> assets.firstOrNull { it.name == a.name + ".sig" } }
+        if (asset != null && (signatur == null || signatur.size != 64L)) {
+            logger.w { "Release $tagName has no valid signature asset; ignoring it" }
+        }
+        // An asset the fork cannot verify is treated as absent, so selection
+        // walks to a release it can verify instead of offering this one.
+        val usable = asset != null && digestHex != null && asset.size > 0 &&
+            signatur != null && signatur.size == 64L
+        return Candidate(
+            selectable = SelectableRelease(version, published, hasAsset = usable),
+            assetUrl = asset?.browserDownloadUrl,
+            assetName = asset?.name,
+            assetSize = asset?.size,
+            digestHex = digestHex,
+            signaturUrl = signatur?.browserDownloadUrl,
+            mindestApp = MindestApp.aus(body),
+        )
+    }
+
+    // Only carries what selection cannot: the asset coordinates. The tag and
+    // publish date live in the selectable (version.raw is the trimmed tag),
+    // so there is a single source of truth per release.
+    private data class Candidate(
+        val selectable: SelectableRelease,
+        val assetUrl: String?,
+        val assetName: String?,
+        val assetSize: Long?,
+        val digestHex: String?,
+        val signaturUrl: String?,
+        val mindestApp: String?,
+    )
+
+    companion object {
+        // BOULDER: DIE EIGENE FIRMWARE, nicht die von Core Devices. Sie liegt
+        // im oeffentlichen Repo boulder-firmware, weil der Fork mit dem
+        // Quellcode privat ist und diese Abfrage ohne Anmeldung laeuft. Die
+        // offizielle Firmware kennt weder die Boulder-Nacht noch Kieselsport.
+        private const val RELEASES_URL = "https://api.github.com/repos/dysseus-pascal/boulder-firmware/releases"
+
+        // ~20 releases spans several weeks of both tag lines: enough history
+        // for the soak policy and for the asset walk-forward on new hardware.
+        private const val PAGE_SIZE = 20
+        private const val GITHUB_API_VERSION = "2022-11-28"
+        private const val GENERIC_FAILURE = "Failed to check for PebbleOS update"
+        private const val RATE_LIMITED_FAILURE = "PebbleOS update check is rate limited, try again later"
+    }
+}
+
+@Serializable
+data class GithubReleaseDto(
+    @SerialName("tag_name")
+    val tagName: String,
+    val draft: Boolean = false,
+    val prerelease: Boolean = false,
+    @SerialName("published_at")
+    val publishedAt: String? = null,
+    val assets: List<GithubReleaseAssetDto> = emptyList(),
+    // Boulder: die Notizen des Releases, fuer die Zeile "Mindest-App".
+    val body: String? = null,
+)
+
+@Serializable
+data class GithubReleaseAssetDto(
+    val name: String,
+    @SerialName("browser_download_url")
+    val browserDownloadUrl: String,
+    val digest: String? = null,
+    val size: Long = 0,
+)

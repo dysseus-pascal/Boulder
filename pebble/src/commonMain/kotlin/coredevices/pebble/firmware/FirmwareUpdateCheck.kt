@@ -36,13 +36,15 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
 import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
 
 class FirmwareUpdateCheck(
     private val memfault: Memfault,
     private val engDashOta: EngDashOta,
     private val cohorts: Cohorts,
+    // Boulder: Firmware fuer Core-Uhren nur aus den signierten Releases von boulder-firmware.
+    private val githubReleases: GithubReleases,
     private val coreConfig: CoreConfigFlow,
     private val coreAnalytics: CoreAnalytics,
     private val clock: Clock = Clock.System,
@@ -97,12 +99,15 @@ class FirmwareUpdateCheck(
 
     private suspend fun doCheck(watch: WatchInfo): FirmwareUpdateCheckResult = when {
         watch.platform == UNKNOWN -> FirmwareUpdateCheckResult.UpdateCheckFailed("Unknown platform")
-        watch.platform.isCoreDevice() -> engDashOta.getLatestFirmware(watch)
+        // Boulder: statt dash.repebble.com; Core-Firmware ersetzte die Boulder-Firmware.
+        watch.platform.isCoreDevice() -> githubReleases.getLatestFirmware(watch, FirmwareUpdateChannel.Soaked)
         else -> cohorts.getLatestFirmware(watch)
     }
 
     companion object {
-        private val CACHE_TTL: Duration = 15.minutes
+        // Boulder: Nutzerentscheid "Firmware-Pruefung seltener" (vorher 15 min). Unter
+        // 6 h, weil der 6-h-Lauf ab 5,4 h startet und sonst erst nach 12 h fragte.
+        private val CACHE_TTL: Duration = 5.hours
     }
 }
 

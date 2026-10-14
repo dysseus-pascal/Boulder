@@ -17,10 +17,13 @@ import coredevices.pebble.account.RealFirestoreLocker
 import coredevices.pebble.account.RealPebbleAccount
 import coredevices.pebble.firmware.BatteryChargedNotifier
 import coredevices.pebble.firmware.Cohorts
+import coredevices.pebble.firmware.FirmwareArtifactExpectations
 import coredevices.pebble.firmware.FirmwareUpdateCheck
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.firmware.GithubReleases
 import coredevices.pebble.firmware.RealBatteryChargedNotifier
 import coredevices.pebble.firmware.RealFirmwareUpdateUiTracker
+import coredevices.pebble.firmware.VerifiedFirmwareInstaller
 import coredevices.pebble.firmware.postWatchFullyChargedNotification
 import coredevices.pebble.services.AppstoreCache
 import coredevices.pebble.services.AppstoreService
@@ -77,6 +80,7 @@ import io.rebble.libpebblecommon.LibPebbleConfig
 import io.rebble.libpebblecommon.NotificationConfig
 import io.rebble.libpebblecommon.WatchConfig
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LibPebble
@@ -91,6 +95,7 @@ import io.rebble.libpebblecommon.js.InjectedPKJSHttpInterceptors
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
 import io.rebble.libpebblecommon.web.LockerEntry
+import io.rebble.libpebblecommon.locker.getLockerPBWCacheDirectory
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
@@ -209,6 +214,26 @@ val watchModule = module {
     singleOf(::AnalyticsHeartbeatQueue)
     singleOf(::ContactDeveloperApi)
     factoryOf(::Cohorts)
+    // Boulder: Firmware aus den GitHub-Releases von boulder-firmware, geprueft vor der Installation
+    // (sha256, Ed25519, Manifest). Der Installer nutzt Cores Firmware-Cache (eindeutige Dateinamen);
+    // LibPebble wird erst bei Bedarf geholt, weil sie selbst in diesem Modul entsteht.
+    singleOf(::FirmwareArtifactExpectations)
+    singleOf(::GithubReleases)
+    single {
+        val appContext = get<AppContext>()
+        val libPebble = lazy { get<LibPebble>() }
+        VerifiedFirmwareInstaller(
+            httpClient = get(),
+            expectations = get(),
+            downloadDirectory = { getLockerPBWCacheDirectory(appContext) },
+            watchUpdateStates = { identifierKey ->
+                libPebble.value.watches.map { watches ->
+                    val device = watches.firstOrNull { it.identifier.asString == identifierKey }
+                    (device as? ConnectedPebble.Firmware)?.firmwareUpdateState
+                }
+            },
+        )
+    }
     singleOf(::FirmwareUpdateCheck)
     factoryOf(::PebbleFeatures)
     factoryOf(::WeatherFetcher)

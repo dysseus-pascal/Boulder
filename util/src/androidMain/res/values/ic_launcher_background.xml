@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#FA4A36</color>
+    <!-- Moosgruen: der Stein ist grau, der Grund darf farbig sein. -->
+    <color name="ic_launcher_background">#3E5641</color>
 </resources>

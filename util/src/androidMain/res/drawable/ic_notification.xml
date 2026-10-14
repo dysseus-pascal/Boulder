@@ -1,20 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Notification small icon: der Felsbrocken, weiss auf transparent. Android
+     maskiert kleine Symbole auf ihren Alphakanal. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:pathData="M 2.435,11.820 A 8.150,8.150 0 1 1 18.735,11.820 A 8.150,8.150 0 1 1 2.435,11.820"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.68" />
-    <path
-        android:pathData="M 17.551,2.848 A 2.007,2.007 0 1 1 21.565,2.848 A 2.007,2.007 0 1 1 17.551,2.848"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.68" />
-    <path
-        android:pathData="M 9.175,23.160 L 11.994,23.160"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeWidth="1.68"
-        android:strokeLineCap="round" />
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group android:scaleX="1.5" android:scaleY="1.5" android:pivotX="55" android:pivotY="57">
+        <path android:fillColor="#FFFFFFFF"
+            android:pathData="M26,70 L30,52 L42,38 L60,33 L76,40 L84,56 L82,72 L70,80 L44,81 Z" />
+    </group>
 </vector>

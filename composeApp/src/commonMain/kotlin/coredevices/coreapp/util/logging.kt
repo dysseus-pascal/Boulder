@@ -35,6 +35,7 @@ import kotlinx.io.writeString
 import okio.deflate
 import okio.inflate
 import okio.use
+import okio.utf8Size
 import org.koin.mp.KoinPlatform
 import kotlin.time.Duration.Companion.seconds
 
@@ -59,6 +60,16 @@ fun initLogging() {
         Logger.e(e) { "Failed to initialize Cactus logging" }
     }
 }
+
+/**
+ * Boulder: die Mindeststufe fuer Logcat und Logdatei. Im Release erst ab Info (Nutzerentscheid
+ * 03.10.2026): geschaetzt 5'000-20'000 Zeilen am Tag, 70-90 % davon v/d, und Kermit baut eine
+ * Zeile unter der Mindeststufe gar nicht erst. Der Debug-Build bleibt bei Verbose, ebenso wer
+ * einen Diagnoseschalter der Verbindung einschaltet ([ausfuehrlich]) - die loggen ueber v/d
+ * und waeren sonst wirkungslos.
+ */
+fun logMindeststufe(debugBuild: Boolean, ausfuehrlich: Boolean): Severity =
+    if (debugBuild || ausfuehrlich) Severity.Verbose else Severity.Info
 
 expect fun generateDeviceSummaryPlatformDetails(): String
 
@@ -99,6 +110,12 @@ class FileLogWriter : LogWriter(), AutoCloseable {
     private lateinit var logContext: LogContext
     private val logMutex = Mutex()
 
+    // Boulder: die Groesse von latest.log, mitgezaehlt statt vor jeder Zeile per stat() erfragt.
+    // Hier kommt nur an, was Kermit ueber der Mindeststufe durchlaesst: im Release ab Info etwa
+    // 500-6'000 Zeilen am Tag (10-30 % von 5'000-20'000), im Debug-Build alle. stat() bleibt fuer
+    // den Start und nach jedem Rollover. Nur unter logMutex gelesen und geschrieben.
+    private var geschriebeneBytes = 0L
+
     init {
         startLogProcessing()
     }
@@ -137,21 +154,21 @@ class FileLogWriter : LogWriter(), AutoCloseable {
                 }
                 val sink = SystemFileSystem.sink(path, true).buffered()
                 logContext = LogContext(path, backupPath, sink)
+                geschriebeneBytes = SystemFileSystem.metadataOrNull(path)?.size ?: 0L
             }
             try {
                 for (logEntry in logChannel) { // Consumes from the channel
                     if (!logScope.isActive) break // Exit if scope is cancelled
 
                     logMutex.withLock { // Serialize access to the sink
-                        SystemFileSystem.metadataOrNull(path)?.let {
-                            if (it.size > MAX_LOG_FILE_SIZE) {
-                                logContext.sink.flush()
-                                logContext.sink.closeQuietly()
-                                try {
-                                    rollover(path)
-                                } finally {
-                                    logContext.sink = SystemFileSystem.sink(path, true).buffered()
-                                }
+                        if (geschriebeneBytes > MAX_LOG_FILE_SIZE) {
+                            logContext.sink.flush()
+                            logContext.sink.closeQuietly()
+                            try {
+                                rollover(path)
+                            } finally {
+                                logContext.sink = SystemFileSystem.sink(path, true).buffered()
+                                geschriebeneBytes = SystemFileSystem.metadataOrNull(path)?.size ?: 0L
                             }
                         }
                         writeLogEntryToFile(logEntry)
@@ -191,9 +208,9 @@ class FileLogWriter : LogWriter(), AutoCloseable {
         }
         val timestamp = Clock.System.now()
         val tagText = logEntry.tag.ifBlank { "Global" }
-        logContext.sink.append("$timestamp [$severityChar] ${tagText}: ${logEntry.message}\n")
+        geschriebeneBytes += logContext.sink.appendGezaehlt("$timestamp [$severityChar] ${tagText}: ${logEntry.message}\n")
         logEntry.throwable?.let {
-            logContext.sink.append(it.stackTraceToString() + "\n")
+            geschriebeneBytes += logContext.sink.appendGezaehlt(it.stackTraceToString() + "\n")
         }
     }
 
@@ -249,6 +266,15 @@ class FileLogWriter : LogWriter(), AutoCloseable {
             }
         }
     }
+}
+
+/**
+ * Boulder: haengt [text] an und gibt die geschriebenen Bytes zurueck - die UTF-8-Laenge, die
+ * append() schreibt (ein einzelnes Surrogat als ein "?"), so dass der Zaehler der Datei folgt.
+ */
+internal fun Sink.appendGezaehlt(text: String): Long {
+    append(text)
+    return text.utf8Size()
 }
 
 fun AutoCloseable.closeQuietly() = try {

@@ -185,6 +185,8 @@ kotlin {
         }
         getByName("androidHostTest").dependencies {
             implementation(libs.ktor.client.okhttp)
+            // Boulder: NachholenTest (virtuelle Zeit fuer das Nachholen beim Verbinden).
+            implementation(libs.coroutines.test)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

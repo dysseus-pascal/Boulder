@@ -60,6 +60,9 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // Boulder: Cactus bringt seine iOS-Bibliotheken als Java-Ressourcen mit
+            // (ios/lib/..., 16 MB ungepackt); Android laedt sie nie.
+            excludes += "ios/**"
         }
     }
     buildTypes {

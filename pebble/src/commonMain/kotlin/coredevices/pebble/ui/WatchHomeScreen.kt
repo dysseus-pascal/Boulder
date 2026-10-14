@@ -1,5 +1,6 @@
 package coredevices.pebble.ui
 
+import coredevices.pebble.SideloadArt
 import CommonRoutes
 import CoreNav
 import CoreRoute
@@ -323,11 +324,23 @@ fun WatchHomeScreen(
         pendingFirmwareSideload?.let { pending ->
             AlertDialog(
                 onDismissRequest = deepLinkHandler::dismissPendingFirmwareSideload,
-                title = { Text("Sideload firmware?") },
+                // Boulder: dieselbe Rueckfrage fuer Sprachpakete.
+                title = {
+                    Text(
+                        when (pending.art) {
+                            SideloadArt.Firmware -> "Sideload firmware?"
+                            SideloadArt.Sprachpaket -> "Install language pack?"
+                        }
+                    )
+                },
                 text = {
                     Text(
-                        "Install ${pending.fileName} on every connected watch? Only install " +
-                                "firmware from sources you trust."
+                        when (pending.art) {
+                            SideloadArt.Firmware -> "Install ${pending.fileName} on every connected watch? Only install " +
+                                    "firmware from sources you trust."
+                            SideloadArt.Sprachpaket -> "Install ${pending.fileName} on the connected watch? Only install " +
+                                    "language packs from sources you trust."
+                        }
                     )
                 },
                 confirmButton = {

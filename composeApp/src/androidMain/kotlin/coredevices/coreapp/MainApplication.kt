@@ -24,6 +24,7 @@ import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.gif.GifDecoder
 import coil3.memory.MemoryCache
+import coil3.memoryCacheMaxSizePercentWhileInBackground
 import coil3.request.crossfade
 import coil3.svg.SvgDecoder
 import com.google.firebase.Firebase
@@ -36,6 +37,7 @@ import coredevices.coreapp.di.apiModule
 import coredevices.coreapp.di.utilModule
 import coredevices.coreapp.util.FileLogWriter
 import coredevices.coreapp.util.initLogging
+import coredevices.coreapp.util.logMindeststufe
 import coredevices.coreapp.util.registerBluetoothPairingDebugLogger
 import coredevices.experimentalModule
 import coredevices.pebble.PebbleAppDelegate
@@ -45,6 +47,12 @@ import coredevices.util.CoreConfigHolder
 import coredevices.util.R
 import coredevices.util.isDebugBuild
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.connection.LibPebble
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -61,12 +69,15 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
     private val fileLogWriter: FileLogWriter by inject()
     private val coreConfigHolder: CoreConfigHolder by inject()
     private val pebbleBackgroundManager: PebbleBackgroundManager by inject()
+    private val libPebble: LibPebble by inject()
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder().build()
 
     override fun onCreate() {
         super.onCreate()
+        // Boulder: vor allem anderen - siehe logMindeststufe.
+        Logger.setMinSeverity(logMindeststufe(AppContext(this).isDebugBuild(), ausfuehrlich = false))
         if (AppContext(this).isDebugBuild()) {
             Firebase.crashlytics.setCrashlyticsCollectionEnabled(false)
         }
@@ -96,6 +107,13 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
         experimentalDevices.appInit()
         // Cactus telemetry is initialized via CommonAppDelegate.initCactus()
         pebbleAppDelegate.init()
+        // Boulder: nur gelesen - die Diagnoseschalter der Verbindung holen Verbose zurueck.
+        libPebble.config
+            .onEach {
+                val ausfuehrlich = it.watchConfig.verboseWatchManagerLogging || it.bleConfig.verbosePpogLogging
+                Logger.setMinSeverity(logMindeststufe(AppContext(this@MainApplication).isDebugBuild(), ausfuehrlich))
+            }
+            .launchIn(CoroutineScope(SupervisorJob() + Dispatchers.Default))
         configureStrictMode()
         NotifierManager.initialize(
             configuration = NotificationPlatformConfiguration.Android(
@@ -197,10 +215,16 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
         return ImageLoader.Builder(context)
             .crossfade(true)
             .memoryCache {
+                // Boulder: 15 statt 25 % des App-Heaps (Pixel 8: 38 statt 64 MB Obergrenze); die
+                // Bilder kommen nur aus Locker und Store, ein Neuladen aus dem Disk-Cache ist billig.
                 MemoryCache.Builder()
-                    .maxSizePercent(context, 0.25)
+                    .maxSizePercent(context, 0.15)
                     .build()
             }
+            // Boulder: verschwindet die Oberflaeche (TRIM_MEMORY_UI_HIDDEN), leert Coil den Cache
+            // bis zum naechsten Activity-Start - der Prozess lebt mit dem Vordergrunddienst
+            // tagelang, die Oberflaeche nur Minuten.
+            .memoryCacheMaxSizePercentWhileInBackground(0.0)
             .components {
                 add(SvgDecoder.Factory())
                 // Trying to see if not using AnimatedImageDecoder fixes memory leaks

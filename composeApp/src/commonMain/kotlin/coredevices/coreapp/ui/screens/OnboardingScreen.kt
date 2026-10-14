@@ -50,7 +50,7 @@ import co.touchlab.kermit.Logger
 import com.russhwolf.settings.Settings
 import com.russhwolf.settings.set
 import coreapp.composeapp.generated.resources.Res
-import coreapp.composeapp.generated.resources.pebble_logo
+import coreapp.composeapp.generated.resources.boulder_logo
 import coredevices.pebble.ui.PebbleRoutes
 import coredevices.pebble.ui.PreviewWrapper
 import coredevices.ui.PebbleElevatedButton
@@ -167,10 +167,10 @@ fun OnboardingScreen(
                         verticalArrangement = Arrangement.Center,
                     ) {
                         Image(
-                            painter = painterResource(Res.drawable.pebble_logo),
-                            contentDescription = "description",
+                            painter = painterResource(Res.drawable.boulder_logo),
+                            contentDescription = "Boulder logo",
                             colorFilter = ColorFilter.tint(Color.White),
-                            modifier = Modifier.height(50.dp),
+                            modifier = Modifier.height(96.dp),
                         )
                         Spacer(modifier = Modifier.height(15.dp))
                         PebbleElevatedButton(

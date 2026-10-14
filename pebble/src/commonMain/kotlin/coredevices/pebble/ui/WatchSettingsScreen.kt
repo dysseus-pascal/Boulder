@@ -160,7 +160,6 @@ import coredevices.util.transcription.platformModelState
 import coredevices.util.transcription.spokenLanguageLabel
 import dev.gitlive.firebase.Firebase
 import dev.gitlive.firebase.auth.auth
-import dev.gitlive.firebase.crashlytics.crashlytics
 import io.rebble.libpebblecommon.permissions.PermissionPolicy
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
@@ -1647,50 +1646,9 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { pebbleFeatures.supportsDetectingOtherPebbleApps() },
                 ),
-                basicSettingsToggleItem(
-                    title = "Send app crashes",
-                    description = "This allows us to fix crashes in the mobile app - otherwise we don't know how often they are happening, or how to fix them",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Diagnostics,
-                    checked = enableFirebase.value,
-                    onCheckChanged = {
-                        enableFirebase.value = it
-                        settings.set(KEY_ENABLE_FIREBASE_UPLOADS, it)
-                        if (!it) {
-                            coreAnalytics.logEvent("crashlytics_collection_disabled")
-                        }
-                        Firebase.crashlytics.setCrashlyticsCollectionEnabled(it)
-                    },
-                ),
-                basicSettingsToggleItem(
-                    title = "Send watch analytics",
-                    description = "Only for Core Devices watches. This allows us to measure metrics e.g. battery life, and debug watch crashes (otherwise we do not know whether they are regressions in reliability or performance)",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Diagnostics,
-                    checked = enableMemfault.value,
-                    onCheckChanged = {
-                        enableMemfault.value = it
-                        if (!it) {
-                            coreAnalytics.logEvent("memfault_collection_disabled")
-                        }
-                        settings.set(KEY_ENABLE_MEMFAULT_UPLOADS, it)
-                    },
-                ),
-                basicSettingsToggleItem(
-                    title = "Send app analytics",
-                    description = "This allows us to track metrics e.g. connectivity, so that we can track different types of error and improve reliability",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Diagnostics,
-                    checked = enableMixpanel.value,
-                    onCheckChanged = {
-                        enableMixpanel.value = it
-                        settings.set(KEY_ENABLE_MIXPANEL_UPLOADS, it)
-                        if (!it) {
-                            coreAnalytics.logEvent("mixpanel_collection_disabled")
-                        }
-                        analyticsBackend.setEnabled(it)
-                    },
-                ),
+                // Boulder: keine Schalter fuer Absturzberichte, Uhr- und App-Analysen. Boulder sammelt
+                // nichts davon (F25: Crashlytics im Manifest aus, Memfault und Mixpanel ohne Token);
+                // "Send app crashes" schaltete Crashlytics zur Laufzeit wieder ein.
                 basicSettingsToggleItem(
                     title = "Show notifications in phone logs",
                     description = "Notification logging, to diagnose processing/deduplication issues (does not include any content/app name/personal information unless separately enabled below)",

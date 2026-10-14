@@ -53,6 +53,9 @@ jobs:
           name: boulder-apk
           path: androidApp/build/outputs/apk/release/*.apk
           if-no-files-found: error
+          # Nur die Uebergabe an den Release-Job: nach 90 Tagen Aufbewahrung fuellten die APKs
+          # das Kontingent fuer Artefakte, und der Lauf von 0.53 scheiterte beim Hochladen.
+          retention-days: 1
 
   release:
     needs: android

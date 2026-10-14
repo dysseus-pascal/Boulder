@@ -15,8 +15,10 @@
             </intent-filter>
         </receiver>
 
+        <!-- Boulder: PebbleKit-2-Clients suchen den Provider unter <Paket>.pebblekit
+             (PebbleKitProviderContract), Cores feste Kennung passt nur zu Cores Paket. -->
         <provider
-            android:authorities="coredevices.coreapp.pebblekit"
+            android:authorities="${applicationId}.pebblekit"
             android:name="io.rebble.libpebblecommon.pebblekit.two.PebbleKitProvider"
             android:exported="true" />
         <provider

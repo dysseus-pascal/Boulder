@@ -64,11 +64,14 @@ class RemoteTimelineEmulator(
             return ERROR
         }
         val uri = Uri.parseOrNull(url)
-        if (uri?.authority == null || body == null) {
+        // Boulder: ein DELETE hat keinen Inhalt (xhr.send() ohne Argument). Mit body == null
+        // als Fehler endete jedes Loeschen mit 500, und der Pin blieb stehen.
+        if (uri?.authority == null || (body == null && method != "DELETE")) {
+            logger.w { "onIntercepted: $method without ${if (uri?.authority == null) "host" else "body"}, answering 500" }
             return ERROR
         }
 //        logger.v { "onIntercepted: uri=$uri method=$method body=$body" }
-        if (method == "PUT" || method == "POST") {
+        if ((method == "PUT" || method == "POST") && body != null) {
             logger.v { "onIntercepted: PUT/POST; inserting pin" }
             if (!mayAddPins(appUuid)) return FORBIDDEN
             insertPin(body, appUuid)

@@ -428,38 +428,8 @@ class Locker(
     }
 
     private suspend fun insertSystemApps(force: Boolean) {
-        val lockerApps = getAllLockerBasicInfo()
-            .first()
-            .map { it.id }
-        val systemAppsToInsert =
-            SystemApps.entries.filter { force || !lockerApps.contains(it.uuid) }
-                .map { systemApp ->
-                    LockerEntry(
-                        id = systemApp.uuid,
-                        version = "",
-                        title = systemApp.name,
-                        type = systemApp.type.code,
-                        developerName = "",
-                        configurable = false,
-                        "",
-                        platforms = systemApp.compatiblePlatforms.map {
-                            LockerEntryPlatform(
-                                lockerEntryId = systemApp.uuid,
-                                sdkVersion = "",
-                                processInfoFlags = 0,
-                                name = it.codename,
-                                pbwIconResourceId = 0,
-                            )
-                        },
-                        systemApp = true,
-                        orderIndex = systemApp.defaultOrder,
-                        capabilities = emptyList(),
-                    )
-                }
-
-        if (systemAppsToInsert.isNotEmpty()) {
-            lockerEntryDao.insertOrReplaceAndOrder(systemAppsToInsert, config.value.lockerSyncLimitV2)
-        }
+        // Boulder: Kieselsport und Kieselstrasse statt Workout, siehe BoulderSystemapps.kt.
+        systemAppsEinfuegen(lockerEntryDao, force, config.value.lockerSyncLimitV2)
     }
 
     override fun restoreSystemAppOrder() {

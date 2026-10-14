@@ -2,9 +2,11 @@ package io.rebble.libpebblecommon.connection.endpointmanager
 
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.LibPebbleConfigFlow
+import io.rebble.libpebblecommon.connection.BuiltInCompanions
 import io.rebble.libpebblecommon.connection.CompanionApp
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
+import io.rebble.libpebblecommon.connection.pkjsBestaetigt
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.entity.LockerEntry
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
@@ -38,6 +40,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.uuid.Uuid
 
 class CompanionAppLifecycleManager(
     private val lockerPBWCache: LockerPBWCache,
@@ -47,7 +50,9 @@ class CompanionAppLifecycleManager(
     private val locker: Locker,
     private val connectionScope: ConnectionCoroutineScope,
     private val libPebbleConfigFlow: LibPebbleConfigFlow,
-    private val libpebbleCoroutineScope: LibPebbleCoroutineScope
+    private val libpebbleCoroutineScope: LibPebbleCoroutineScope,
+    // Boulder: fest eingebaute Begleiter (Kieselsport u. a., siehe BuiltInCompanions).
+    private val builtInCompanions: BuiltInCompanions,
 ): ConnectedPebble.PKJS, ConnectedPebble.CompanionAppControl {
     companion object {
         private val logger = Logger.withTag(CompanionAppLifecycleManager::class.simpleName!!)
@@ -96,7 +101,8 @@ class CompanionAppLifecycleManager(
             val newApps = createCompanionApps(pbw, lockerEntry)
             runningApps.value = newApps
 
-            val appIncomingChannels = newApps.map { Channel<AppMessageData>(Channel.BUFFERED) }
+            // Boulder: begrenzter Eingang mit Log statt BUFFERED, das still verwarf (BoulderBegleiterEingang.kt).
+            val appIncomingChannels = newApps.map { begleiterEingang(lockerEntry.id) }
 
             newApps.zip(appIncomingChannels).forEach { (app, channel) ->
                 app.start(channel.receiveAsFlow())
@@ -105,7 +111,7 @@ class CompanionAppLifecycleManager(
             activeAppScope.launch {
                 device.inboundAppMessages(lockerEntry.id).collect { message ->
                     for (channel in appIncomingChannels) {
-                        channel.trySend(message)
+                        channel.reicheWeiter(message, lockerEntry.id)
                     }
                 }
             }
@@ -118,11 +124,39 @@ class CompanionAppLifecycleManager(
         }
     }
 
+    // Boulder: wie handleNewRunningApp, aber fuer einen Begleiter aus BuiltInCompanions.
+    private suspend fun handleBuiltInApp(uuid: Uuid, app: CompanionApp) {
+        try {
+            val exceptionHandler = CoroutineExceptionHandler { _, throwable ->
+                logger.e(throwable) { "Unhandled exception in built-in companion $uuid: ${throwable.message}" }
+            }
+            activeAppScope = connectionScope +
+                    Job() +
+                    CoroutineName("BuiltInCompanion-$uuid") +
+                    exceptionHandler
+            runningApps.value = listOf(app)
+            val channel = begleiterEingang(uuid)
+            app.start(channel.receiveAsFlow())
+            activeAppScope.launch {
+                device.inboundAppMessages(uuid).collect { channel.reicheWeiter(it, uuid) }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.e(e) { "Failed to start built-in companion for $uuid: ${e.message}" }
+            handleAppStop()
+        }
+    }
+
     private fun createCompanionApps(
         pbw: PbwApp,
         lockerEntry: LockerEntry
     ): List<CompanionApp> {
         return buildList {
+            // Boulder: ein eingebauter Begleiter neben PebbleKit JS nimmt den Platz des Wegs zu
+            // Android-Apps ein (BuiltInCompanions.createBeside). Er entsteht ZUERST: ob PebbleKit JS
+            // bestaetigt, haengt an ihm (BestaetigtSelbst).
+            val daneben = builtInCompanions.createBeside(lockerEntry.id, device, pkjsRunning = pbw.hasPKJS)
             val pkjsApp = if (pbw.hasPKJS) {
                 val jsPath = lockerPBWCache.getPKJSFileForApp(lockerEntry.id, lockerEntry.version)
                 PKJSApp(
@@ -131,10 +165,13 @@ class CompanionAppLifecycleManager(
                     pbw.info,
                     lockerEntry,
                     connectionScope,
+                    bestaetigt = pkjsBestaetigt(daneben),
                 )
             } else null
             pkjsApp?.let { add(it) }
-            if (libPebbleConfigFlow.value.watchConfig.appMessageToMultipleCompanions || pkjsApp == null) {
+            if (daneben != null) {
+                add(daneben)
+            } else if (libPebbleConfigFlow.value.watchConfig.appMessageToMultipleCompanions || pkjsApp == null) {
                 createPlatformSpecificCompanionAppControl(
                     device = device,
                     appInfo = pbw.info,
@@ -157,7 +194,13 @@ class CompanionAppLifecycleManager(
         )
         appRunStateService.runningApp.onEach {
             handleAppStop()
-            if (it != null) {
+            // Boulder: ein eingebauter Begleiter geht vor - auch fuer Systemapps wie Kieselsport,
+            // die keinen Eintrag mit PBW im Locker haben. Dann gibt es keinen zweiten Weg ueber den
+            // Locker, und keine App bekommt dieselbe Nachricht zweimal.
+            val eingebaut = it?.let { uuid -> builtInCompanions.create(uuid, device) }
+            if (it != null && eingebaut != null) {
+                handleBuiltInApp(it, eingebaut)
+            } else if (it != null) {
                 val lockerEntry = lockerEntryDao.getEntry(it)
                 lockerEntry?.let {
                     if (!it.systemApp) {

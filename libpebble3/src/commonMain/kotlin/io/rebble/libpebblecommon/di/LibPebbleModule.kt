@@ -343,6 +343,8 @@ fun initKoin(
     transcriptionProvider: TranscriptionProvider,
     injectedPKJSHttpInterceptors: InjectedPKJSHttpInterceptors,
     pluginOAuthApi: PluginOAuthApi? = null,
+    // Boulder: fest eingebaute Begleiter (siehe BuiltInCompanions).
+    builtInCompanions: io.rebble.libpebblecommon.connection.BuiltInCompanions = io.rebble.libpebblecommon.connection.NoBuiltInCompanions,
 ): Koin {
     val koin = LibPebbleKoinContext.koin
     val libPebbleScope = LibPebbleCoroutineScope(CoroutineName("libpebble3"))
@@ -353,6 +355,7 @@ fun initKoin(
                 includes(platformModule, pkjsPlatformModule, boulderDatenModul)
 
                 single { LibPebbleConfigHolder(defaultValue = defaultConfig, get(), get()) }
+                single { builtInCompanions }
                 single { LibPebbleConfigFlow(get<LibPebbleConfigHolder>().config) }
                 single { WatchConfigFlow(get<LibPebbleConfigHolder>().config) }
                 single { BleConfigFlow(get<LibPebbleConfigHolder>().config) }

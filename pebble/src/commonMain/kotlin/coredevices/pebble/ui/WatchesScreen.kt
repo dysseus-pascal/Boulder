@@ -2,8 +2,6 @@ package coredevices.pebble.ui
 
 import coredevices.pebble.firmware.FirmwareHinweis
 import coredevices.pebble.firmware.firmwareHinweis
-import CommonRoutes
-import NextBugReportContext
 import PlatformShareLauncher
 import PlatformUiContext
 import androidx.compose.animation.core.LinearEasing
@@ -195,9 +193,7 @@ import io.rebble.libpebblecommon.packets.blobdb.TimelineItem
 import io.rebble.libpebblecommon.services.blobdb.TimelineActionResult
 import io.rebble.libpebblecommon.timeline.TimelineColor
 import io.rebble.libpebblecommon.timeline.toPebbleColor
-import io.rebble.libpebblecommon.util.getTempFilePath
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.delay
@@ -207,9 +203,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.io.buffered
-import kotlinx.io.files.SystemFileSystem
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import org.jetbrains.compose.resources.stringResource
@@ -1300,7 +1293,6 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
     var showForgetDialog by remember { mutableStateOf(false) }
     var showLanguageDialog by remember { mutableStateOf(false) }
     var showNotificationDialog by remember { mutableStateOf(false) }
-    val showConfirmCoreDumpDialog = remember { mutableStateOf(false) }
     val showConfirmResetIntoPrfDialog = remember { mutableStateOf(false) }
     val showConfirmFactoryResetDialog = remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -1608,22 +1600,7 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
 
                                 HorizontalDivider(color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.4f))
 
-                                DropdownMenuItem(
-                                    text = { Text("Create a Core Dump") },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Warning,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimary,
-                                        )
-                                    },
-                                    onClick = {
-                                        showMenu = false
-                                        debugMenuExpanded = false
-                                        showConfirmCoreDumpDialog.value = true
-                                    }
-                                )
-
+                                // Boulder: kein Core Dump - er war nur fuer Bug-Reports an Core Devices.
                                 if (watch.watchInfo.recoveryFwVersion != null) {
                                     DropdownMenuItem(
                                         text = { Text("Reset into PRF") },
@@ -1700,15 +1677,6 @@ fun WatchMenu(watch: PebbleDevice, navBarNav: NavBarNav) {
         )
     }
     if (watch is ConnectedPebbleDevice) {
-        ConfirmDialog(
-            show = showConfirmCoreDumpDialog,
-            title = "Create a Core Dump?",
-            text = "This will capture the current state of the watch - then the watch will reset. Send a bug report after reconnection to send us the core dump. Only use this if we asked you to!",
-            onConfirm = {
-                watch.createCoreDump()
-            },
-            confirmText = "OK",
-        )
         ConfirmDialog(
             show = showConfirmResetIntoPrfDialog,
             title = "Reset into PRF?",
@@ -1947,9 +1915,6 @@ fun LanguageDialog(watch: ConnectedPebbleDevice, onDismissRequest: () -> Unit) {
 fun ScreenshotDialog(watch: ConnectedPebble.Screenshot, onDismissRequest: () -> Unit, navBarNav: NavBarNav) {
     var screenshot by remember { mutableStateOf<ImageBitmap?>(null) }
     val scope = rememberCoroutineScope()
-    val nextBugReportContext: NextBugReportContext = koinInject()
-    val appContext: AppContext = koinInject()
-
     suspend fun takeScreenshot() {
         screenshot = null
         screenshot = watch.takeScreenshot()
@@ -1996,34 +1961,7 @@ fun ScreenshotDialog(watch: ConnectedPebble.Screenshot, onDismissRequest: () -> 
                         horizontalArrangement = Arrangement.Center,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        PebbleElevatedButton(
-                            text = "Bug Report",
-                            onClick = {
-                                nextBugReportContext.nextContext = null
-                                scope.launch {
-                                    val tempScreenshotFile = withContext(Dispatchers.Default) {
-                                        val file = getTempFilePath(
-                                            appContext,
-                                            "watch-screenshot.png"
-                                        )
-                                        SystemFileSystem.sink(file, append = false).buffered().use { sink ->
-                                            sink.write(screenshot.toPngBytes())
-                                        }
-                                        file
-                                    }
-                                    navBarNav.navigateTo(
-                                        CommonRoutes.BugReport(
-                                            pebble = true,
-                                            screenshotPath = tempScreenshotFile.toString(),
-                                        )
-                                    )
-                                }
-                            },
-                            icon = Icons.Default.BugReport,
-                            primaryColor = false,
-                            modifier = Modifier.padding(5.dp),
-                        )
-
+                        // Boulder: kein Bug-Report an Core Devices, nur Teilen.
                         val platformShareLauncher = koinInject<PlatformShareLauncher>()
                         PebbleElevatedButton(
                             text = "Share",

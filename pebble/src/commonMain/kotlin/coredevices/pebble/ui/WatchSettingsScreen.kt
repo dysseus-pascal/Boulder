@@ -3,7 +3,6 @@ package coredevices.pebble.ui
 import AppUpdateTracker
 import CommonRoutes
 import CoreAppVersion
-import NextBugReportContext
 import PlatformUiContext
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -357,7 +356,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     val appVersion = koinInject<CoreAppVersion>()
     val platform = koinInject<Platform>()
     val modelManager: ModelManager = koinInject()
-    val nextBugReportContext: NextBugReportContext = koinInject()
     val appUpdate: AppUpdate = koinInject()
     val updateState by appUpdate.updateAvailable.collectAsState()
     val (showCopyTokenDialog, setShowCopyTokenDialog) = remember { mutableStateOf(false) }
@@ -603,37 +601,8 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     actionIcon = Icons.AutoMirrored.Default.Launch,
                 ) },
-                navBarNav?.let { nav -> basicSettingsActionItem(
-                    title = "Getting Started & Troubleshooting",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Support,
-                    action = {
-                        nav.navigateTo(CommonRoutes.TroubleshootingRoute)
-                    },
-                    actionIcon = Icons.AutoMirrored.Default.Launch,
-                ) },
-                navBarNav?.let { nav -> basicSettingsActionItem(
-                    title = "New Bug Report",
-                    description = "Please report a bug if anything went wrong!",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Support,
-                    action = {
-                        nextBugReportContext.nextContext = null
-                        nav.navigateTo(
-                            CommonRoutes.BugReport(
-                                pebble = true,
-                            )
-                        )
-                    },
-                ) },
-                navBarNav?.let { nav -> basicSettingsActionItem(
-                    title = "View My Bug Reports",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Support,
-                    action = {
-                        nav.navigateTo(CommonRoutes.ViewMyBugReportsRoute)
-                    },
-                ) },
+                // Boulder: keine Bug-Reports und keine Hilfeseite von Core (sie fuehrt zum Bug-Report-Formular) -
+                // nichts ueber Boulders App oder Firmware geht an Core Devices.
                 navBarNav?.let { nav -> basicSettingsActionItem(
                     title = "Configure Appstore Sources",
                     topLevelType = TopLevelType.Phone,

@@ -3,7 +3,6 @@ package coredevices.ring.ui.screens.settings
 import BugReportButton
 import CommonRoutes
 import CoreNav
-import NextBugReportContext
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.border
@@ -1121,7 +1120,6 @@ fun DiagnosticsDialog(
     onDismiss: () -> Unit,
 ) {
     val state = viewModel.diagnosticsState.collectAsState().value
-    val nextBugReportContext = koinInject<NextBugReportContext>()
     var job by remember { mutableStateOf<Job?>(null) }
 
     fun dismiss() {
@@ -1148,21 +1146,8 @@ fun DiagnosticsDialog(
                     TextButton(onClick = { job = viewModel.beginDiagnostics() }) { Text("Try Again") }
                 }
                 is DiagnosticsState.Completed -> {
+                    // Boulder: ohne "File Bug Report" - nichts geht an Core Devices.
                     TextButton(onClick = ::dismiss) { Text("Done") }
-                    TextButton(onClick = {
-                        nextBugReportContext.nextContext = buildString {
-                            appendLine()
-                            append("Ring RSSI Diagnostics")
-                            append("\n======================")
-                            state.measurement.let {
-                                append("\nPhone RSSI: ${it.phoneRSSI}")
-                                append("\nRing RX RSSI: ${it.deviceRSSI}")
-                            }
-                            appendLine()
-                        }
-                        dismiss()
-                        coreNav.navigateTo(CommonRoutes.BugReport(pebble = false))
-                    }) { Text("File Bug Report") }
                 }
             }
         }
@@ -1193,7 +1178,7 @@ fun DiagnosticsDialog(
                 "An error occurred: ${state.message}\nPlease try again ensuring you've clicked the button to wake up the device"
             )
             is DiagnosticsState.Completed -> Text(
-                "Diagnostics complete. If support asked you to run this, file a bug report to send them the results."
+                "Diagnostics complete."
             )
         }
     }

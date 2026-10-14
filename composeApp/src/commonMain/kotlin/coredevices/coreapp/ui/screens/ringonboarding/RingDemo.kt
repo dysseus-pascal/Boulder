@@ -1,7 +1,6 @@
 package coredevices.coreapp.ui.screens.ringonboarding
 
 import CoreNav
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Warning
@@ -133,27 +131,9 @@ internal fun RingDemo(nav: CoreNav) {
         }
     }
 
+    // Boulder: kein Link zum Bug-Report an Core Devices.
     @Composable
     fun NotWorkingText() {
-        Row(
-            modifier = Modifier.clickable {
-                nav.navigateTo(CommonRoutes.BugReport(pebble = false))
-            },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "Not working? Report a bug",
-                fontSize = 11.sp,
-                color = LocalPalette.current.onPrimary.copy(alpha = 0.7f),
-            )
-            Spacer(Modifier.width(4.dp))
-            Icon(
-                Icons.AutoMirrored.Filled.OpenInNew,
-                contentDescription = "Open bug report",
-                modifier = Modifier.size(14.dp),
-                tint = LocalPalette.current.onPrimary.copy(alpha = 0.7f),
-            )
-        }
     }
 
     ElevatedCard(

@@ -10,7 +10,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
-import androidx.navigation.NavDeepLink
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.NavUri
@@ -127,11 +126,9 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
             SpeechModelDownloadDialog(onDismiss = { coreNav.goBack() })
         }
         if (CommonBuildKonfig.QA) {
-            composable<CommonRoutes.BugReport>(
-                deepLinks = listOf(
-                    NavDeepLink("pebblecore://deep-link/bug-report?pebble={pebble}")
-                )
-            ) {
+            // Boulder: die Bug-Report-Seiten bleiben eingetragen, sind aber ohne Einstieg und ohne
+            // Deep Link - nichts ueber Boulders App oder Firmware geht an Core Devices.
+            composable<CommonRoutes.BugReport> {
                 val route: CommonRoutes.BugReport = it.toRoute()
                 BugReportScreen(
                     coreNav = coreNav,
@@ -152,11 +149,7 @@ fun AppNavHost(navController: NavHostController, startDestination: Any) {
                     coreNav = coreNav,
                 )
             }
-            composable<CommonRoutes.ViewBugReportRoute>(
-                deepLinks = listOf(
-                    NavDeepLink("pebblecore://deep-link/view-bug-report?conversationId={conversationId}")
-                )
-            ) {
+            composable<CommonRoutes.ViewBugReportRoute> {
                 val route: CommonRoutes.ViewBugReportRoute = it.toRoute()
                 ViewBugReportScreen(
                     coreNav = coreNav,

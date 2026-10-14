@@ -24,7 +24,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Bluetooth
-import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MobileOff
 import androidx.compose.material.icons.filled.WifiOff
@@ -63,16 +62,7 @@ private data class FaqEntry(
 )
 
 private val FaqEntries: List<FaqEntry> = listOf(
-    FaqEntry(
-        "bug", Icons.Default.BugReport,
-        "What if I find a bug?",
-        ann(
-            "This app is a work in progress. We're constantly experimenting and building new " +
-                    "features. If you have any problems, we'd love if you report them to us with " +
-                    "as much detail as possible. We'll fix it as soon as we can.\n\n" +
-                    "Settings → Get Help → Report a bug (be sure to tap Index)"
-        ),
-    ),
+    // Boulder: keine Frage zu Bug-Reports - sie gehen nicht an Core Devices.
     FaqEntry(
         "listen", Icons.Default.Bluetooth,
         "Is it always listening?",

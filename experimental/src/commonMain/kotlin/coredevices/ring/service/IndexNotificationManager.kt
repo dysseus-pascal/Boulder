@@ -115,7 +115,6 @@ class IndexNotificationManager(
     companion object {
         private val logger = Logger.withTag("IndexNotificationManager")
         private const val DEEP_LINK_URI = "pebble://navbar/index"
-        private val BUG_REPORT_DEBOUNCE = 1.minutes
         private val PAIRING_ISSUE_DEBOUNCE = 30.minutes
         private val SPEECH_MODEL_PROMPT_DEBOUNCE = 5.minutes
         private val ACTION_NOTIFICATION_TIMEOUT = 5.minutes
@@ -123,7 +122,6 @@ class IndexNotificationManager(
     private val mapMutex = Mutex() // Guards the three mutable maps below
     private val inflightNotificationJobs = mutableMapOf<Long, Job?>()
     private val inflightNotifications = mutableMapOf<Long, InflightIndexNotification>()
-    private var lastBugReportPrompt: Instant? = null
     private var lastPairingIssuePrompt: Instant? = null
     private var lastSpeechModelPrompt: Pair<SpeechModelPrompt, Instant>? = null
     private val transferToRecordingId = mutableMapOf<Long, Long?>()
@@ -515,27 +513,13 @@ class IndexNotificationManager(
         mapMutex.withLock { inflightNotificationJobs[id] = job }
     }
 
+    // Boulder: keine Aufforderung zum Bug-Report an Core Devices; die Meldung bat um nichts anderes.
+    @Suppress("UNUSED_PARAMETER")
     suspend fun sendBugReportPrompt(
         title: String,
         content: String
     ) {
-        val now = Clock.System.now()
-        lastBugReportPrompt?.let { last ->
-            if (now - last < BUG_REPORT_DEBOUNCE) {
-                logger.d { "Skipping bug report prompt notification; last sent at $lastBugReportPrompt" }
-                return
-            }
-        }
-        lastBugReportPrompt = now
-        val notif = GenericNotification(
-            id = nextNotificationId(),
-            title = title,
-            contentText = content,
-            inProgress = null,
-            localOnly = false,
-            deepLink = "pebblecore://deep-link/bug-report?pebble=false"
-        )
-        platformIndexNotificationManager.notify(notif)
+        logger.d { "Not prompting for a bug report: $title" }
     }
 
 
@@ -639,7 +623,7 @@ class IndexNotificationManager(
                             contentText = "Failed to update Index 01 to version ${it.newVersion}",
                             inProgress = null,
                             localOnly = false,
-                            deepLink = "pebblecore://deep-link/bug-report?pebble=false"
+                            // Boulder: ohne den Weg zum Bug-Report an Core Devices.
                         )
                         platformIndexNotificationManager.notify(notif)
                         inProgressUpdate = null

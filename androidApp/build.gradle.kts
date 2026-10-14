@@ -15,19 +15,18 @@ val properties = Properties().apply {
 }
 val localReleaseBuild = properties["LOCAL_RELEASE_BUILD"]?.toString()?.toBooleanStrictOrNull() ?: false
 
-// Most recent tag reachable from HEAD, so a release branch versions from its own tag.
-val gitVersionName = providers.exec {
-    isIgnoreExitValue = true
-    commandLine("git", "describe", "--tags", "--abbrev=0", "HEAD")
-}.standardOutput.asText.map { it.trim().ifEmpty { "unknown" } }
+// Boulder: die Fassung steht in BOULDER_VERSION, versionCode ist die Zahl der Commits. Cores
+// Schema packt den Tag in die Zahl und bricht an Boulders Tags (v0.54.0); die Commit-Zahl liegt
+// ueber jeder installierten Boulder-Fassung und waechst auch mit jedem Core-Merge. Die Namen
+// bleiben Cores, damit onVariants unten unveraendert bleibt.
+val gitVersionName = providers.fileContents(rootProject.layout.projectDirectory.file("BOULDER_VERSION"))
+    .asText.map { it.trim() }
 
-// Tag as an increasing int: 1.9.1.3 -> 10901003. Major must stay below 100, the rest below 1000.
-val gitVersionCode = gitVersionName.map { name ->
-    val parts = name.split('.').map { it.toIntOrNull() ?: -1 }
-    if (parts.size > 4 || parts.first() !in 0..99 || parts.any { it !in 0..999 }) {
-        throw GradleException("Cannot derive versionCode from tag '$name'")
-    }
-    listOf(10_000_000, 100_000, 1_000, 1).zip(parts) { scale, part -> scale * part }.sum()
+val gitVersionCode = providers.exec {
+    isIgnoreExitValue = true
+    commandLine("git", "rev-list", "--count", "HEAD")
+}.standardOutput.asText.map {
+    it.trim().toIntOrNull() ?: throw GradleException("Error reading current commit count")
 }
 
 android {
@@ -46,13 +45,16 @@ android {
     }
 
     defaultConfig {
-        applicationId = "coredevices.coreapp"
+        // Boulder: eigene App-ID, damit die App neben Cores App steht und sich ueber Boulder 0.53
+        // installiert. Der namespace oben bleibt Cores, damit die Quellpakete gleich bleiben.
+        applicationId = "ch.dysseus.boulder"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
+            // Boulder: nur 64 Bit (Entscheid 03.10.2026); Cactus liefert ohnehin nur arm64-v8a.
             //noinspection ChromeOsAbiSupport
-            abiFilters += setOf("armeabi-v7a", "arm64-v8a")
+            abiFilters += setOf("arm64-v8a")
         }
     }
     packaging {
@@ -197,3 +199,122 @@ tasks.register("buildTestAppPbws") {
 // model of the source sets — has to run after they land.
 tasks.matching { it.name.contains("Assets") || it.name.contains("lint", ignoreCase = true) }
     .configureEach { dependsOn(testAppPbws) }
+
+// ---- Boulder ----
+
+// Boulder: compose ui-tooling bringt eine exportierte PreviewActivity ins Manifest, ueber die jede
+// App auf dem Telefon beliebige Composables der App starten kann. Die KMP-Module ziehen ui-tooling
+// in androidMain (dort gibt es keine debug/release-Trennung), darum faellt es hier an der Grenze
+// der App aus dem Release; Debug behaelt die Vorschau. Beide Koordinaten, weil das JetBrains-
+// Artefakt auf das von AndroidX verweist.
+configurations.matching {
+    it.name == "releaseRuntimeClasspath" || it.name == "releaseCompileClasspath"
+}.configureEach {
+    exclude(group = "androidx.compose.ui", module = "ui-tooling")
+    exclude(group = "org.jetbrains.compose.ui", module = "ui-tooling")
+}
+
+/**
+ * Boulder: was die App exportieren darf, samt der Berechtigung davor. Alles andere bricht den
+ * Release-Build ab: eine Abhaengigkeit kann ueber das Zusammenfuehren der Manifeste still eine
+ * Komponente nachschieben (so kam die PreviewActivity ins Release), ohne dass ein Diff es zeigt.
+ * Laufzeit-Empfaenger mit RECEIVER_EXPORTED sieht diese Pruefung nicht.
+ */
+val erlaubteExporte = setOf(
+    "activity|coredevices.coreapp.MainActivity|perm=|read=|write=",
+    "activity-alias|coredevices.coreapp.HealthPermissionsRationaleActivity|perm=|read=|write=",
+    "activity-alias|coredevices.coreapp.ViewPermissionUsageActivity|perm=android.permission.START_VIEW_PERMISSION_USAGE|read=|write=",
+    "receiver|coredevices.coreapp.debug.QemuSetupReceiver|perm=android.permission.DUMP|read=|write=",
+    "receiver|coredevices.coreapp.debug.DevConnectionReceiver|perm=android.permission.DUMP|read=|write=",
+    "receiver|coredevices.coreapp.debug.SetSettingReceiver|perm=android.permission.DUMP|read=|write=",
+    "receiver|coredevices.pebble.firmware.FirmwareSideloadReceiver|perm=android.permission.DUMP|read=|write=",
+    "provider|io.rebble.libpebblecommon.pebblekit.two.PebbleKitProvider|perm=|read=|write=",
+    "provider|io.rebble.libpebblecommon.pebblekit.classic.PebbleKitProvider|perm=|read=|write=",
+    "service|io.rebble.libpebblecommon.pebblekit.two.PebbleSenderReceiver|perm=|read=|write=",
+    "service|io.rebble.libpebblecommon.notification.LibPebbleNotificationListener|perm=android.permission.BIND_NOTIFICATION_LISTENER_SERVICE|read=|write=",
+    "service|io.rebble.libpebblecommon.calls.LibPebbleInCallService|perm=android.permission.BIND_INCALL_SERVICE|read=|write=",
+    "service|androidx.health.platform.client.impl.sdkservice.HealthDataSdkService|perm=|read=|write=",
+    "service|androidx.glance.appwidget.GlanceRemoteViewsService|perm=android.permission.BIND_REMOTEVIEWS|read=|write=",
+    "service|androidx.work.impl.background.systemjob.SystemJobService|perm=android.permission.BIND_JOB_SERVICE|read=|write=",
+    "receiver|androidx.work.impl.diagnostics.DiagnosticsReceiver|perm=android.permission.DUMP|read=|write=",
+    "receiver|androidx.profileinstaller.ProfileInstallReceiver|perm=android.permission.DUMP|read=|write=",
+    // Cores Ring/Index (Modul experimental); Boulder nutzt sie nicht, Entscheid in AP7.
+    "receiver|coredevices.ring.reminders.ReminderBootReceiver|perm=|read=|write=",
+    "service|coredevices.ring.service.RingCompanionDeviceService|perm=android.permission.BIND_COMPANION_DEVICE_SERVICE|read=|write=",
+    "activity|coredevices.ring.ShareToIndexNoteActivity|perm=|read=|write=",
+    "activity|coredevices.ring.ShareToIndexReminderActivity|perm=|read=|write=",
+    // Google-Bibliotheken (F25: eingebaut, still).
+    "activity|com.google.firebase.auth.internal.GenericIdpActivity|perm=|read=|write=",
+    "activity|com.google.firebase.auth.internal.RecaptchaActivity|perm=|read=|write=",
+    "service|com.google.android.gms.auth.api.signin.RevocationBoundService|perm=com.google.android.gms.auth.api.signin.permission.REVOCATION_NOTIFICATION|read=|write=",
+    "receiver|com.google.firebase.iid.FirebaseInstanceIdReceiver|perm=com.google.android.c2dm.permission.SEND|read=|write=",
+)
+
+abstract class PruefeExporte : DefaultTask() {
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val manifest: RegularFileProperty
+
+    @get:Input
+    abstract val erlaubt: SetProperty<String>
+
+    @TaskAction
+    fun pruefe() {
+        val android = "http://schemas.android.com/apk/res/android"
+        val dokument = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+            .apply { isNamespaceAware = true }
+            .newDocumentBuilder()
+            .parse(manifest.get().asFile)
+        val gefunden = mutableSetOf<String>()
+        for (tag in listOf("activity", "activity-alias", "service", "receiver", "provider")) {
+            val knoten = dokument.getElementsByTagName(tag)
+            for (i in 0 until knoten.length) {
+                val e = knoten.item(i) as org.w3c.dom.Element
+                if (e.getAttributeNS(android, "exported") != "true") continue
+                gefunden += "$tag|${e.getAttributeNS(android, "name")}" +
+                    "|perm=${e.getAttributeNS(android, "permission")}" +
+                    "|read=${e.getAttributeNS(android, "readPermission")}" +
+                    "|write=${e.getAttributeNS(android, "writePermission")}"
+            }
+        }
+        val neu = (gefunden - erlaubt.get()).sorted()
+        // Ein veralteter Eintrag heisst meist: umbenannt oder andere Berechtigung, der neue steht in "neu".
+        val weg = (erlaubt.get() - gefunden).sorted()
+        if (neu.isEmpty() && weg.isEmpty()) {
+            logger.lifecycle("Exported components verified: ${gefunden.size}, all allowlisted.")
+            return
+        }
+        throw GradleException(buildString {
+            appendLine("Exported component surface changed (androidApp/build.gradle.kts, erlaubteExporte).")
+            if (neu.isNotEmpty()) appendLine("Exported but not allowlisted:\n  " + neu.joinToString("\n  "))
+            if (weg.isNotEmpty()) appendLine("Allowlisted but no longer exported like this:\n  " + weg.joinToString("\n  "))
+        })
+    }
+}
+
+androidComponents {
+    onVariants(selector().withBuildType("release")) { variant ->
+        val name = variant.name.replaceFirstChar { it.uppercase() }
+        val pruefung = tasks.register<PruefeExporte>("pruefe${name}Exporte") {
+            group = "verification"
+            description = "Fails if the release manifest exports anything not on the allowlist."
+            manifest.set(variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.MERGED_MANIFEST))
+            erlaubt.set(erlaubteExporte)
+        }
+        // An den Packaging-Tasks, nicht an assemble: auch installRelease und bundleRelease laufen
+        // ueber sie. Lazy, weil es sie waehrend onVariants noch nicht gibt.
+        val packaging = setOf("package$name", "package${name}Bundle")
+        tasks.matching { it.name in packaging }.configureEach { dependsOn(pruefung) }
+        // tasks.matching schweigt, wenn nichts passt: nach einer Umbenennung in AGP liefe kein
+        // Release mehr durch die Pruefung. Darum bricht der Bau ab, wenn sie im Graphen fehlt.
+        gradle.taskGraph.whenReady {
+            val pfad = project.path
+            val packt = allTasks.any { it.name in packaging && it.project.path == pfad }
+            val prueft = allTasks.any { it.name == "pruefe${name}Exporte" && it.project.path == pfad }
+            if (packt && !prueft) {
+                throw GradleException("pruefe${name}Exporte is not in the task graph although $name packaging is.")
+            }
+        }
+    }
+}

@@ -1,0 +1,25 @@
+{
+  "project_info": {
+    "project_number": "boulder-attrappe",
+    "project_id": "boulder-attrappe",
+    "storage_bucket": "boulder-attrappe"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "boulder-attrappe",
+        "android_client_info": {
+          "package_name": "ch.dysseus.boulder"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "boulder-attrappe"
+        }
+      ],
+      "services": {}
+    }
+  ],
+  "configuration_version": "1"
+}

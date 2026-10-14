@@ -16,10 +16,11 @@ jobs:
       ver: ${{ steps.v.outputs.ver }}
       neu: ${{ steps.v.outputs.neu }}
     steps:
+      # Core pinnt die Toolchain auf JDK 17 (jvm-toolchain im Versionskatalog).
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 17
       - uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -40,7 +41,7 @@ jobs:
       - name: Fester Debug-Schlüssel
         run: mkdir -p ~/.android && cp ci/debug.keystore ~/.android/debug.keystore
       - name: Tests
-        run: ./gradlew :libpebble3:testAndroidHostTest :pebble:testAndroidHostTest :composeApp:testAndroidHostTest :util:testAndroidHostTest :androidApp:testDebugUnitTest
+        run: ./gradlew testDebugUnitTest testAndroidHostTest jvmTest
       - name: Bauen
         # Release-Build (R8, nicht debuggable), signiert mit dem festen Debug-Schluessel:
         # so installiert er sich als Update ueber jede bisherige Boulder-Fassung.

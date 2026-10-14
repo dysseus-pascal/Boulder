@@ -10,6 +10,7 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.PowerManager
 import android.os.StrictMode
+import android.system.Os
 import androidx.annotation.RequiresApi
 import androidx.work.Configuration
 import androidx.work.Constraints
@@ -76,6 +77,10 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
 
     override fun onCreate() {
         super.onCreate()
+        // Boulder: sonst schickt die Cactus-Engine Nutzungsdaten an den Server von Cactus, sobald ein
+        // Modell startet (F25: Sammeln aus). Sie liest den Schalter beim Start ihrer Telemetrie,
+        // jeder Wert ausser "0" schaltet ab; darum vor allem, was Cactus anfasst.
+        Os.setenv("CACTUS_NO_CLOUD_TELE", "1", true)
         // Boulder: vor allem anderen - siehe logMindeststufe.
         Logger.setMinSeverity(logMindeststufe(AppContext(this).isDebugBuild(), ausfuehrlich = false))
         if (AppContext(this).isDebugBuild()) {

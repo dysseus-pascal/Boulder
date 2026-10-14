@@ -22,3 +22,10 @@ androidApp/src/main/assets/bundled-apps/
 iosApp/bundled-apps/*
 !iosApp/bundled-apps/.gitkeep
 .lock-waf_darwin_build
+
+# Boulder: CMake-Ordner der nativen Bauten (cactus-native), je Rechner erzeugt und voller
+# absoluter Pfade; stand bis 0.53 schon hier.
+**/.cxx/
+# Boulder: Arbeitskopie des whisper.cpp-Submoduls aus Klonen bis 0.53; Git entfernt sie beim
+# Wechsel auf Cores Grundlage nicht.
+/whisper-native/

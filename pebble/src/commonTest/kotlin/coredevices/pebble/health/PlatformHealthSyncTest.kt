@@ -104,7 +104,8 @@ private fun overlay(start: Long, duration: Long, type: OverlayType) = OverlayDat
     steps = 0,
     restingKiloCalories = 0,
     activeKiloCalories = 0,
-    distanceCm = 0,
+    // Boulder: die Sitzung traegt Meter (distanceM, Spalte distanceCm).
+    distanceM = 0,
     offsetUTC = 0,
 )
 

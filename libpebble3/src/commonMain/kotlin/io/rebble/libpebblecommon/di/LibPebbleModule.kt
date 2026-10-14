@@ -111,6 +111,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItemDao
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationDao
 import io.rebble.libpebblecommon.database.getRoomDatabase
 import io.rebble.libpebblecommon.datalogging.Datalogging
+import io.rebble.libpebblecommon.datalogging.DlsQuarantaene
 import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
 import io.rebble.libpebblecommon.health.Health
 import io.rebble.libpebblecommon.js.HttpInterceptorManager
@@ -123,6 +124,7 @@ import io.rebble.libpebblecommon.locker.Locker
 import io.rebble.libpebblecommon.locker.LockerPBWCache
 import io.rebble.libpebblecommon.locker.StaticLockerPBWCache
 import io.rebble.libpebblecommon.locker.WebSyncManagerProvider
+import io.rebble.libpebblecommon.locker.getLockerPBWCacheDirectory
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.notification.ContactsApi
 import io.rebble.libpebblecommon.notification.NotificationApi
@@ -174,6 +176,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.io.files.Path
 import kotlinx.serialization.json.Json
 import org.koin.core.Koin
 import org.koin.core.component.KoinComponent
@@ -487,6 +490,14 @@ fun initKoin(
                 singleOf(::InterruptedFirmwareUpdates)
                 singleOf(::JsTokenUtil)
                 singleOf(::Datalogging)
+                // Boulder: neben dem PBW-Speicher, also im dauerhaften App-Speicher
+                // (Android: filesDir) - kein Cache, den das System leeren darf.
+                single {
+                    DlsQuarantaene(get()) {
+                        val pbw = getLockerPBWCacheDirectory(appContext)
+                        Path(pbw.parent ?: pbw, DlsQuarantaene.ORDNER)
+                    }
+                }
                 singleOf(::Health)
                 singleOf(::ErrorTracker)
                 singleOf(::RealConnectionFailureHandler) bind ConnectionFailureHandler::class
@@ -574,7 +585,8 @@ fun initKoin(
                     scopedOf(::AppFetchService)
                     scopedOf(::TimelineService)
                     scopedOf(::AppMessageService)
-                    scopedOf(::DataLoggingService)
+                    // Boulder: die Zeitquelle behaelt ihre Vorgabe (siehe DataLoggingService).
+                    scoped { DataLoggingService(get(), get(), get()) }
                     scopedOf(::LogDumpService)
                     scopedOf(::GetBytesService)
                     scopedOf(::PhoneControlService)

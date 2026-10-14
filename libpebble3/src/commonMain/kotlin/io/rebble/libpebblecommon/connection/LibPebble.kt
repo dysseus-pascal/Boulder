@@ -34,8 +34,11 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
+import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
+import io.rebble.libpebblecommon.database.entity.NachtEntity
+import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotification
-import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
 import io.rebble.libpebblecommon.database.entity.TimelinePin
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.di.initKoin
@@ -72,6 +75,7 @@ import io.rebble.libpebblecommon.services.WatchInfo
 import io.rebble.libpebblecommon.time.TimeChanged
 import io.rebble.libpebblecommon.util.SystemGeolocation
 import io.rebble.libpebblecommon.voice.TranscriptionProvider
+import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
 import io.rebble.libpebblecommon.weather.WeatherLocationData
 import io.rebble.libpebblecommon.weather.WeatherManager
 import io.rebble.libpebblecommon.web.LockerEntry
@@ -160,6 +164,28 @@ data class LatestHeartRate(
     val timestampEpochSec: Long,
 )
 
+/**
+ * Represents the most recent SpO2 (blood oxygen saturation) reading from the watch.
+ */
+data class LatestSpo2(
+    val spo2Percent: Int,
+    val quality: Int,
+    val timestampEpochSec: Long,
+)
+
+/**
+ * Boulder: Minutenpuls als zwei gleich lange Reihen, nur Minuten mit Puls,
+ * aelteste zuerst. 12 Byte je Minute statt einer HealthDataEntity mit zwoelf
+ * Feldern und einem Pair mit geboxtem Long - bei 14 Tagen bis zu 20'160 Minuten.
+ */
+class Pulsreihe(val zeiten: LongArray, val werte: IntArray) {
+    val size: Int get() = zeiten.size
+
+    companion object {
+        val LEER = Pulsreihe(LongArray(0), IntArray(0))
+    }
+}
+
 interface HealthDataApi {
     suspend fun getLatestTimestamp(): Long?
     suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity>
@@ -167,6 +193,26 @@ interface HealthDataApi {
 
     /** Returns minute-level health data for the given epoch-second range. */
     suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity>
+
+    /**
+     * Boulder: nur der Puls der Minuten in [start, end) mit Puls, aelteste
+     * zuerst. Der Rumpf hier gilt fuer Ersatz-Implementierungen ohne eigene
+     * Abfrage; [io.rebble.libpebblecommon.health.Health] liest nur die zwei Spalten.
+     */
+    suspend fun getPulsMinuten(start: Long, end: Long): Pulsreihe {
+        val zeilen = getHealthDataForRange(start, end).filter { it.heartRate > 0 }
+        return Pulsreihe(LongArray(zeilen.size) { zeilen[it].timestamp }, IntArray(zeilen.size) { zeilen[it].heartRate })
+    }
+
+    /**
+     * Boulder: die Schritte je halbe Stunde in [start, end) als (Beginn in
+     * Sekunden, Schritte), nur Fenster mit Schritten, aelteste zuerst - fuer
+     * das Tagesband. Der Rumpf hier gilt fuer Ersatz-Implementierungen ohne
+     * eigene Abfrage; [io.rebble.libpebblecommon.health.Health] zaehlt in der Datenbank.
+     */
+    suspend fun getSchritteJeHalbstunde(start: Long, end: Long): List<Pair<Long, Long>> =
+        getHealthDataForRange(start, end).filter { it.steps > 0 }.groupBy { it.timestamp / 1800 * 1800 }
+            .map { (beginn, minuten) -> beginn to minuten.sumOf { it.steps.toLong() } }.sortedBy { it.first }
 
     /** Returns per-day step/calorie/distance/active-minute aggregates for the range. */
     suspend fun getDailyAggregates(start: Long, end: Long): List<DailyMovementAggregate>
@@ -198,6 +244,44 @@ interface HealthDataApi {
     /** Returns minutes spent in each heart rate zone (keys: 0=rest, 1=light, 2=cardio, 3=high). */
     suspend fun getHRZoneMinutes(start: Long, end: Long): Map<Int, Long>
 
+    /** Returns SpO2 readings (percent > 0) in the epoch-second range. */
+    suspend fun getSpo2Readings(start: Long, end: Long): List<Spo2ReadingEntity>
+
+    /** Returns SpO2 readings after the given timestamp, in ascending order. */
+    suspend fun getSpo2ReadingsAfter(afterTimestamp: Long): List<Spo2ReadingEntity>
+
+    /** Boulder: die Naechte der Firmware (Datalogging-Tag 88), deren Beginn in [von, bis) liegt, aelteste zuerst. */
+    suspend fun getNaechte(von: Long, bis: Long): List<NachtEntity>
+
+    /** Boulder: die Schlafphasen einer Nacht, in Minuten ab ihrem Beginn. */
+    suspend fun getNachtAbschnitte(beginnUtc: Long): List<NachtAbschnittEntity>
+
+    /** Boulder: die Schlafphasen aller Naechte, deren Beginn in [von, bis) liegt, nach Nacht und Zeit geordnet. */
+    suspend fun getNachtAbschnitte(von: Long, bis: Long): List<NachtAbschnittEntity>
+
+    /** Boulder: die HRV-Fenster einer Nacht (Tag 89), in Minuten ab ihrem Beginn; leer bei aelterer Firmware. */
+    suspend fun getNachtHrv(beginnUtc: Long): List<NachtHrvEntity>
+
+    /**
+     * Boulder: die HRV einer gespeicherten Nacht eintragen, nur wenn sie keine
+     * hat (0 oder null) - fuer die einmalige Reparatur aus Boulders eigenen
+     * Saetzen der Akte (0.52). True, wenn die Nacht geaendert wurde.
+     */
+    suspend fun setzeNachtHrvWennLeer(beginnUtc: Long, hrv: Int): Boolean
+
+    /**
+     * Boulder: die Ziele fuer Schritte und Schlaf zur Uhr ([io.rebble.libpebblecommon.health.BoulderZiele]).
+     * Der Satz liegt in der Datenbank Health und geht mit ihr zur Uhr, auch spaeter,
+     * wenn sie jetzt nicht verbunden ist; derselbe Wert noch einmal geht nicht erneut.
+     */
+    suspend fun setzeZiele(schritte: Int, schlafMin: Int)
+
+    /** Returns the average SpO2 percent for readings in the range, or null if none. */
+    suspend fun getAverageSpo2(start: Long, end: Long): Double?
+
+    /** Returns the most recent SpO2 reading, or null if none exists. */
+    suspend fun getLatestSpo2Reading(): LatestSpo2?
+
     /** Returns activity overlay entries (Walk, Run, OpenWorkout types) in the range. */
     suspend fun getActivitySessions(start: Long, end: Long): List<OverlayDataEntity>
 
@@ -207,9 +291,6 @@ interface HealthDataApi {
 
     /** Returns the 30-day average sleep duration in seconds. */
     suspend fun getTypicalSleepSeconds(): Long
-
-    /** Wipes all health data and populates 30 days of fake data for testing. */
-    suspend fun populateDebugHealthData()
 }
 
 interface Weather {
@@ -314,6 +395,15 @@ sealed class FirmwareUpdateCheckResult {
 
     data class UpdateCheckFailed(
         val error: String,
+    ) : FirmwareUpdateCheckResult()
+
+    /**
+     * Boulder: es gibt eine neuere Firmware, sie braucht aber mindestens die App
+     * [mindestApp] (Zeile "Mindest-App" im Release). Kein Fehler - die Firmware
+     * wartet nur auf das App-Update.
+     */
+    data class BrauchtNeuereApp(
+        val mindestApp: String,
     ) : FirmwareUpdateCheckResult()
 }
 

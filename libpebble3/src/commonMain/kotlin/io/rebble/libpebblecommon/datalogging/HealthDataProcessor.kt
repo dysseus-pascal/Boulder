@@ -3,23 +3,36 @@ package io.rebble.libpebblecommon.datalogging
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.SystemAppIDs.SYSTEM_APP_UUID
 import io.rebble.libpebblecommon.database.dao.HealthDao
+import io.rebble.libpebblecommon.database.dao.Spo2Dao
 import io.rebble.libpebblecommon.database.dao.insertHealthDataWithPriority
 import io.rebble.libpebblecommon.database.dao.insertOverlayDataWithDeduplication
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
 import io.rebble.libpebblecommon.health.parsers.parseOverlayData
+import io.rebble.libpebblecommon.health.parsers.parseNachtData
+import io.rebble.libpebblecommon.health.parsers.parseNachtHrvData
+import io.rebble.libpebblecommon.database.dao.NachtDao
+import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.health.parsers.NachtHrvTeil
+import io.rebble.libpebblecommon.health.parsers.NachtTeil
+import io.rebble.libpebblecommon.health.parsers.ParsedHealthData
 import io.rebble.libpebblecommon.health.parsers.parseStepsData
 import io.rebble.libpebblecommon.services.updateHealthStatsInDatabase
+import io.rebble.libpebblecommon.util.datenbereich
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
-import kotlin.time.Clock.System
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.hours
 import kotlin.uuid.Uuid
 
 /**
@@ -35,20 +48,36 @@ class HealthDataProcessor(
     private val scope: LibPebbleCoroutineScope,
     private val healthDao: HealthDao,
     private val healthStatDao: HealthStatDao,
+    private val spo2Dao: Spo2Dao,
+    private val nachtDao: NachtDao,
+    private val clock: Clock,
 ) {
     private val logger = Logger.withTag("HealthDataProcessor")
 
     private val healthSessions = mutableMapOf<UByte, HealthSession>()
-    private val pendingData = mutableMapOf<UByte, MutableList<PendingDataItem>>()
     private val lastTodayUpdateDate = MutableStateFlow<LocalDate?>(null)
     private val lastTodayUpdateTime = MutableStateFlow(0L)
-    private val _healthDataUpdated = MutableSharedFlow<Unit>(replay = 0)
+    // Boulder: ohne Puffer wartete emit auf den langsamsten Sammler (den
+    // Health-Connect-Sync). Mit einem Platz, der den aelteren Wert verdraengt,
+    // wartet niemand, und der juengste Anstoss bleibt fuer den Nachzuegler liegen.
+    private val _healthDataUpdated = MutableSharedFlow<Unit>(
+        replay = 0,
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
 
     val healthDataUpdated: SharedFlow<Unit> = _healthDataUpdated
 
-    suspend fun emitHealthDataUpdated() {
-        _healthDataUpdated.emit(Unit)
+    // Boulder: ein Schub der Uhr sind Dutzende Pakete; gemeldet wird er einmal,
+    // nach den Tageszahlen, damit die Meldung nicht vor ihnen ankommt.
+    private val schub = Schubsammler(scope.datenbereich("HealthDataProcessor")) {
+        aktualisiereHeute()
+        _healthDataUpdated.tryEmit(Unit)
     }
+
+    // Boulder: ein Paket nach dem anderen. Teil 0 einer Nacht raeumt die Abschnitte
+    // der vorigen Fassung weg; liefe Teil 1 daneben, verschwaenden dessen Abschnitte mit.
+    private val schreibSperre = Mutex()
 
     companion object {
         private const val HEALTH_STEPS_TAG: UInt = 81u
@@ -56,97 +85,123 @@ class HealthDataProcessor(
         private const val HEALTH_OVERLAY_TAG: UInt = 84u
         private const val HEALTH_HR_TAG: UInt = 85u
 
+        // Boulder: nur Upstreams Tags. Die Naechte der Boulder-Firmware erkennt
+        // BoulderDls nach Tag UND Itemgroesse.
         val HEALTH_TAGS = setOf(HEALTH_STEPS_TAG, HEALTH_SLEEP_TAG, HEALTH_OVERLAY_TAG, HEALTH_HR_TAG)
+
+        // Boulder: so oft rechnet ein Schub die Tageszahlen hoechstens neu.
+        private val TAGESZAHLEN_ABSTAND = 1.hours
     }
 
     fun handleSessionOpen(sessionId: UByte, tag: UInt, applicationUuid: Uuid, itemSize: UShort) {
-        if (tag !in HEALTH_TAGS) return
+        // Boulder: BoulderDls
+        if (tag !in HEALTH_TAGS && BoulderDls.art(tag, applicationUuid, itemSize) == null) return
 
         val session = HealthSession(tag, applicationUuid, itemSize)
         healthSessions[sessionId] = session
         logger.d {
             "HEALTH_SESSION: Opened session $sessionId for ${tagName(tag)} (tag=$tag, itemSize=$itemSize bytes)"
         }
+    }
 
-        // Process any data that arrived before the session was opened
-        pendingData.remove(sessionId)?.let { pending ->
-            logger.d { "HEALTH_SESSION: Processing ${pending.size} pending data items for session $sessionId" }
-            pending.forEach { item ->
-                processDataItem(session, sessionId, item.payload, item.itemsLeft)
+    /**
+     * Boulder: liest und speichert ein Paket sofort, der Reihe nach, und sagt, ob
+     * es gesichert ist. Erst danach darf die Uhr es freigeben (DataLoggingService).
+     */
+    suspend fun speichere(sessionId: UByte, tag: UInt, appUuid: Uuid, itemSize: UShort, payload: ByteArray): Ablage {
+        // Only process health data from the system app
+        if (appUuid != SYSTEM_APP_UUID) {
+            logger.d { "Ignoring health data from non-system app: $appUuid" }
+            return Ablage.Gesichert
+        }
+        val verworfen = mutableListOf<String>()
+        val schreibe = try {
+            lies(tag, payload, itemSize) { verworfen += it }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.e(e) { "HEALTH_DATA: ${tagName(tag)} packet unreadable (session=$sessionId, ${payload.size} bytes)" }
+            return Ablage.Quarantaene("unreadable: ${e.message}")
+        }
+        val summary = try {
+            schreibSperre.withLock { schreibe() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.e(e) { "HEALTH_DATA: ${tagName(tag)} not stored, not acknowledging (session=$sessionId, ${payload.size} bytes)" }
+            return Ablage.NichtGespeichert
+        }
+        logger.d { "HEALTH_SESSION: Received data for ${tagName(tag)} (session=$sessionId, ${payload.size} bytes) - $summary" }
+        return if (verworfen.isEmpty()) Ablage.Gesichert else Ablage.Quarantaene(verworfen.joinToString("; "))
+    }
+
+    // Erst alles lesen, dann schreiben: eine Ausnahme beim Lesen ist ein unlesbares
+    // Paket, eine beim Schreiben ein Speicherfehler - die Uhr bekommt verschiedene Antworten.
+    private fun lies(tag: UInt, payload: ByteArray, itemSize: UShort, verworfen: (String) -> Unit): suspend () -> String? =
+        when (tag) {
+            HEALTH_STEPS_TAG -> parseStepsData(payload, itemSize, verworfen).let { { processStepsData(it) } }
+            HEALTH_OVERLAY_TAG -> parseOverlayData(payload, itemSize, verworfen).let { { processOverlayData(it) } }
+            HEALTH_SLEEP_TAG -> {
+                // Sleep data is sent as overlay data with sleep types
+                logger.d { "Received sleep tag data, processing as overlay" }
+                parseOverlayData(payload, itemSize, verworfen).let { { processOverlayData(it) } }
+            }
+            HEALTH_HR_TAG -> {
+                // Heart rate data is embedded in steps data for newer firmware
+                logger.d { "Received standalone HR data (tag 85), currently handled in steps data" };
+                { null }
+            }
+            else -> liesBoulder(tag, payload, itemSize, verworfen)
+        }
+
+    // Boulder: die Tags der Boulder-Firmware. Hierher kommt nur die System-UUID (speichere).
+    private fun liesBoulder(tag: UInt, payload: ByteArray, itemSize: UShort, verworfen: (String) -> Unit): suspend () -> String? {
+        val vorwaerts = BoulderDls.vorwaerts(tag)
+        return when (BoulderDls.art(tag, SYSTEM_APP_UUID, itemSize)) {
+            BoulderDls.Art.NACHT -> parseNachtData(payload, itemSize, vorwaerts, verworfen).let { { processNachtData(it) } }
+            BoulderDls.Art.HRV -> parseNachtHrvData(payload, itemSize, vorwaerts, verworfen).let { { processNachtHrvData(it) } }
+            // Ein Tag einer neueren Boulder-Firmware: unlesbar, also roh in die Quarantaene, nicht verwerfen.
+            BoulderDls.Art.UNBEKANNT -> throw IllegalArgumentException("Boulder tag 0x${tag.toString(16)} unknown to this app")
+            null -> {
+                logger.w { "Unknown health data tag: $tag" };
+                { null }
             }
         }
     }
 
-    fun handleSendDataItems(sessionId: UByte, payload: ByteArray, itemsLeft: UInt) {
-        val session = healthSessions[sessionId]
-        if (session == null) {
-            // Queue data for processing when session opens (handles race condition)
-            logger.w { "HEALTH_DATA: Session $sessionId not found, queuing ${payload.size} bytes for later processing" }
-            pendingData.getOrPut(sessionId) { mutableListOf() }
-                .add(PendingDataItem(payload, itemsLeft))
+    // Boulder: am Ende eines Schubs statt bei itemsLeft == 0 - die Firmware schickt
+    // dort immer 0xffff (dls_endpoint.c), der alte Zweig lief nie. Auch am selben Tag
+    // wieder, wenn eine Stunde vergangen ist, fuer spaet nachgelieferte Vortagsdaten.
+    private suspend fun aktualisiereHeute() {
+        val timeZone = TimeZone.currentSystemDefault()
+        val jetzt = clock.now()
+        val today = jetzt.toLocalDateTime(timeZone).date
+        val now = jetzt.toEpochMilliseconds()
+        val timeSinceLastUpdate = now - lastTodayUpdateTime.value
+        val shouldUpdate = lastTodayUpdateDate.value != today ||
+            timeSinceLastUpdate >= TAGESZAHLEN_ABSTAND.inWholeMilliseconds
+        if (!shouldUpdate) {
+            logger.d { "HEALTH_DATA: Skipping today update - last update ${timeSinceLastUpdate / 60_000}min ago" }
             return
         }
-
-        processDataItem(session, sessionId, payload, itemsLeft)
-    }
-
-    private fun processDataItem(session: HealthSession, sessionId: UByte, payload: ByteArray, itemsLeft: UInt) {
-        val payloadSize = payload.size
-        logger.d { "HEALTH_DATA: handleSendDataItems called (session=$sessionId, ${payloadSize} bytes, $itemsLeft items remaining)" }
-
-        // Process and store the health data in the database
-        scope.launch {
-            try {
-                val summary = processHealthData(session, payload)
-
-                logger.d {
-                    buildString {
-                        append("HEALTH_SESSION: Received data for ${tagName(session.tag)} (session=$sessionId, ")
-                        append("$payloadSize bytes, $itemsLeft items remaining")
-                        if (summary != null) {
-                            append(") - $summary")
-                        } else {
-                            append(")")
-                        }
-                    }
-                }
-
-                // Update today's movement and recent sleep data when we finish receiving a batch
-                if (itemsLeft.toInt() == 0) {
-                    val timeZone = TimeZone.currentSystemDefault()
-                    val today = System.now().toLocalDateTime(timeZone).date
-                    val now = System.now().toEpochMilliseconds()
-                    val timeSinceLastUpdate = now - lastTodayUpdateTime.value
-
-                    val shouldUpdate = lastTodayUpdateDate.value != today
-
-                    if (shouldUpdate) {
-                        logger.d {
-                            "HEALTH_DATA: Received new data, updating today's movement and recent sleep data (last update ${timeSinceLastUpdate / 60_000}min ago)"
-                        }
-                        // Today's data is included in the weekly update, no separate call needed
-                        updateHealthStatsInDatabase(healthDao, healthStatDao, today, today.minus(DatePeriod(days = 29)), timeZone)
-                        lastTodayUpdateDate.value = today
-                        lastTodayUpdateTime.value = now
-                    } else {
-                        logger.d { "HEALTH_DATA: Skipping today update - already updated today" }
-                    }
-                }
-            } catch (e: Exception) {
-                logger.e(e) { "HEALTH_DATA: Failed to process health data for session $sessionId (${payload.size} bytes)" }
-            }
+        logger.d {
+            "HEALTH_DATA: Received new data, updating today's movement and recent sleep data (last update ${timeSinceLastUpdate / 60_000}min ago)"
+        }
+        try {
+            // Today's data is included in the weekly update, no separate call needed
+            updateHealthStatsInDatabase(healthDao, healthStatDao, today, today.minus(DatePeriod(days = 29)), timeZone)
+            lastTodayUpdateDate.value = today
+            lastTodayUpdateTime.value = now
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            logger.e(e) { "HEALTH_DATA: today's stats update failed" }
         }
     }
 
     fun handleSessionClose(sessionId: UByte) {
         healthSessions.remove(sessionId)?.let { session ->
             logger.d { "HEALTH_SESSION: Closed session $sessionId for ${tagName(session.tag)}" }
-        }
-        // Clean up any pending data that was never processed
-        pendingData.remove(sessionId)?.let { pending ->
-            if (pending.isNotEmpty()) {
-                logger.w { "HEALTH_SESSION: Discarding ${pending.size} pending data items for closed session $sessionId (session opened too late or never)" }
-            }
         }
     }
 
@@ -156,40 +211,39 @@ class HealthDataProcessor(
             HEALTH_SLEEP_TAG -> "SLEEP"
             HEALTH_OVERLAY_TAG -> "OVERLAY"
             HEALTH_HR_TAG -> "HEART_RATE"
+            BoulderDls.NACHT_ALT, BoulderDls.NACHT -> "NACHT($tag)"
+            BoulderDls.HRV_ALT, BoulderDls.HRV -> "NACHT_HRV($tag)"
             else -> "UNKNOWN($tag)"
         }
 
-    private suspend fun processHealthData(session: HealthSession, payload: ByteArray): String? {
-        // Only process health data from the system app
-        if (session.appUuid != SYSTEM_APP_UUID) {
-            logger.d { "Ignoring health data from non-system app: ${session.appUuid}" }
-            return null
+    private suspend fun processNachtData(teile: List<NachtTeil>): String? {
+        if (teile.isEmpty()) return null
+        teile.forEach { t ->
+            // Der erste Teil einer Nacht raeumt die Abschnitte der vorigen Fassung weg.
+            nachtDao.speichereNachtTeil(t.nacht, ersterTeil = t.teil == 0, t.abschnitte)
         }
-
-        return when (session.tag) {
-            HEALTH_STEPS_TAG -> processStepsData(payload, session.itemSize)
-            HEALTH_OVERLAY_TAG -> processOverlayData(payload, session.itemSize)
-            HEALTH_SLEEP_TAG -> {
-                // Sleep data is sent as overlay data with sleep types
-                logger.d { "Received sleep tag data, processing as overlay" }
-                processOverlayData(payload, session.itemSize)
-            }
-            HEALTH_HR_TAG -> {
-                // Heart rate data is embedded in steps data for newer firmware
-                logger.d { "Received standalone HR data (tag 85), currently handled in steps data" }
-                null
-            }
-            else -> {
-                logger.w { "Unknown health data tag: ${session.tag}" }
-                null
-            }
-        }
+        schub.stossAn()
+        val n = teile.first().nacht
+        return "Nacht ab ${n.beginnUtc}: ${n.schlafMinuten} min Schlaf, Teil ${teile.first().teil + 1}/${teile.first().teile}"
     }
 
-    private suspend fun processStepsData(payload: ByteArray, itemSize: UShort): String? {
-        val records = parseStepsData(payload, itemSize)
-        logger.d { "HEALTH_DATA: Parsed ${records.size} step records from payload" }
-        if (records.isEmpty()) {
+    private suspend fun processNachtHrvData(teile: List<NachtHrvTeil>): String? {
+        if (teile.isEmpty()) return null
+        teile.forEach { t ->
+            // Der erste Teil raeumt die Fenster der vorigen Fassung dieser Nacht weg.
+            nachtDao.speichereHrvTeil(t.beginnUtc, ersterTeil = t.teil == 0, t.fenster)
+        }
+        schub.stossAn()
+        val t = teile.first()
+        return "HRV der Nacht ab ${t.beginnUtc}: ${t.fenster.size} Fenster, Teil ${t.teil + 1}/${t.teile}"
+    }
+
+    private suspend fun processStepsData(parsed: ParsedHealthData): String? {
+        val records = parsed.healthData
+        logger.d {
+            "HEALTH_DATA: Parsed ${records.size} step records and ${parsed.spo2Readings.size} SpO2 readings from payload"
+        }
+        if (records.isEmpty() && parsed.spo2Readings.isEmpty()) {
             return null
         }
 
@@ -213,20 +267,25 @@ class HealthDataProcessor(
             "HEALTH_DATA: About to insert ${records.size} records into database (steps=$totalSteps, active=${totalActiveKcal}kcal, resting=${totalRestingKcal}kcal, distance=${totalDistanceKm}km, activeMin=$totalActiveMin, $hrSummary)"
         }
 
-        healthDao.insertHealthDataWithPriority(records)
-        _healthDataUpdated.emit(Unit)
-        logger.d { "HEALTH_DATA: Health update event emitted successfully" }
+        if (records.isNotEmpty()) {
+            healthDao.insertHealthDataWithPriority(records)
+        }
+        if (parsed.spo2Readings.isNotEmpty()) {
+            spo2Dao.insertSpo2Readings(parsed.spo2Readings)
+            logger.d { "HEALTH_DATA: Inserted ${parsed.spo2Readings.size} SpO2 readings" }
+        }
+        schub.stossAn()
 
-        return "${records.size} records (${totalSteps} steps)"
+        return "${records.size} records (${totalSteps} steps)" +
+            if (parsed.spo2Readings.isNotEmpty()) ", ${parsed.spo2Readings.size} SpO2" else ""
     }
 
-    private suspend fun processOverlayData(payload: ByteArray, itemSize: UShort): String? {
-        val records = parseOverlayData(payload, itemSize)
+    private suspend fun processOverlayData(records: List<OverlayDataEntity>): String? {
         logger.d { "HEALTH_DATA: Parsed ${records.size} overlay records from payload" }
         if (records.isEmpty()) return null
 
         healthDao.insertOverlayDataWithDeduplication(records)
-        _healthDataUpdated.emit(Unit)
+        schub.stossAn()
 
         val totalDurationHours = kotlin.math.round(records.sumOf { it.duration } / 360.0) / 10.0
         return "${records.size} overlay records (${totalDurationHours}h total)"
@@ -239,7 +298,14 @@ data class HealthSession(
     val itemSize: UShort,
 )
 
-data class PendingDataItem(
-    val payload: ByteArray,
-    val itemsLeft: UInt,
-)
+/** Boulder: was aus einem Datalogging-Paket wurde; davon haengt die Antwort an die Uhr ab. */
+sealed interface Ablage {
+    /** Gespeichert, oder es gab nichts zu speichern. */
+    data object Gesichert : Ablage
+
+    /** Nicht oder nur zum Teil lesbar; was sich lesen liess, ist gespeichert. Das Paket gehoert roh in die Quarantaene. */
+    data class Quarantaene(val grund: String) : Ablage
+
+    /** Nicht gespeichert (Datenbank): nicht bestaetigen, die Uhr schickt es noch einmal. */
+    data object NichtGespeichert : Ablage
+}

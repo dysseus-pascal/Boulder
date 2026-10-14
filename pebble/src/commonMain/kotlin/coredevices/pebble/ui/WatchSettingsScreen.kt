@@ -355,7 +355,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
         PKJSCopyTokenDialog(onDismissRequest = { setShowCopyTokenDialog(false) })
     }
     var showHealthStatsDialog by remember { mutableStateOf(false) }
-    val showFakeHealthDataDialog = remember { mutableStateOf(false) }
     var showSignInDialog by remember { mutableStateOf(false) }
     var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
     var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
@@ -453,15 +452,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             onDismissRequest = { showHealthStatsDialog = false },
         )
     }
-    ConfirmDialog(
-        show = showFakeHealthDataDialog,
-        title = "Populate fake health data",
-        text = "This will wipe all existing health data and replace it with 30 days of fake data. This cannot be undone.",
-        confirmText = "Wipe & Populate",
-        onConfirm = {
-            scope.launch { libPebble.populateDebugHealthData() }
-        },
-    )
     if (showSignInDialog) {
         SignInDialog(
             onDismiss = { showSignInDialog = false }
@@ -1338,17 +1328,8 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { debugOptionsEnabled },
                 ),
-                basicSettingsActionItem(
-                    title = "Populate fake health data",
-                    description = "Warning: this will wipe all existing health data!",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    keywords = "health debug fake data populate",
-                    action = {
-                        showFakeHealthDataDialog.value = true
-                    },
-                    show = { debugOptionsEnabled },
-                ),
+                // Boulder: kein "Populate fake health data" - es loeschte alle echten Gesundheitsdaten
+                // (siehe DebugDatenTest in libpebble3).
                 basicSettingsToggleItem(
                     title = "Enable Weather",
                     description = "Fetch weather for the current location, for the Weather App (requires location permission)",

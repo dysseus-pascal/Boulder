@@ -89,6 +89,30 @@ interface HealthDao {
     @Query("SELECT * FROM health_data WHERE timestamp >= :start AND timestamp < :end ORDER BY timestamp ASC")
     suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity>
 
+    /**
+     * Boulder: nur Zeit und Puls der Minuten mit Puls. Kurven und Tagesherz
+     * brauchen 2 der 12 Spalten; ueber 14 Tage sind das bis zu 20'160 Zeilen,
+     * die SELECT * sonst ganz als HealthDataEntity baute.
+     */
+    @Query("SELECT timestamp, heartRate FROM health_data WHERE timestamp >= :start AND timestamp < :end AND heartRate > 0 ORDER BY timestamp ASC")
+    suspend fun getPulsMinuten(start: Long, end: Long): List<PulsMinute>
+
+    /**
+     * Boulder: die Schritte je halbe Stunde fuer das Tagesband der
+     * Gesundheitsseite - gezaehlt in der Datenbank, statt bis zu 1'600
+     * Minutenzeilen ganz zu holen. Die Fenster liegen auf vollen halben
+     * Stunden der Weltzeit; das sind volle halbe Stunden jeder Ortszeit mit
+     * einem Versatz in halben Stunden (in Nepal laegen sie eine Viertelstunde daneben).
+     */
+    @Query("""
+        SELECT (timestamp / 1800) * 1800 AS beginn, SUM(steps) AS schritte
+        FROM health_data
+        WHERE timestamp >= :start AND timestamp < :end AND steps > 0
+        GROUP BY timestamp / 1800
+        ORDER BY beginn ASC
+        """)
+    suspend fun getSchritteJeHalbstunde(start: Long, end: Long): List<Schritthalbstunde>
+
     @Query("SELECT * FROM health_data WHERE timestamp > :afterTimestamp ORDER BY timestamp ASC")
     suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity>
 
@@ -160,4 +184,16 @@ data class DailyMovementAggregate(
 data class HRZoneCount(
     val heartRateZone: Int,
     val minutes: Long,
+)
+
+/** Boulder: eine Minute mit Puls, siehe [HealthDao.getPulsMinuten]. */
+data class PulsMinute(
+    val timestamp: Long,
+    val heartRate: Int,
+)
+
+/** Boulder: die Schritte einer halben Stunde ab [beginn] (Sekunde), siehe [HealthDao.getSchritteJeHalbstunde]. */
+data class Schritthalbstunde(
+    val beginn: Long,
+    val schritte: Long,
 )

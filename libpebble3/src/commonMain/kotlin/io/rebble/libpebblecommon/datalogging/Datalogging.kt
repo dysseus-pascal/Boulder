@@ -9,6 +9,7 @@ import io.rebble.libpebblecommon.structmapper.SUInt
 import io.rebble.libpebblecommon.structmapper.StructMappable
 import io.rebble.libpebblecommon.util.DataBuffer
 import io.rebble.libpebblecommon.util.Endian
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -17,6 +18,8 @@ import kotlin.uuid.Uuid
 class Datalogging(
     private val webServices: WebServices,
     private val healthDataProcessor: HealthDataProcessor,
+    // Boulder: was sich nicht lesen laesst, liegt dort roh, bevor die Uhr es freigibt.
+    private val quarantaene: DlsQuarantaene,
 ) {
     private val logger = Logger.withTag("Datalogging")
 
@@ -25,7 +28,12 @@ class Datalogging(
     /** Data logging events of third-party watchapps, in protocol order. */
     val thirdPartyEvents: SharedFlow<ThirdPartyDatalogEvent> = _thirdPartyEvents.asSharedFlow()
 
-    fun logData(
+    /**
+     * Boulder: true, wenn das Paket gesichert ist und die Uhr es freigeben darf -
+     * in der Datenbank oder, wo es sich nicht lesen liess, in der Quarantaene.
+     * false: nicht bestaetigen, die Uhr schickt es nach ihrer Wartezeit noch einmal.
+     */
+    suspend fun logData(
         sessionId: UByte,
         uuid: Uuid,
         tag: UInt,
@@ -34,51 +42,48 @@ class Datalogging(
         watchInfo: WatchInfo,
         itemSize: UShort,
         itemsLeft: UInt,
-    ) {
+    ): Boolean {
+        // Boulder: mit Itemgroesse 0 laesst sich kein Item abteilen. Schritte, Sitzungen
+        // und Heartbeat bestaetigten das Paket bisher ungelesen, die Memfault-Schleife
+        // rueckte nie weiter und endete nur ueber eine Ausnahme beim Lesen. Wie alles
+        // Unlesbare kommt es roh in die Quarantaene; erst danach gibt die Uhr es frei.
+        if (itemSize.toInt() == 0 && wirdGelesen(tag, uuid, itemSize)) {
+            if (data.isEmpty()) {
+                logger.w { "Datalogging tag $tag with item size 0 and no data; nothing to keep" }
+                return true
+            }
+            logger.e { "Datalogging tag $tag with item size 0 (session $sessionId, ${data.size} bytes); unreadable" }
+            return quarantaene.lege(tag, sessionId, itemSize, data, "item size 0")
+        }
+
         if (uuid == SYSTEM_APP_UUID) {
             // Handle health tags
-            if (tag in HealthDataProcessor.HEALTH_TAGS) {
-                healthDataProcessor.handleSendDataItems(sessionId, data, itemsLeft)
-                return
+            // Boulder: auch die Tags der Boulder-Firmware (BoulderDls), Unbekanntes aus ihrem Bereich inklusive.
+            if (tag in HealthDataProcessor.HEALTH_TAGS || BoulderDls.art(tag, uuid, itemSize) != null) {
+                return when (val ablage = healthDataProcessor.speichere(sessionId, tag, uuid, itemSize, data)) {
+                    Ablage.Gesichert -> true
+                    is Ablage.Quarantaene -> quarantaene.lege(tag, sessionId, itemSize, data, ablage.grund)
+                    Ablage.NichtGespeichert -> false
+                }
             }
 
             // Handle system-app datalogging tags
-            when (tag) {
-                MEMFAULT_CHUNKS_TAG -> {
-                    // A single SendDataItems payload can contain multiple items,
-                    // each itemSize bytes. Parse each one as a MemfaultChunk.
-                    val size = itemSize.toInt()
-                    var offset = 0
-                    while (offset + size <= data.size) {
-                        val itemData = data.copyOfRange(offset, offset + size)
-                        val chunk = MemfaultChunk()
-                        chunk.fromBytes(DataBuffer(itemData.toUByteArray()))
-                        webServices.uploadMemfaultChunk(chunk.bytes.get().toByteArray(), watchInfo)
-                        offset += size
-                    }
-                }
-                ANALYTICS_HEARTBEAT_TAG -> {
-                    // Fixed-size native_heartbeat_record items (no inner length prefix).
-                    val size = itemSize.toInt()
-                    if (size <= 0) {
-                        logger.w { "Analytics heartbeat with itemSize=$size; ignoring" }
-                        return
-                    }
-                    var offset = 0
-                    while (offset + size <= data.size) {
-                        val itemData = data.copyOfRange(offset, offset + size)
-                        webServices.uploadAnalyticsHeartbeat(itemData, watchInfo)
-                        offset += size
-                    }
-                }
+            try {
+                systemDaten(tag, data, watchInfo, itemSize)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Boulder: vorher beendete das den Empfang aller Datalogging-Pakete.
+                logger.e(e) { "System datalogging tag $tag unreadable (${data.size} bytes)" }
+                return quarantaene.lege(tag, sessionId, itemSize, data, "unreadable: ${e.message}")
             }
-            return
+            return true
         }
 
         // A third-party session: emit it for delivery to companion apps
         if (itemSize.toInt() <= 0 || data.size % itemSize.toInt() != 0) {
             logger.w { "Dropped a malformed datalogging batch (uuid=$uuid tag=$tag size=${data.size} itemSize=$itemSize)" }
-            return
+            return true
         }
         val batch = ThirdPartyDatalogEvent.Batch(
             uuid = uuid,
@@ -90,12 +95,56 @@ class Datalogging(
             data = data,
         )
         if (!_thirdPartyEvents.tryEmit(batch)) {
-            logger.w { "Third-party datalogging buffer is full; dropped a batch (uuid=$uuid tag=$tag)" }
+            // Boulder: nicht bestaetigen - die Uhr behaelt den Schub und schickt ihn spaeter noch einmal.
+            logger.w { "Third-party datalogging buffer is full; not acknowledging the batch (uuid=$uuid tag=$tag)" }
+            return false
+        }
+        return true
+    }
+
+    // Boulder: die Tags, deren Items Boulder selbst liest. Alles andere wird wie
+    // bisher nur bestaetigt (Gesundheit fremder Apps, Datalogging von Watchapps).
+    private fun wirdGelesen(tag: UInt, uuid: Uuid, itemSize: UShort): Boolean =
+        BoulderDls.art(tag, uuid, itemSize) != null || (uuid == SYSTEM_APP_UUID &&
+            (tag in HealthDataProcessor.HEALTH_TAGS || tag == MEMFAULT_CHUNKS_TAG || tag == ANALYTICS_HEARTBEAT_TAG))
+
+    private fun systemDaten(tag: UInt, data: ByteArray, watchInfo: WatchInfo, itemSize: UShort) {
+        when (tag) {
+            MEMFAULT_CHUNKS_TAG -> {
+                // A single SendDataItems payload can contain multiple items,
+                // each itemSize bytes. Parse each one as a MemfaultChunk.
+                val size = itemSize.toInt()
+                var offset = 0
+                while (offset + size <= data.size) {
+                    val itemData = data.copyOfRange(offset, offset + size)
+                    val chunk = MemfaultChunk()
+                    chunk.fromBytes(DataBuffer(itemData.toUByteArray()))
+                    webServices.uploadMemfaultChunk(chunk.bytes.get().toByteArray(), watchInfo)
+                    offset += size
+                }
+            }
+            ANALYTICS_HEARTBEAT_TAG -> {
+                // Fixed-size native_heartbeat_record items (no inner length prefix).
+                val size = itemSize.toInt()
+                if (size <= 0) {
+                    logger.w { "Analytics heartbeat with itemSize=$size; ignoring" }
+                    return
+                }
+                var offset = 0
+                while (offset + size <= data.size) {
+                    val itemData = data.copyOfRange(offset, offset + size)
+                    webServices.uploadAnalyticsHeartbeat(itemData, watchInfo)
+                    offset += size
+                }
+            }
         }
     }
 
     fun openSession(sessionId: UByte, tag: UInt, applicationUuid: Uuid, itemSize: UShort) {
-        if (applicationUuid == SYSTEM_APP_UUID && tag in HealthDataProcessor.HEALTH_TAGS) {
+        // Boulder: BoulderDls
+        if ((applicationUuid == SYSTEM_APP_UUID && tag in HealthDataProcessor.HEALTH_TAGS) ||
+            BoulderDls.art(tag, applicationUuid, itemSize) != null
+        ) {
             healthDataProcessor.handleSessionOpen(sessionId, tag, applicationUuid, itemSize)
         }
     }
@@ -108,10 +157,9 @@ class Datalogging(
         itemSize: UShort,
         watchSerial: String?,
     ) {
+        // Boulder: auch fuer die Boulder-Tags; vergessen wird nur, was beim Oeffnen gemerkt wurde.
+        healthDataProcessor.handleSessionClose(sessionId)
         if (uuid == SYSTEM_APP_UUID) {
-            if (tag in HealthDataProcessor.HEALTH_TAGS) {
-                healthDataProcessor.handleSessionClose(sessionId)
-            }
             return
         }
         if (watchSerial == null) {

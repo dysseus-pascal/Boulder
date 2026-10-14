@@ -38,7 +38,8 @@ class HealthDataParserTest {
         val payload = stepsItem(version = 14, sampleSize = 18, extraSampleBytes = 2, itemSize = itemSize) +
             stepsItem(version = 14, sampleSize = 18, extraSampleBytes = 2, itemSize = itemSize)
 
-        val records = parseStepsData(payload, itemSize.toUShort())
+        // Boulder: parseStepsData liefert Minuten und SpO2 getrennt (ParsedHealthData).
+        val records = parseStepsData(payload, itemSize.toUShort()).healthData
 
         assertEquals(4, records.size)
         assertEquals(listOf(100, 101, 100, 101), records.map { it.steps })
@@ -51,7 +52,7 @@ class HealthDataParserTest {
         val itemSize = 9 + 15 * 16
         val payload = stepsItem(version = 14, sampleSize = 15, extraSampleBytes = 0, itemSize = itemSize)
 
-        assertEquals(0, parseStepsData(payload, itemSize.toUShort()).size)
+        assertEquals(0, parseStepsData(payload, itemSize.toUShort()).healthData.size)
     }
 
     private fun overlayItem(version: Int, itemSize: Int): ByteArray {
@@ -80,7 +81,8 @@ class HealthDataParserTest {
             assertEquals(1200, steps)
             assertEquals(40, activeKiloCalories)
             assertEquals(15, restingKiloCalories)
-            assertEquals(800, distanceCm)
+            // Boulder: die Sitzung traegt Meter (distanceM, Spalte distanceCm).
+            assertEquals(800, distanceM)
         }
     }
 

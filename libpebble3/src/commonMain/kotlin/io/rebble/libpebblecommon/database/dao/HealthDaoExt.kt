@@ -3,90 +3,120 @@ package io.rebble.libpebblecommon.database.dao
 import co.touchlab.kermit.Logger
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 private val logger = Logger.withTag("HealthDaoExt")
+
+// Boulder: Lesen und Schreiben eines Pakets am Stueck - der Empfang startet je Paket
+// eine Coroutine, und zwei Pakete mit derselben Minute saehen sonst beide "nichts da".
+private val schreibSperre = Mutex()
+
+/** Boulder: so weit reicht eine Bereichsabfrage hoechstens, ein Tag = 1440 Minutenzeilen. */
+internal const val BEREICH_SEKUNDEN = 86_400L
 
 /**
  * Inserts health data with priority based on step count. If data already exists for a timestamp,
  * only replaces it if the new data has more steps.
+ *
+ * Boulder: je Paket eine Bereichsabfrage und ein Insert (eine Transaktion) statt
+ * je Minute - vorher ~2880 Room-Aufrufe am Tag.
  */
 suspend fun HealthDao.insertHealthDataWithPriority(data: List<HealthDataEntity>) {
-    var inserted = 0
-    var skipped = 0
-    var replaced = 0
-
-    data.forEach { newData ->
-        val existing = getDataAtTimestamp(newData.timestamp)
-        if (existing == null) {
-            insertHealthData(listOf(newData))
-            inserted++
-        } else if (newData.steps > existing.steps) {
-            logger.d {
-                "Replacing data at timestamp ${newData.timestamp}: ${existing.steps} steps -> ${newData.steps} steps (gained ${newData.steps - existing.steps} steps)"
-            }
-            insertHealthData(listOf(newData))
-            replaced++
-        } else if (newData.steps < existing.steps) {
-            logger.d {
-                "Skipping data at timestamp ${newData.timestamp}: existing ${existing.steps} steps > new ${newData.steps} steps"
-            }
-            skipped++
-        } else {
-            logger.d {
-                "Skipping duplicate data at timestamp ${newData.timestamp}: both have ${newData.steps} steps"
-            }
-            skipped++
+    if (data.isEmpty()) return
+    schreibSperre.withLock {
+        val bestand = HashMap<Long, HealthDataEntity>()
+        for ((von, bis) in zeitbereiche(data.map { it.timestamp })) {
+            getHealthDataForRange(von, bis).associateByTo(bestand) { it.timestamp }
         }
+        val wahl = vorrang(data, bestand, { it.timestamp }, ::minutenGewicht)
+        if (wahl.zuSchreiben.isNotEmpty()) insertHealthData(wahl.zuSchreiben)
+        logger.d { "Health data insert complete: ${wahl.zusammenfassung("higher steps", "lower/equal steps")}" }
     }
-
-    val summary = buildString {
-        append("Health data insert complete: ")
-        if (inserted > 0) append("$inserted new, ")
-        if (replaced > 0) append("$replaced replaced (higher steps), ")
-        if (skipped > 0) append("$skipped skipped (lower/equal steps)")
-    }
-    logger.d { summary }
 }
 
 /**
  * Inserts overlay data (sleep, activities) while preventing duplicates.
  * An overlay entry is considered duplicate if it has the same startTime and type.
  * When duplicates exist, keeps the entry with the longer duration to prevent data loss.
+ *
+ * Boulder: wie oben eine Bereichsabfrage und ein Insert je Paket.
  */
 suspend fun HealthDao.insertOverlayDataWithDeduplication(data: List<OverlayDataEntity>) {
     if (data.isEmpty()) return
-
-    var inserted = 0
-    var skipped = 0
-    var replaced = 0
-
-    data.forEach { newData ->
-        val existing = getOverlayAtStartTimeAndType(newData.startTime, newData.type)
-        if (existing == null) {
-            insertOverlayData(listOf(newData))
-            inserted++
-        } else if (newData.duration > existing.duration) {
-            logger.d {
-                "Replacing overlay at startTime ${newData.startTime}, type ${newData.type}: ${existing.duration}s -> ${newData.duration}s (gained ${newData.duration - existing.duration}s)"
-            }
-            insertOverlayData(listOf(newData))
-            replaced++
-        } else if (newData.duration < existing.duration) {
-            logger.d {
-                "Skipping overlay at startTime ${newData.startTime}, type ${newData.type}: existing ${existing.duration}s > new ${newData.duration}s"
-            }
-            skipped++
-        } else {
-            // Same duration - skip as duplicate
-            skipped++
+    schreibSperre.withLock {
+        val typen = data.map { it.type }.distinct()
+        val bestand = HashMap<Pair<Long, Int>, OverlayDataEntity>()
+        for ((von, bis) in zeitbereiche(data.map { it.startTime })) {
+            getOverlayEntries(von, bis, typen).associateByTo(bestand) { it.startTime to it.type }
         }
+        val wahl = vorrang(data, bestand, { it.startTime to it.type }, { it.duration })
+        if (wahl.zuSchreiben.isNotEmpty()) insertOverlayData(wahl.zuSchreiben)
+        logger.d { "Overlay data insert complete: ${wahl.zusammenfassung("longer duration", "shorter/equal duration")}" }
     }
+}
 
-    val summary = buildString {
-        append("Overlay data insert complete: ")
-        if (inserted > 0) append("$inserted new, ")
-        if (replaced > 0) append("$replaced replaced (longer duration), ")
-        if (skipped > 0) append("$skipped skipped (shorter/equal duration)")
+// Boulder: mehr Schritte gewinnen wie bisher; bei gleich vielen gewinnt eine Minute
+// mit Puls gegen eine ohne - sonst fiele ein nachgelieferter Puls weg.
+private fun minutenGewicht(minute: HealthDataEntity): Long =
+    minute.steps.toLong() * 2 + if (minute.heartRate > 0) 1 else 0
+
+internal data class Vorrangwahl<T>(
+    val zuSchreiben: List<T>,
+    val neu: Int,
+    val ersetzt: Int,
+    val uebersprungen: Int,
+) {
+    fun zusammenfassung(besser: String, schlechter: String): String =
+        "$neu new, $ersetzt replaced ($besser), $uebersprungen skipped ($schlechter)"
+}
+
+/**
+ * Boulder: die bisherige Regel gegen eine Karte statt je Satz gegen die Datenbank.
+ * Jeder Gewinner kommt sofort in die Karte, weil sich Saetze desselben Pakets mit
+ * gleichem Schluessel wie vorher der Reihe nach vergleichen.
+ */
+internal fun <K, T> vorrang(
+    neue: List<T>,
+    bestand: MutableMap<K, T>,
+    schluessel: (T) -> K,
+    mass: (T) -> Long,
+): Vorrangwahl<T> {
+    val gewinner = LinkedHashMap<K, T>()
+    var neu = 0
+    var ersetzt = 0
+    var uebersprungen = 0
+    for (satz in neue) {
+        val k = schluessel(satz)
+        val alt = bestand[k]
+        when {
+            alt == null -> neu++
+            mass(satz) > mass(alt) -> ersetzt++
+            else -> {
+                uebersprungen++
+                continue
+            }
+        }
+        bestand[k] = satz
+        gewinner[k] = satz
     }
-    logger.d { summary }
+    return Vorrangwahl(gewinner.values.toList(), neu, ersetzt, uebersprungen)
+}
+
+/** Boulder: Bereiche [von, bis) von hoechstens einem Tag, auch fuer einen Nachholschub ueber Tage. */
+internal fun zeitbereiche(zeiten: List<Long>): List<Pair<Long, Long>> {
+    if (zeiten.isEmpty()) return emptyList()
+    val sortiert = zeiten.sorted()
+    val bereiche = mutableListOf<Pair<Long, Long>>()
+    var von = sortiert.first()
+    var letzte = von
+    for (t in sortiert) {
+        if (t - von >= BEREICH_SEKUNDEN) {
+            bereiche += von to letzte + 1
+            von = t
+        }
+        letzte = t
+    }
+    bereiche += von to letzte + 1
+    return bereiche
 }

@@ -5,14 +5,23 @@ import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.HealthApi
 import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.LatestHeartRate
+import io.rebble.libpebblecommon.connection.LatestSpo2
+import io.rebble.libpebblecommon.connection.Pulsreihe
 import io.rebble.libpebblecommon.connection.WatchManager
 import io.rebble.libpebblecommon.database.dao.HealthDao
+import io.rebble.libpebblecommon.database.dao.NachtDao
+import io.rebble.libpebblecommon.database.boulder.NachtUmzug
+import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
+import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
+import io.rebble.libpebblecommon.database.entity.NachtEntity
+import io.rebble.libpebblecommon.database.dao.Spo2Dao
 import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
 import io.rebble.libpebblecommon.database.entity.getWatchSettings
 import io.rebble.libpebblecommon.database.entity.setImperialUnits
 import io.rebble.libpebblecommon.database.entity.setWatchSettings
@@ -26,6 +35,8 @@ import io.rebble.libpebblecommon.services.decodeTypicalStepTotal
 import io.rebble.libpebblecommon.services.groupSleepSessions
 import io.rebble.libpebblecommon.services.fetchAndGroupDailySleep
 import io.rebble.libpebblecommon.services.updateHealthStatsInDatabase
+import io.rebble.libpebblecommon.util.datenbereich
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharedFlow
@@ -46,10 +57,17 @@ class Health(
     private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val healthDao: HealthDao,
     private val healthStatDao: HealthStatDao,
+    private val spo2Dao: Spo2Dao,
     private val watchManager: WatchManager,
     private val healthDataProcessor: HealthDataProcessor,
+    private val nachtDao: NachtDao,
+    // Boulder: die Naechte ziehen beim Start nach boulder.db, nicht erst beim ersten Lesen.
+    private val nachtUmzug: NachtUmzug,
 ) : HealthApi, HealthDataApi {
     private val logger = Logger.withTag("Health")
+
+    // Boulder: Einstellungen und Tageszahlen laufen hier; ein Datenbankfehler beendete vorher die App.
+    private val bereich = libPebbleCoroutineScope.datenbereich("Health")
 
     companion object {
         private val HEALTH_STATS_AVERAGE_DAYS = 30
@@ -64,11 +82,21 @@ class Health(
 
     fun init() {
         startPeriodicStatsUpdate()
+        bereich.launch {
+            try {
+                nachtUmzug.sicherstellen()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // NachtUmzug hat es geloggt; der naechste Zugriff auf die Naechte versucht es erneut.
+                logger.w { "Night move not done at start: ${e.message}" }
+            }
+        }
     }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {
         logger.d { "updateHealthSettings called: $healthSettings" }
-        libPebbleCoroutineScope.launch {
+        bereich.launch {
             healthSettingsDao.setWatchSettings(healthSettings)
             logger.d { "Health settings saved to database - will sync to watch via BlobDB" }
         }
@@ -123,18 +151,26 @@ class Health(
     override fun requestHealthData(fullSync: Boolean) {
         libPebbleCoroutineScope.launch {
             val device = watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>().firstOrNull()
-            device?.requestHealthData(fullSync)
+            // Boulder: der Bereich hat keinen Fehlerfaenger; bricht die Verbindung
+            // mitten in der Anfrage ab, fiele sonst die ganze App um.
+            try {
+                device?.requestHealthData(fullSync)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logger.w(e) { "requestHealthData failed" }
+            }
         }
     }
 
     override fun sendHealthAveragesToWatch() {
-        libPebbleCoroutineScope.launch {
+        bereich.launch {
             updateHealthStats()
         }
     }
 
     private fun startPeriodicStatsUpdate() {
-        libPebbleCoroutineScope.launch {
+        bereich.launch {
             // Update health stats once daily at 7 AM
             while (true) {
                 val timeZone = TimeZone.currentSystemDefault()
@@ -158,7 +194,14 @@ class Health(
                 delay(delayUntilMorning)
 
                 logger.d { "HEALTH_STATS: Running scheduled daily stats update" }
-                updateHealthStats()
+                // Boulder: ein Fehler laesst nur diesen Morgen ausfallen, nicht alle folgenden.
+                try {
+                    updateHealthStats()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.e(e) { "HEALTH_STATS: scheduled update failed" }
+                }
             }
         }
     }
@@ -194,6 +237,15 @@ class Health(
 
     override suspend fun getHealthDataForRange(start: Long, end: Long): List<HealthDataEntity> =
         healthDao.getHealthDataForRange(start, end)
+
+    // Boulder: zwei Spalten statt zwoelf, gleich in Reihen - siehe Pulsreihe.
+    override suspend fun getPulsMinuten(start: Long, end: Long): Pulsreihe {
+        val zeilen = healthDao.getPulsMinuten(start, end)
+        return Pulsreihe(LongArray(zeilen.size) { zeilen[it].timestamp }, IntArray(zeilen.size) { zeilen[it].heartRate })
+    }
+
+    override suspend fun getSchritteJeHalbstunde(start: Long, end: Long): List<Pair<Long, Long>> =
+        healthDao.getSchritteJeHalbstunde(start, end).map { it.beginn to it.schritte }
 
     override suspend fun getDailyAggregates(start: Long, end: Long) =
         healthDao.getDailyMovementAggregates(start, end)
@@ -233,6 +285,38 @@ class Health(
 
     override suspend fun getHRZoneMinutes(start: Long, end: Long): Map<Int, Long> =
         healthDao.getHeartRateZoneMinutes(start, end).associate { it.heartRateZone to it.minutes }
+
+    override suspend fun getSpo2Readings(start: Long, end: Long): List<Spo2ReadingEntity> =
+        spo2Dao.getSpo2Readings(start, end)
+
+    override suspend fun getSpo2ReadingsAfter(afterTimestamp: Long): List<Spo2ReadingEntity> =
+        spo2Dao.getSpo2ReadingsAfter(afterTimestamp)
+
+    override suspend fun getNaechte(von: Long, bis: Long): List<NachtEntity> = nachtDao.naechte(von, bis)
+
+    override suspend fun getNachtAbschnitte(beginnUtc: Long): List<NachtAbschnittEntity> = nachtDao.abschnitte(beginnUtc)
+
+    override suspend fun getNachtAbschnitte(von: Long, bis: Long): List<NachtAbschnittEntity> = nachtDao.abschnitteZwischen(von, bis)
+
+    override suspend fun getNachtHrv(beginnUtc: Long): List<NachtHrvEntity> = nachtDao.hrv(beginnUtc)
+
+    override suspend fun setzeNachtHrvWennLeer(beginnUtc: Long, hrv: Int): Boolean = nachtDao.setzeHrvWennLeer(beginnUtc, hrv) > 0
+
+    override suspend fun setzeZiele(schritte: Int, schlafMin: Int) {
+        healthStatDao.insertOrReplace(BoulderZiele.zeile(schritte, schlafMin))
+    }
+
+    override suspend fun getAverageSpo2(start: Long, end: Long): Double? =
+        spo2Dao.getAverageSpo2(start, end)
+
+    override suspend fun getLatestSpo2Reading(): LatestSpo2? {
+        val entry = spo2Dao.getLatestSpo2Reading() ?: return null
+        return LatestSpo2(
+            spo2Percent = entry.spo2Percent,
+            quality = entry.quality,
+            timestampEpochSec = entry.timestamp,
+        )
+    }
 
     override suspend fun getActivitySessions(start: Long, end: Long): List<OverlayDataEntity> =
         healthDao.getOverlayEntries(start, end, listOf(
@@ -281,161 +365,6 @@ class Health(
         val validSessions = sessions.filter { it.totalSleep > 1800 }
         return if (validSessions.isNotEmpty()) validSessions.sumOf { it.totalSleep } / validSessions.size else 0L
     }
-
-    override suspend fun populateDebugHealthData() {
-        healthDao.deleteExpiredHealthData(Long.MAX_VALUE)
-        healthDao.deleteExpiredOverlayData(Long.MAX_VALUE)
-
-        val timeZone = TimeZone.currentSystemDefault()
-        val today = System.now().toLocalDateTime(timeZone).date
-
-        for (daysAgo in 0..29) {
-            val date = today.minus(DatePeriod(days = daysAgo))
-            val dayStart = date.atStartOfDayIn(timeZone).epochSeconds
-            val dow = date.dayOfWeek.ordinal
-            val random = kotlin.random.Random(dayStart.toInt())
-
-            // Day-of-week personality: weekends are lazier, some weekdays more active
-            val activityMultiplier = when (dow) {
-                0 -> 1.2f  // Monday - motivated
-                1 -> 1.0f  // Tuesday
-                2 -> 1.3f  // Wednesday - peak
-                3 -> 0.9f  // Thursday - tired
-                4 -> 1.1f  // Friday
-                5 -> 0.6f  // Saturday - lazy
-                6 -> 0.7f  // Sunday - lazy
-                else -> 1.0f
-            }
-            // Per-day variance so each day looks different
-            val dayVariance = 0.7f + random.nextFloat() * 0.6f
-
-            val healthEntries = mutableListOf<HealthDataEntity>()
-            for (minute in 0 until 1440) {
-                val hour = minute / 60
-                val isAwake = hour in 7..22
-                val baseSteps = if (isAwake) {
-                    when {
-                        hour in 8..9 -> random.nextInt(5, 35)
-                        hour in 12..13 -> random.nextInt(8, 45)
-                        hour in 17..18 -> random.nextInt(10, 55)
-                        hour == 7 -> random.nextInt(2, 12)
-                        hour in 20..22 -> random.nextInt(0, 8)
-                        else -> random.nextInt(0, 18)
-                    }
-                } else 0
-                val steps = (baseSteps * activityMultiplier * dayVariance).toInt()
-                val heartRate = if (isAwake) {
-                    random.nextInt(58, 95) + (steps / 3)
-                } else {
-                    random.nextInt(48, 63)
-                }
-
-                healthEntries.add(
-                    HealthDataEntity(
-                        timestamp = dayStart + minute * 60L,
-                        steps = steps,
-                        orientation = 0,
-                        intensity = if (steps > 20) 2 else if (steps > 0) 1 else 0,
-                        lightIntensity = if (isAwake) 50 else 0,
-                        activeMinutes = if (steps > 10) 1 else 0,
-                        restingGramCalories = random.nextInt(800, 1200),
-                        activeGramCalories = steps * random.nextInt(3, 8),
-                        distanceCm = steps * random.nextInt(50, 80),
-                        heartRate = heartRate,
-                        heartRateZone = when {
-                            heartRate > 120 -> 3
-                            heartRate > 90 -> 2
-                            heartRate > 70 -> 1
-                            else -> 0
-                        },
-                        heartRateWeight = if (heartRate > 0) 10 else 0,
-                    )
-                )
-            }
-            healthDao.insertHealthData(healthEntries)
-
-            // Sleep: weekends stay up later, variance per day
-            val baseBedtimeHour = if (dow >= 4) 23 else 22
-            val bedtimeHour = baseBedtimeHour + random.nextInt(0, 2)
-            val bedtimeMinute = random.nextInt(0, 60)
-            val sleepStart = dayStart - (24 - bedtimeHour) * 3600L + bedtimeMinute * 60L
-            val baseSleepHours = if (dow >= 5) random.nextInt(7, 10) else random.nextInt(5, 8)
-            val totalSleepSec = baseSleepHours * 3600L + random.nextInt(0, 60) * 60L
-            val deepFraction = random.nextDouble(0.15, 0.35)
-
-            val overlays = mutableListOf<OverlayDataEntity>()
-            fun addOverlay(start: Long, duration: Long, type: OverlayType) {
-                overlays += OverlayDataEntity(
-                    startTime = start, duration = duration, type = type.value,
-                    steps = 0, restingKiloCalories = 0, activeKiloCalories = 0,
-                    distanceCm = 0, offsetUTC = 0,
-                )
-            }
-            // Drop n DeepSleep blocks roughly evenly inside [start, start+duration].
-            fun addDeepSleeps(start: Long, duration: Long, n: Int) {
-                if (n <= 0 || duration <= 0) return
-                val deepEach = (duration * deepFraction / n).toLong()
-                val slot = duration / (n + 1)
-                repeat(n) { i ->
-                    addOverlay(start + slot * (i + 1) - deepEach / 2, deepEach, OverlayType.DeepSleep)
-                }
-            }
-
-            // Mix in split-sleep and interrupted-sleep nights so the daily timeline shows
-            // off multi-session and within-session-awake-gap rendering.
-            when {
-                random.nextFloat() < 0.20f -> {
-                    // Split sleep: two sessions separated by > 1h (the grouper splits them).
-                    val firstDur = (totalSleepSec * 0.55).toLong()
-                    val gap = 5400L + random.nextInt(5400)  // 1.5h–3h
-                    val secondDur = totalSleepSec - firstDur
-                    val secondStart = sleepStart + firstDur + gap
-                    addOverlay(sleepStart, firstDur, OverlayType.Sleep)
-                    addDeepSleeps(sleepStart, firstDur, random.nextInt(1, 3))
-                    addOverlay(secondStart, secondDur, OverlayType.Sleep)
-                    addDeepSleeps(secondStart, secondDur, random.nextInt(1, 3))
-                }
-                random.nextFloat() < 0.25f -> {
-                    // Interrupted sleep: one session with a short awake gap inside it.
-                    val firstDur = (totalSleepSec * 0.6).toLong()
-                    val gap = (random.nextInt(14, 31) * 60).toLong()  // 14–30 min
-                    val secondDur = totalSleepSec - firstDur
-                    val secondStart = sleepStart + firstDur + gap
-                    addOverlay(sleepStart, firstDur, OverlayType.Sleep)
-                    addDeepSleeps(sleepStart, firstDur, random.nextInt(2, 4))
-                    addOverlay(secondStart, secondDur, OverlayType.Sleep)
-                    addDeepSleeps(secondStart, secondDur, random.nextInt(1, 3))
-                }
-                else -> {
-                    // Typical uninterrupted night with multiple deep-sleep cycles.
-                    addOverlay(sleepStart, totalSleepSec, OverlayType.Sleep)
-                    addDeepSleeps(sleepStart, totalSleepSec, random.nextInt(2, 4))
-                }
-            }
-
-            // Add activity sessions on some days
-            if (random.nextFloat() > 0.4f) {
-                val sessionHour = if (random.nextBoolean()) random.nextInt(7, 9) else random.nextInt(17, 19)
-                val sessionStart = dayStart + sessionHour * 3600L
-                val sessionDur = random.nextInt(15, 60) * 60L
-                val sessionType = if (random.nextBoolean()) OverlayType.Walk else OverlayType.Run
-                overlays.add(OverlayDataEntity(
-                    startTime = sessionStart, duration = sessionDur,
-                    type = sessionType.value,
-                    steps = (sessionDur / 60 * random.nextInt(80, 160)).toInt(),
-                    restingKiloCalories = 0,
-                    activeKiloCalories = (sessionDur / 60 * random.nextInt(4, 10)).toInt(),
-                    distanceCm = (sessionDur / 60 * random.nextInt(50, 150)).toInt(),
-                    offsetUTC = 0,
-                ))
-            }
-
-            healthDao.insertOverlayData(overlays)
-        }
-
-        logger.d { "DEBUG: Populated 30 days of varied fake health data" }
-        healthDataProcessor.emitHealthDataUpdated()
-    }
 }
 
 data class HealthSettings(
@@ -458,6 +387,12 @@ data class HealthSettings(
     val hrZone1Threshold: Short,
     val hrZone2Threshold: Short,
     val hrZone3Threshold: Short,
+    // BloodOxygenPreferences
+    val bloodOxygenEnabled: Boolean,
+    // BloodOxygenActivityPreferences (SpO2 during activities; gated by HR During Activities)
+    val bloodOxygenActivityEnabled: Boolean,
+    // Spo2Preferences — SpO2 monitoring rate; sampling runs only when bloodOxygenEnabled && rate != Disabled
+    val spo2MeasurementInterval: HRMonitoringInterval,
 )
 
 /** Time range for displaying health data */

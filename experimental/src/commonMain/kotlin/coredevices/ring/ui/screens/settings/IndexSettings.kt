@@ -154,7 +154,6 @@ fun IndexSettings(coreNav: CoreNav) {
     val autoDismissActionNotifications by viewModel.autoDismissActionNotifications.collectAsState()
     val pendingIntentScanEnabled by viewModel.pendingIntentScanEnabled.collectAsState()
     val scanByPairedAddress by viewModel.scanByPairedAddress.collectAsState()
-    val diagnosticsState by viewModel.diagnosticsState.collectAsState()
     val platform = koinInject<Platform>()
     val providers = koinInject<IntegrationProviderRepository>()
     val coreConfigHolder = koinInject<CoreConfigHolder>()
@@ -187,7 +186,6 @@ fun IndexSettings(coreNav: CoreNav) {
     val noteShortcut by viewModel.noteShortcut.collectAsState()
     var showSignInDialog by remember { mutableStateOf(false) }
     var showBackupDialog by remember { mutableStateOf(false) }
-    var showDiagnosticsDialog by remember { mutableStateOf(false) }
     val availableNoteProviders by viewModel.availableNoteProviders.collectAsState()
     val availableReminderProviders by viewModel.availableReminderProviders.collectAsState()
 
@@ -221,13 +219,6 @@ fun IndexSettings(coreNav: CoreNav) {
         BackupDialog(
             debugDetailsEnabled = debugDetailsEnabled,
             onDismiss = { showBackupDialog = false }
-        )
-    }
-    if (showDiagnosticsDialog) {
-        DiagnosticsDialog(
-            coreNav = coreNav,
-            viewModel = viewModel,
-            onDismiss = { showDiagnosticsDialog = false }
         )
     }
     val scope = rememberCoroutineScope()
@@ -472,17 +463,8 @@ fun IndexSettings(coreNav: CoreNav) {
                     subtitle = currentRingFirmware ?: "Not yet seen device",
                 )
             }
-            item {
-                SettingsRow(
-                    title = "Diagnostics",
-                    subtitle = "Record diagnostic information from your Index 01, only needed if support asks.",
-                    enabled = ringPaired && diagnosticsState != DiagnosticsState.Running,
-                    onClick = {
-                        if (diagnosticsState != DiagnosticsState.Idle) viewModel.resetDiagnostics()
-                        showDiagnosticsDialog = true
-                    },
-                )
-            }
+            // Boulder: keine "Diagnostics" - die Messung zeigt nichts an und war nur fuer einen
+            // Bug-Report an Core Devices da.
 
             if (debugDetailsEnabled || platform.isSecondaryProfile) {
                 item {

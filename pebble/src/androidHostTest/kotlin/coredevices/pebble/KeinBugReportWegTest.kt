@@ -21,6 +21,8 @@ class KeinBugReportWegTest {
         Regex("""navigateTo\(\s*CommonRoutes\.(BugReport|ViewMyBugReportsRoute|ViewBugReportRoute|TroubleshootingRoute)\b"""),
         Regex("""deep-link/(view-)?bug-report"""),
         Regex("""\.createCoreDump\("""),
+        // Index-Diagnose: ihr Ergebnis ging nur in einen Bug-Report.
+        Regex("""if support asks"""),
     )
 
     /** Fundstellen in [text] als "Zeile: Treffer". */
@@ -55,6 +57,7 @@ class KeinBugReportWegTest {
             "NavDeepLink(\"pebblecore://deep-link/bug-report?pebble={pebble}\")",
             "deepLink = \"pebblecore://deep-link/bug-report?pebble=false\"",
             "watch.createCoreDump()",
+            "subtitle = \"Record diagnostic information from your Index 01, only needed if support asks.\",",
         )
         core.forEach { assertTrue(funde(it).isNotEmpty(), "nicht erkannt: $it") }
     }

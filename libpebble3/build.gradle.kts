@@ -182,6 +182,10 @@ afterEvaluate {
     tasks.named("kspAndroidMain") {
         dependsOn("kspCommonMainKotlinMetadata")
     }
+    // Boulder: Room auch fuer die JVM, siehe kspJvm unten.
+    tasks.named("kspKotlinJvm") {
+        dependsOn("kspCommonMainKotlinMetadata")
+    }
 
     if (enableIosTarget) {
         tasks.named("kspKotlinIosArm64") {
@@ -195,7 +199,9 @@ afterEvaluate {
 
 dependencies {
 //    add("kspCommonMainMetadata", libs.room.compiler)
-//    add("kspJvm", libs.room.compiler)
+    // Boulder: Boulders Datenbanktests (Migrationen, Downgrade-Schutz, Naechte) laufen gegen die
+    // echte Room-Datenbank auf der JVM; ohne den Prozessor fehlt dort Database_Impl.
+    add("kspJvm", libs.room.compiler)
     add("kspCommonMainMetadata", project(":blobdbgen"))
     add("kspAndroid", libs.room.compiler)
 

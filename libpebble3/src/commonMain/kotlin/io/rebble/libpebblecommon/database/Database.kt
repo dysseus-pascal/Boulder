@@ -12,6 +12,10 @@ import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import io.rebble.libpebblecommon.connection.AppContext
+import io.rebble.libpebblecommon.database.boulder.BOULDER_ALTE_MIGRATIONEN
+import io.rebble.libpebblecommon.database.boulder.DATENBANK_VERSION
+import io.rebble.libpebblecommon.database.boulder.DowngradeSchutz
+import io.rebble.libpebblecommon.database.boulder.UPSTREAM_VERSATZ
 import io.rebble.libpebblecommon.database.dao.CalendarDao
 import io.rebble.libpebblecommon.database.dao.ContactDao
 import io.rebble.libpebblecommon.database.dao.HealthDao
@@ -22,6 +26,7 @@ import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationDao
 import io.rebble.libpebblecommon.database.dao.NotificationRuleDao
+import io.rebble.libpebblecommon.database.dao.Spo2Dao
 import io.rebble.libpebblecommon.database.dao.TimelineNotificationRealDao
 import io.rebble.libpebblecommon.database.dao.TimelinePinRealDao
 import io.rebble.libpebblecommon.database.dao.TimelineReminderRealDao
@@ -48,6 +53,7 @@ import io.rebble.libpebblecommon.database.entity.NotificationAppItemSyncEntity
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationEntity
 import io.rebble.libpebblecommon.database.entity.TimelineNotificationSyncEntity
 import io.rebble.libpebblecommon.database.entity.TimelinePinEntity
@@ -61,6 +67,7 @@ import io.rebble.libpebblecommon.database.entity.WeatherAppEntryEntity
 import io.rebble.libpebblecommon.database.entity.WeatherAppEntrySyncEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
+import kotlin.time.Clock
 
 internal const val DATABASE_FILENAME = "libpebble3.db"
 
@@ -95,8 +102,11 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AppPrefsEntryEntity::class,
         AppPrefsEntrySyncEntity::class,
         NotificationRuleEntity::class,
+        // Boulder: SpO2 aus den Minutendaten (Fassung 14)
+        Spo2ReadingEntity::class,
     ],
-    version = 49,
+    // Boulder: Upstream-Fassung plus UPSTREAM_VERSATZ (siehe database/boulder/Fassungen.kt)
+    version = DATENBANK_VERSION,
     autoMigrations = [
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
@@ -133,10 +143,10 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         AutoMigration(from = 42, to = 43),
         AutoMigration(from = 43, to = 44),
         AutoMigration(from = 44, to = 45),
-        AutoMigration(from = 45, to = 46),
-        AutoMigration(from = 46, to = 47),
-        AutoMigration(from = 47, to = 48, spec = AutoMigration48::class),
-        AutoMigration(from = 48, to = 49),
+        // Boulder: Upstreams 45 -> 49 in einem Schritt ab Boulders 1045 (0.50 bis 0.53). Einzelne
+        // Schritte haetten Schemas 1046..1048 gebraucht, die nie gebaut wurden. Boulders alte
+        // Zaehlung vor 0.50 steht in BOULDER_ALTE_MIGRATIONEN.
+        AutoMigration(from = UPSTREAM_VERSATZ + 45, to = UPSTREAM_VERSATZ + 49, spec = AutoMigration48::class),
     ],
     exportSchema = true,
 )
@@ -161,6 +171,7 @@ abstract class Database : RoomDatabase() {
     abstract fun weatherAppDao(): WeatherAppRealDao
     abstract fun appPrefsDao(): AppPrefsEntryDao
     abstract fun notificationRuleDao(): NotificationRuleDao
+    abstract fun spo2Dao(): Spo2Dao
 }
 
 @DeleteTable(tableName = "WatchSettingsEntity")
@@ -185,11 +196,13 @@ val MIGRATION_39_40 = object : Migration(39, 40) {
 
 fun getRoomDatabase(ctx: AppContext): Database {
     return getDatabaseBuilder(ctx)
-        .addMigrations(MIGRATION_39_40)
+        // Boulder: Dateien aus Fassungen vor 0.50
+        .addMigrations(MIGRATION_39_40, *BOULDER_ALTE_MIGRATIONEN)
         .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
         // V7 required a full re-create.
         .fallbackToDestructiveMigrationFrom(dropAllTables = true, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-        .setDriver(BundledSQLiteDriver())
+        // Boulder: der Treiber legt eine neuere Datei beiseite, bevor Room sie leert.
+        .setDriver(DowngradeSchutz(BundledSQLiteDriver(), DATENBANK_VERSION, Clock.System))
         .setQueryCoroutineContext(Dispatchers.IO)
         .build()
 }

@@ -99,6 +99,7 @@ import io.rebble.libpebblecommon.contacts.PhoneContactsSyncer
 import io.rebble.libpebblecommon.database.BlobDbDatabaseManager
 import io.rebble.libpebblecommon.database.Database
 import io.rebble.libpebblecommon.database.RealBlobDbDatabaseManager
+import io.rebble.libpebblecommon.database.boulder.boulderDatenModul
 import io.rebble.libpebblecommon.database.dao.HealthSettingsEntryRealDao
 import io.rebble.libpebblecommon.database.dao.LockerEntryRealDao
 import io.rebble.libpebblecommon.database.dao.NotificationAppRealDao
@@ -345,7 +346,8 @@ fun initKoin(
     koin.loadModules(
         listOf(
             module {
-                includes(platformModule, pkjsPlatformModule)
+                // Boulder: boulderDatenModul (boulder.db, NachtDao)
+                includes(platformModule, pkjsPlatformModule, boulderDatenModul)
 
                 single { LibPebbleConfigHolder(defaultValue = defaultConfig, get(), get()) }
                 single { LibPebbleConfigFlow(get<LibPebbleConfigHolder>().config) }
@@ -377,6 +379,8 @@ fun initKoin(
                 single { get<Database>().notificationRuleDao() }
                 single { get<Database>().healthDao() }
                 single { get<Database>().healthStatDao() }
+                // Boulder: SpO2 aus den Minutendaten
+                single { get<Database>().spo2Dao() }
                 singleOf(::HealthDataProcessor)
                 single { get<Database>().watchPrefDao() }
                 single { get<Database>().weatherAppDao() }

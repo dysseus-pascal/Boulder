@@ -8,6 +8,13 @@
         <exclude
             domain="sharedpref"
             path="com.google.firebase.auth.api.Store.W0RFRkFVTFRd+MTo0NjA5Nzc4Mzg5NTY6YW5kcm9pZDpjNjJlZDRhMTVjMDc4MWU2MzAzMTQ5.xml" />
+        <!-- Boulder: Datenbanken einer neueren Fassung, vor einem Downgrade beiseitegelegt
+             (DowngradeSchutz), je eine ganze Kopie; und Datalogging-Pakete, die Boulder nicht lesen
+             konnte (DlsQuarantaene, bis 20 MB). Beides gegen die 25-MB-Grenze des Cloud-Backups,
+             sonst sichert das System gar nichts mehr von der App. Regeln kennen keine Platzhalter,
+             darum liegen beide in eigenen Ordnern. -->
+        <exclude domain="database" path="beiseite" />
+        <exclude domain="file" path="dls-quarantaene" />
     </cloud-backup>
     <device-transfer>
         <exclude

@@ -94,7 +94,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import theme.coreOrange
+import theme.boulderGruen
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
@@ -331,7 +331,7 @@ fun CommonApp.CompatibilityWarning(topBarParams: TopBarParams) {
                 Icons.Filled.Block,
                 contentDescription = "Not compatible with this watch",
                 modifier = Modifier.fillMaxSize(),
-                tint = coreOrange,
+                tint = boulderGruen,
             )
         }
     } else if (!isNativelyCompatible) {

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Der Grund des Widgets. Eine Karte wie in der App, nur ohne Schatten:
+     auf einem Hintergrundbild wirkt ein Schatten wie ein Fehler im Bild. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/ks_w_karte" />
+    <corners android:radius="18dp" />
+</shape>

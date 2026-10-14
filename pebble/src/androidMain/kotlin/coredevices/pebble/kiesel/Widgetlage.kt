@@ -1,0 +1,402 @@
+package coredevices.pebble.kiesel
+
+import coredevices.pebble.R
+import coredevices.pebble.health.Einzellauf
+import kotlin.math.roundToInt
+import java.time.Duration
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+
+/**
+ * Welche Lage gerade gilt - und was das Widget deshalb gross zeigt.
+ *
+ * DAS WIDGET WEISS, WAS GERADE ZAEHLT. Morgens nach dem Aufwachen gibt es noch
+ * keine Schritte, aber die Nacht ist die Auskunft, die man will. Nach einem
+ * Training will man das Training sehen. Am Abend die Bilanz. Statt vier
+ * festen Kacheln gibt es eine Buehne, die wechselt, und drei kleine Kacheln
+ * fuer den Rest.
+ *
+ * EINE VORRANGLISTE, KEIN GEWICHT: Training vor Morgen vor Erinnerung vor
+ * Abend vor Tag. Wer im Morgen trainiert, sieht danach das Training.
+ *
+ * REINE LOGIK OHNE SCHIRM, damit sie sich pruefen laesst: hinein geht ein
+ * Blick auf den Stand, heraus kommt, was zu zeigen ist. Die Woerter kommen
+ * ueber [Texte] - in der App aus den Ressourcen, im Test (WidgetlageTest)
+ * als ihre Schluessel, damit er prueft, welcher Text gewaehlt wurde.
+ */
+internal object Widgetlage {
+
+    enum class Art { TRAINING, MORGEN, ERINNERUNG, ABEND, TAG }
+
+    /** Was das Widget vom Stand braucht - gesammelt, damit die Logik ohne Akte prueft. */
+    data class Blick(
+        val jetzt: LocalDateTime,
+        /** Wann die letzte Nacht endete, null wenn keine eingetragen ist. */
+        val schlafEnde: LocalDateTime?,
+        val schlafMin: Double?,
+        val schlafZielMin: Double?,
+        val schlafWocheMin: Double?,
+        val erholsamAnteil: Double?,     //< 0..1, null wenn unbekannt
+        val ruhepuls: Double?,
+        val hrv: Double?,
+        /** Das letzte Training, null wenn keines in Reichweite. */
+        val trainingEnde: LocalDateTime?,
+        val trainingName: String?,
+        val trainingMin: Long?,
+        val trainingPuls: Double?,
+        val trainingKm: Double?,
+        val trainingBeginn: Long?,       //< Epoch-Sekunden, fuer den Sprung zur Seite
+        val schritte: Double?,
+        val schritteZiel: Double?,
+        val aktivMin: Double?,
+        val aktivZiel: Double?,
+        val wasserMl: Double?,
+        val wasserZiel: Double?,
+        val glasMl: Double,
+        /** Die Praeparate von heute, wie die Gesundheitsseite sie zeigt - mit Planzeit. */
+        val praeparate: List<SupCycle.Eintrag>,
+        val koffeinMg: Double?,
+        /** Von Hand gewaehlt, gilt bis dann. */
+        val wunsch: Art?,
+        /** Gravels "Imperial Units" - die Strecke in mi. Die Rechnung bleibt ohne Android, der Schalter kommt von aussen. */
+        val imperial: Boolean = false,
+        /** Das letzte Training bleibt trotz [imperial] in km/m (Schwimmen, Sport.immerMetrisch) - wie in der App. */
+        val trainingMetrisch: Boolean = false,
+    )
+
+    /** Eine kleine Kachel: Beschriftung, Wert, Anteil am Ziel. */
+    data class Kachel(val schluessel: String, val name: String, val text: String?, val anteil: Float)
+
+    data class Lage(
+        val art: Art,
+        val wort: String,          //< das Wort oben: "Nacht", "Training", "Heute"
+        val name: String,          //< Beschriftung der Buehne
+        val gross: String,         //< die grosse Zahl
+        val einheit: String,
+        val satz: String,          //< der Satz darunter
+        val anteil: Float?,        //< Balken unter der grossen Zahl, oder keiner
+        val kacheln: List<Kachel>, //< die drei kleinen
+        val trainingBeginn: Long?, //< gesetzt, wenn ein Tipp auf die Trainingsseite fuehren soll
+    )
+
+    internal val TRAINING_FRIST: Duration = Duration.ofHours(2)
+    internal val MORGEN_FRIST: Duration = Duration.ofHours(3)
+    internal const val ABEND_AB = 20
+    /** Ab dieser Stunde zeigt ein erreichtes Schrittziel die Bilanz. */
+    internal const val ZIEL_AB = 16
+    /** Die Wassermahnung gilt von dieser Stunde bis vor [WASSER_BIS]. */
+    internal const val WASSER_AB = 9
+    internal const val WASSER_BIS = 22
+
+    /**
+     * Hoechstens so lange bis zum naechsten Zeichnen ohne neue Daten - so oft
+     * wie frueher Androids Takt (updatePeriodMillis 30 min). Die Wassermahnung
+     * waechst stetig mit der Uhrzeit und hat keine feste Wende.
+     */
+    val TAKT: Duration = Duration.ofMinutes(30)
+
+    /**
+     * Ein Durchgang des Widgets mit seinem Takt. ZUERST DAS NETZ, DANN DAS
+     * ZEICHNEN: stirbt der Prozess beim Lesen (Speicher knapp, 60-s-Frist des
+     * Broadcasts bei haengender Akte), steht trotzdem ein Alarm in [TAKT].
+     * Frueher holte Androids 30-min-Takt so ein Loch nach; ohne ihn bliebe
+     * das Widget ohne Uhr stehen, bis die App wieder aufgeht.
+     * [zeichne] gibt den Ausgang des Einzellaufs und die naechste Wende -
+     * null nach einem Fehler, dann bleibt das Netz stehen.
+     */
+    suspend fun mitTakt(
+        jetzt: Instant, plane: (Instant) -> Unit, zeichne: suspend () -> Pair<Einzellauf.Ausgang, Instant?>,
+    ): Einzellauf.Ausgang {
+        plane(jetzt.plus(TAKT))
+        val (ausgang, wende) = zeichne()
+        // Zeichnet gerade ein anderer Durchgang, plant der seine Wende - sicher nach diesem Netz.
+        if (ausgang != Einzellauf.Ausgang.UEBERGEBEN && wende != null) plane(wende)
+        return ausgang
+    }
+
+    /** Das juengste Training fuer den [Blick] - gelesen ausserhalb der Rechnung. */
+    data class Training(
+        val ende: LocalDateTime,
+        val name: String,
+        val minuten: Long,
+        val puls: Double?,
+        val km: Double?,
+        val beginn: Long,
+        val metrisch: Boolean,
+    )
+
+    /**
+     * Der [Blick] aus einem Gesundheitsstand. REIN, damit ein Test zeigen kann,
+     * dass der schlanke Stand des Widgets dieselbe Lage ergibt wie der volle
+     * der Seite (GesundheitsdatenTest). [platz]: der Name eines Praeparats
+     * ohne eigenen Namen ("Slot 3").
+     */
+    fun blick(
+        s: GesundheitsStand, jetzt: LocalDateTime, zone: ZoneId, training: Training?, wunsch: Art?, imperial: Boolean, platz: (Int) -> String,
+    ): Blick {
+        val heute = jetzt.toLocalDate()
+        val n = s.nacht
+        val woche = s.wocheSchlaf.filter { it.first != heute && it.second > 0 }.map { it.second.toDouble() }
+        return Blick(
+            jetzt = jetzt,
+            schlafEnde = n?.aufwachen?.atZone(zone)?.toLocalDateTime(),
+            schlafMin = n?.schlafMinuten?.toDouble(),
+            schlafZielMin = s.ziele.schlafMin.toDouble(),
+            schlafWocheMin = Statistik.mittel(woche),
+            erholsamAnteil = n?.let { Gesundheitsrechnung.erholsamAnteil(it.phasen) },
+            ruhepuls = n?.ruhepuls?.toDouble(),
+            hrv = n?.hrv?.toDouble(),
+            trainingEnde = training?.ende,
+            trainingName = training?.name,
+            trainingMin = training?.minuten,
+            trainingPuls = training?.puls,
+            trainingKm = training?.km,
+            trainingBeginn = training?.beginn,
+            schritte = s.schritte.toDouble(),
+            schritteZiel = s.ziele.schritte.toDouble(),
+            aktivMin = s.aktivMinuten.toDouble(),
+            aktivZiel = Gesundheitsziele.AKTIV_MIN.toDouble(),
+            // Ohne Drinktervall keine Wasserkachel und keine Mahnung (UhrApps).
+            wasserMl = s.wasserMl.toDouble().takeIf { s.mitDrinktervall },
+            wasserZiel = s.wasserZiel?.ml?.toDouble()?.takeIf { s.mitDrinktervall },
+            glasMl = (s.wasserZiel?.glasMl ?: Gesundheitsziele.GLAS_ML).toDouble(),
+            praeparate = s.supplemente?.takeIf { s.mitSupCycle }?.heute(platz).orEmpty(),
+            koffeinMg = Gesundheitsrechnung.koffeinHeute(s.koffein, heute, zone).takeIf { s.mitDrinktervall },
+            wunsch = wunsch,
+            imperial = imperial,
+            // Ein Schwimmen in Metern wie in Sport und im Zeitstrahl - sonst "0.9 mi" hier, "1.5 km" dort.
+            trainingMetrisch = training?.metrisch == true,
+        )
+    }
+
+    /**
+     * Wann das Widget ohne neue Daten wieder zeichnen muss: an der naechsten
+     * Uhrzeit, zu der die Lage von selbst wechseln kann (Ende von Training,
+     * Morgen und Kachelwunsch, Planzeit eines Praeparats, 11, 16 und 20 Uhr,
+     * Beginn und Ende der Wassermahnung, Mitternacht), spaetestens nach
+     * [takt]. Mit Uhr zeichnet ohnehin jeder Schub (alle 15 min) und plant
+     * neu; dann kommt nur eine echte Wende zum Zug.
+     */
+    fun naechsteWende(b: Blick, wunschBis: LocalDateTime?, takt: Duration = TAKT): LocalDateTime {
+        val jetzt = b.jetzt
+        val tag = jetzt.toLocalDate()
+        val kandidaten = buildList {
+            add(jetzt.plus(takt))
+            // Beginn und Ende: ein Ende in der Zukunft (falsche Uhr der Quelle) zaehlt erst ab dann.
+            b.trainingEnde?.let { add(it); add(it.plus(TRAINING_FRIST)) }
+            b.schlafEnde?.let { add(it); add(it.plus(MORGEN_FRIST)) }
+            wunschBis?.let { add(it) }
+            listOf(PRAEPARATE_OHNE_PLAN_AB, ZIEL_AB, ABEND_AB, WASSER_AB, WASSER_BIS).forEach { add(tag.atTime(it, 0)) }
+            b.praeparate.mapNotNull { it.zeit }.forEach { add(tag.atTime(it)) }
+            add(tag.plusDays(1).atStartOfDay())
+        }
+        return kandidaten.filter { it.isAfter(jetzt) }.min()
+    }
+
+    fun ermittle(b: Blick, t: Texte): Lage {
+        val art = b.wunsch ?: when {
+            b.trainingEnde != null && Duration.between(b.trainingEnde, b.jetzt) < TRAINING_FRIST &&
+                !b.trainingEnde.isAfter(b.jetzt) -> Art.TRAINING
+            b.schlafEnde != null && b.schlafMin != null && Duration.between(b.schlafEnde, b.jetzt) < MORGEN_FRIST &&
+                !b.schlafEnde.isAfter(b.jetzt) -> Art.MORGEN
+            erinnerung(b, t) != null -> Art.ERINNERUNG
+            b.jetzt.hour >= ABEND_AB || zielErreicht(b) -> Art.ABEND
+            else -> Art.TAG
+        }
+        return when (art) {
+            Art.TRAINING -> training(b, t)
+            Art.MORGEN -> morgen(b, t)
+            Art.ERINNERUNG -> erinnerungLage(b, t)
+            Art.ABEND -> abend(b, t)
+            Art.TAG -> tag(b, t)
+        }
+    }
+
+    private fun zielErreicht(b: Blick): Boolean {
+        val s = b.schritte ?: return false
+        val z = b.schritteZiel ?: return false
+        return s >= z && b.jetzt.hour >= ZIEL_AB
+    }
+
+    // --- Die Kacheln, aus denen die Buehne waehlt ---
+
+    private fun kSchritte(b: Blick, t: Texte) = Kachel("schritte", t.text(R.string.ks_h_schritte), ganz(b.schritte), anteil(b.schritte, b.schritteZiel))
+    private fun kAktiv(b: Blick, t: Texte) = Kachel("aktiv", t.text(R.string.ks_h_aktiv), b.aktivMin?.let { Formate.menge(it, "min").text }, anteil(b.aktivMin, b.aktivZiel))
+    private fun kSchlaf(b: Blick, t: Texte) = Kachel("schlaf", t.text(R.string.ks_h_schlaf_n), dauer(b.schlafMin)?.text, anteil(b.schlafMin, b.schlafZielMin))
+    /** Ohne Wasser (kein Drinktervall auf der Uhr) keine Kachel - nicht "0 l". In Litern wie die App. */
+    private fun kWasser(b: Blick, t: Texte) = b.wasserMl?.let { Kachel("wasser", t.text(R.string.ks_h_wasser_n), Formate.Angabe(liter(it), "l").text, anteil(it, b.wasserZiel)) }
+
+    // Die Werte des Widgets sind Doubles aus der Akte; gerundet wird hier, geformt in Formate.
+    private fun ganz(d: Double?): String? = d?.let { Formate.zahl(it.roundToInt().toLong()) }
+    private fun dauer(min: Double?): Formate.Angabe? = min?.let { Formate.dauerTeile(it.roundToInt().toLong()) }
+    /** Wasser in Litern ohne Einheit, wie auf der Gesundheitsseite - INTERNAL nur fuer den Test, der das Runden prueft. */
+    internal fun liter(ml: Double): String = Formate.liter(ml.roundToInt())
+
+    private fun anteil(zahl: Double?, ziel: Double?): Float {
+        if (zahl == null || ziel == null || ziel <= 0) return 0f
+        return (zahl / ziel).coerceIn(0.0, 1.0).toFloat()
+    }
+
+    // --- Die Lagen ---
+
+    private fun morgen(b: Blick, t: Texte): Lage {
+        val min = b.schlafMin ?: 0.0
+        val teile = mutableListOf<String>()
+        b.erholsamAnteil?.let { teile += t.text(R.string.ks_wl_erholsam, Formate.prozent(it)) }
+        b.ruhepuls?.let { teile += t.text(R.string.ks_w_ruhepuls_wert, ganz(it).orEmpty()) }
+        b.hrv?.let { teile += "HRV " + Formate.menge(it, "ms").text }
+        val vergleich = b.schlafWocheMin?.let { woche ->
+            when {
+                min >= woche + 30 -> t.text(R.string.ks_wl_laenger)
+                min <= woche - 30 -> t.text(R.string.ks_wl_kuerzer)
+                else -> t.text(R.string.ks_wl_wie_sonst)
+            }
+        }
+        val satz = buildString {
+            if (teile.isNotEmpty()) append(teile.joinToString(" · "))
+            if (vergleich != null) { if (isNotEmpty()) append(" — "); append(vergleich) }
+            if (isEmpty()) append(t.text(R.string.ks_wl_nacht_eingetragen))
+        }
+        // Zahl und Einheit getrennt wie in der App: "7:42" gross, "h" klein daneben.
+        val dauer = Formate.dauerTeile(min.roundToInt().toLong())
+        return Lage(
+            Art.MORGEN, t.text(R.string.ks_wl_nacht), t.text(R.string.ks_wl_geschlafen),
+            dauer.zahl, dauer.einheit.orEmpty(), satz, anteil(b.schlafMin, b.schlafZielMin),
+            listOfNotNull(kSchritte(b, t), kAktiv(b, t), kWasser(b, t)), null,
+        )
+    }
+
+    private fun training(b: Blick, t: Texte): Lage {
+        val teile = mutableListOf<String>()
+        b.trainingPuls?.let { teile += t.text(R.string.ks_wl_puls_schnitt, ganz(it).orEmpty()) }
+        b.trainingKm?.takeIf { it >= 0.1 }?.let { teile += Formate.distanz(it * 1000, b.imperial && !b.trainingMetrisch).text }
+        val vor = b.trainingEnde?.let { Duration.between(it, b.jetzt).toMinutes() } ?: 0
+        val wann = if (vor < 60) t.text(R.string.ks_wl_beendet_min, vor)
+                   else t.text(R.string.ks_wl_beendet_h, vor / 60)
+        val satz = (teile + wann).joinToString(" · ")
+        val dauer = dauer(b.trainingMin?.toDouble())
+        return Lage(
+            Art.TRAINING, t.text(R.string.ks_training), b.trainingName ?: t.text(R.string.ks_training),
+            dauer?.zahl ?: Formate.FEHLT, dauer?.einheit.orEmpty(), satz, null,
+            listOfNotNull(kSchritte(b, t), kWasser(b, t), kSchlaf(b, t)), b.trainingBeginn,
+        )
+    }
+
+    /**
+     * Gibt es etwas, woran zu erinnern ist? Den Satz dazu, sonst null.
+     *
+     * Vorne steht ein Schluessel ("praeparate", "wasser"), kein Wort: die
+     * Lage darunter entscheidet danach, und ein uebersetztes Wort taugt
+     * dafuer nicht.
+     */
+    private fun erinnerung(b: Blick, t: Texte): Pair<String, String>? {
+        val versaeumt = versaeumtePraeparate(b)
+        if (versaeumt.isNotEmpty()) {
+            val namen = versaeumt.take(2).joinToString(", ") + (if (versaeumt.size > 2) " …" else "")
+            return "praeparate" to t.text(R.string.ks_wl_noch_offen, namen)
+        }
+        // Wasser: was bis jetzt haette getrunken sein sollen - zwei Glaeser
+        // dahinter ist eine Erinnerung wert. Das Soll folgt [wasserSoll].
+        val ziel = b.wasserZiel
+        val ml = b.wasserMl
+        if (ziel != null && ml != null && b.jetzt.hour in WASSER_AB until WASSER_BIS) {
+            val soll = ziel * wasserSoll(b.jetzt.hour + b.jetzt.minute / 60.0)
+            val fehltGlaeser = ((soll - ml) / b.glasMl).toInt()
+            if (fehltGlaeser >= 2) return "wasser" to t.mehrzahl(R.plurals.ks_wl_glaeser_hinterher, fehltGlaeser, fehltGlaeser)
+        }
+        return null
+    }
+
+    /** Die Praeparate, an die zu erinnern ist - dieselbe Regel wie auf der Gesundheitsseite ([praeparatVersaeumt]). */
+    fun versaeumtePraeparate(b: Blick): List<String> =
+        b.praeparate.filter { Gesundheitsrechnung.praeparatVersaeumt(it, b.jetzt.toLocalTime()) }.map { it.name }
+
+    /**
+     * Welcher Anteil des Tagesziels bis zu dieser Stunde getrunken sein soll.
+     *
+     * NICHT GLEICHMAESSIG. Wer morgens trinkt, holt nach der Nacht auf, und am
+     * Abend will niemand noch einen Liter nachschuetten. Deshalb vorne mehr:
+     * bis Mittag 40 %, bis fuenf Uhr nachmittags 75 %, bis zehn Uhr abends
+     * alles - dazwischen gleichmaessig. Eine gleichmaessige Kurve von acht
+     * bis zweiundzwanzig Uhr mahnte am Nachmittag, obwohl der Morgen schon
+     * die Arbeit gemacht hatte.
+     */
+    fun wasserSoll(stunde: Double): Double {
+        val punkte = listOf(8.0 to 0.0, 12.0 to 0.40, 17.0 to 0.75, 22.0 to 1.0)
+        if (stunde <= punkte.first().first) return 0.0
+        if (stunde >= punkte.last().first) return 1.0
+        for (i in 1 until punkte.size) {
+            val (h1, a1) = punkte[i]
+            if (stunde <= h1) {
+                val (h0, a0) = punkte[i - 1]
+                return a0 + (a1 - a0) * (stunde - h0) / (h1 - h0)
+            }
+        }
+        return 1.0
+    }
+
+    private fun erinnerungLage(b: Blick, t: Texte): Lage {
+        val (was, satz) = erinnerung(b, t) ?: ("" to "")
+        // Ohne Mahnung fuehrte die Wasserkachel hierher - dann das Wasser, nicht "0 open".
+        return if (was != "praeparate") {
+            Lage(
+                Art.ERINNERUNG, t.text(R.string.ks_wl_erinnerung), t.text(R.string.ks_h_wasser_n),
+                liter(b.wasserMl ?: 0.0), "l", satz, anteil(b.wasserMl, b.wasserZiel),
+                listOfNotNull(kSchritte(b, t), kAktiv(b, t), kSchlaf(b, t)), null,
+            )
+        } else {
+            Lage(
+                Art.ERINNERUNG, t.text(R.string.ks_wl_erinnerung), t.text(R.string.ks_w_praeparate),
+                Formate.zahl(versaeumtePraeparate(b).size.toLong()), t.text(R.string.ks_wl_offen), satz, null,
+                listOfNotNull(kSchritte(b, t), kWasser(b, t), kSchlaf(b, t)), null,
+            )
+        }
+    }
+
+    private fun abend(b: Blick, t: Texte): Lage {
+        val teile = mutableListOf<String>()
+        val s = b.schritte
+        val z = b.schritteZiel
+        if (s != null && z != null) {
+            teile += if (s >= z) t.text(R.string.ks_wl_schrittziel_erreicht)
+                     else t.text(R.string.ks_wl_schritte_zum_ziel, ganz(z - s).orEmpty())
+        }
+        val ml = b.wasserMl
+        val wz = b.wasserZiel
+        if (ml != null && wz != null && ml < wz) {
+            val fehlt = Math.ceil((wz - ml) / b.glasMl).toInt()
+            teile += t.mehrzahl(R.plurals.ks_wl_glaeser_fehlen, fehlt, fehlt)
+        }
+        b.koffeinMg?.takeIf { it > 0 }?.let { teile += t.text(R.string.ks_wl_koffein_mg, ganz(it).orEmpty()) }
+        return Lage(
+            Art.ABEND, t.text(R.string.ks_wl_bilanz), t.text(R.string.ks_h_schritte),
+            ganz(b.schritte) ?: Formate.FEHLT, "",
+            teile.ifEmpty { listOf(t.text(R.string.ks_wl_tag_eingetragen)) }.joinToString(" · "),
+            anteil(b.schritte, b.schritteZiel),
+            listOfNotNull(kAktiv(b, t), kWasser(b, t), kSchlaf(b, t)), null,
+        )
+    }
+
+    private fun tag(b: Blick, t: Texte): Lage {
+        val s = b.schritte
+        val z = b.schritteZiel
+        val satz = when {
+            s == null -> t.text(R.string.ks_wl_keine_schritte)
+            z == null -> t.text(R.string.ks_wl_schritte_bis_jetzt, ganz(s).orEmpty())
+            s >= z -> t.text(R.string.ks_wl_ziel_erreicht)
+            else -> t.text(R.string.ks_wl_bis_zum_ziel, ganz(z - s).orEmpty())
+        }
+        return Lage(
+            Art.TAG, t.text(R.string.ks_h_heute), t.text(R.string.ks_h_schritte),
+            ganz(b.schritte) ?: Formate.FEHLT, "", satz, anteil(b.schritte, b.schritteZiel),
+            listOfNotNull(kAktiv(b, t), kWasser(b, t), kSchlaf(b, t)), null,
+        )
+    }
+}
+
+/** Die Texte der Lage - ueber den Context, damit die Rechnung selbst kein Android braucht. */
+internal interface Texte {
+    fun text(id: Int, vararg a: Any): String
+    fun mehrzahl(id: Int, n: Int, vararg a: Any): String
+}

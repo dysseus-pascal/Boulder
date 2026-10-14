@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Trainingsansicht in Boulder: uebernommen aus Kiesel-Helper (ch.dysseus.kieselhelper). -->
+<resources>
+    <string name="ks_t_noch_keins">No workout yet</string>
+    <string name="ks_t_dauer">Duration</string>
+    <string name="ks_t_puls_schnitt">Avg HR</string>
+    <string name="ks_t_puls_max">Max HR</string>
+    <string name="ks_t_keine_strecke">No route</string>
+    <string name="ks_t_route">Route</string>
+    <string name="ks_t_zeigen">Show</string>
+    <string name="ks_t_tempo">Pace</string>
+    <string name="ks_t_tempo_rad">Speed</string>
+    <string name="ks_t_aufstieg">Ascent</string>
+    <string name="ks_t_kcal">Active energy</string>
+    <string name="ks_t_strecke">Distance</string>
+    <string name="ks_t_zeit">Time</string>
+    <string name="ks_t_ausblenden">Hide</string>
+    <string name="ks_t_eintragen">Log</string>
+    <string name="ks_t_welche_art">What was it?</string>
+    <string name="ks_abbrechen">Cancel</string>
+    <string name="ks_t_start">Start</string>
+    <string name="ks_t_ende">Finish</string>
+    <string name="ks_sport_laufen">Running</string>
+    <string name="ks_sport_bike">Bike</string>
+    <string name="ks_sport_mtb">Bike MTB</string>
+    <string name="ks_sport_wandern">Hiking</string>
+    <string name="ks_sport_kraft">Strength</string>
+    <string name="ks_sport_yoga">Yoga</string>
+    <string name="ks_sport_schwimmen">Swimming</string>
+    <string name="ks_zone_unter">below zone\u00A01</string>
+    <string name="ks_zone_1">Recovery</string>
+    <string name="ks_zone_2">Base</string>
+    <string name="ks_zone_3">Endurance</string>
+    <string name="ks_zone_4">Threshold</string>
+    <string name="ks_zone_5">Maximum</string>
+    <string name="ks_ei_standort_nicht">Location not allowed</string>
+    <!-- Die Sportseite nach dem Entwurf "Empfehlung" (0.28): Wochenkarte, Latest, Liste nach Wochen. -->
+    <plurals name="ks_sp_anzahl">
+        <item quantity="one">%1$d workout</item>
+        <item quantity="other">%1$d workouts</item>
+    </plurals>
+    <string name="ks_sp_vorwoche">last week %1$s</string>
+    <string name="ks_sp_vorwoche_keins">none last week</string>
+    <string name="ks_sp_leer">No workouts yet</string>
+    <string name="ks_sp_davor">RECENT</string>
+    <string name="ks_sp_trainings">Workouts</string>
+    <string name="ks_sp_zeit">Time</string>
+    <string name="ks_sp_alle">All workouts</string>
+    <string name="ks_sp_einrichten">SET UP</string>
+    <string name="ks_sp_routen">Routes</string>
+    <string name="ks_sp_nur_nutzung">Only while in use</string>
+    <string name="ks_sp_hc">Health Connect</string>
+    <string name="ks_sp_hc_trainings">Workouts not shared</string>
+    <string name="ks_sp_hc_teils">Not all data shared</string>
+    <string name="ks_sp_hc_fehlt">Not available on this phone</string>
+    <plurals name="ks_sp_spuren">
+        <item quantity="one">%1$d track to add</item>
+        <item quantity="other">%1$d tracks to add</item>
+    </plurals>
+    <string name="ks_sp_spuren_titel">Tracks to add</string>
+    <string name="ks_sp_spuren_leer">No tracks left to add</string>
+    <string name="ks_sp_diese_woche">THIS WEEK</string>
+    <string name="ks_sp_letzte_woche">LAST WEEK</string>
+    <string name="ks_sp_woche_zusatz">%1$d · %2$s</string>
+    <string name="ks_sp_90_tage">90 days</string>
+    <string name="ks_sp_keine">No workouts</string>
+    <string name="ks_sp_alle_chip">All</string>
+    <string name="ks_sp_acht_wochen">EIGHT WEEKS</string>
+    <string name="ks_sp_nach_art">BY SPORT</string>
+    <string name="ks_sp_vier_wochen">FOUR WEEKS</string>
+    <!-- TalkBack in Kalender und Wochenstapel: "Wk 40: 2:10 h", "Mon, Sep 28: Running, 45 min". -->
+    <string name="ks_sp_bild_wert">%1$s: %2$s</string>
+</resources>

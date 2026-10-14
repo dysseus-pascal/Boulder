@@ -152,6 +152,7 @@ fun WatchPref<*>.section(): Section = when (this) {
     RgbColorWatchPref.BacklightColor -> Section.Display
     NumberWatchPref.BacklightTimeoutMs -> Section.Display
     NumberWatchPref.AmbientLightThreshold -> Section.Display
+    NumberWatchPref.BoulderMessstufe -> Section.Health
     QuicklaunchWatchPref.QlUp -> Section.QuickLaunch
     QuicklaunchWatchPref.QlDown -> Section.QuickLaunch
     QuicklaunchWatchPref.QlComboBackUp -> Section.QuickLaunch
@@ -216,6 +217,22 @@ private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): Setti
                 steps = NOTIFICATION_TIMEOUT_STEP_COUNT,
             )
         }
+        NumberWatchPref.BoulderMessstufe -> basicSettingsNumberItem(
+            id = pref.id,
+            title = pref.displayName,
+            description = pref.description,
+            topLevelType = pref.topLevelType(),
+            section = pref.section(),
+            value = item.valueOrDefault(),
+            min = pref.min,
+            max = pref.max,
+            onValueChange = { libPebble.setWatchPref(item.copy(value = it)) },
+            isDebugSetting = pref.isDebugSetting,
+            defaultValue = pref.defaultValue,
+            unit = pref.unit,
+            // Boulder: dieselben Namen wie auf der Uhr (Einstellungen > Health > Precision).
+            valueFormatter = { stufe -> MESSSTUFEN_NAMEN.getOrElse(stufe.toInt() - 1) { "$stufe" } },
+        )
         else -> basicSettingsNumberItem(
             id = pref.id,
             title = pref.displayName,
@@ -234,6 +251,8 @@ private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): Setti
         )
     }
 }
+
+private val MESSSTUFEN_NAMEN = listOf("Battery Saver", "Light", "Balanced", "Detailed", "Precise")
 
 private fun basicSettingsNumberSecondsItem(
     pref: NumberWatchPref,

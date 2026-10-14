@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DoNotDisturb
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreHoriz
@@ -53,6 +55,7 @@ import androidx.compose.material.icons.filled.RocketLaunch
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material.icons.filled.Terrain
 import androidx.compose.material.icons.filled.Timeline
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Watch
@@ -218,7 +221,12 @@ enum class Section(val title: String, val icon: ImageVector) {
     Apps("Apps", Icons.Default.Apps),
     Battery("Battery", Icons.Default.BatteryFull),
     Calendar("Calendar", Icons.Default.CalendarMonth),
-    Health("Health", Icons.AutoMirrored.Filled.DirectionsRun),
+    Health("Health", Icons.Default.Favorite),
+    // Boulder: Kieselsport und Trainings, und Kieselstrasse mit den Kartenlinks.
+    Sport("Sport", Icons.AutoMirrored.Filled.DirectionsRun),
+    Navigation("Navigation", Icons.Default.Navigation),
+    // Boulder: Sicherung und Protokoll - sie betreffen die ganze App, nicht Health oder Sport.
+    Boulder("Boulder", Icons.Default.Terrain),
     Speech("Speech Recognition", Icons.Default.Mic),
     Display("Display", Icons.Default.DarkMode), // watch only
     Weather("Weather", Icons.Default.Cloud),
@@ -234,7 +242,8 @@ enum class Section(val title: String, val icon: ImageVector) {
 }
 
 fun Section.navigatesDirectlyTo(): NavBarRoute? = when (this) {
-    Section.Battery -> PebbleNavBarRoutes.BatterySettingsRoute
+    // Boulder: die eigene Akkuseite aus den Naechten der Firmware.
+    Section.Battery -> PebbleNavBarRoutes.AkkuRoute
     else -> null
 }
 
@@ -252,6 +261,9 @@ object SettingsIds {
     const val HrmEnabled = "HrmEnabled"
     const val HrmMeasurementInterval = "HrmMeasurementInterval"
     const val HrmActivityTracking = "HrmActivityTracking"
+    const val BloodOxygenEnabled = "BloodOxygenEnabled"
+    const val BloodOxygenActivityEnabled = "BloodOxygenActivityEnabled"
+    const val Spo2MeasurementInterval = "Spo2MeasurementInterval"
 }
 
 data class SettingsItem(
@@ -294,7 +306,8 @@ fun settingsBadgeTotal(): Int {
         true -> 1
         false -> 0
     }
-    return permissionBadgeCount + updatesAvailable + appUpdated
+    // Boulder: die "!" der eigenen Eintraege (Rechte, Routen, OsmAnd) zaehlen mit.
+    return permissionBadgeCount + updatesAvailable + appUpdated + boulderAbzeichen()
 }
 
 private val logger = Logger.withTag("WatchSettingsScreen")
@@ -322,7 +335,6 @@ data class SettingsItemsState(
     val debugOptionsEnabled: Boolean,
     val anyWatchSupportsSettingsSync: Boolean,
     val coreConfig: CoreConfig,
-    val healthTrackingEnabled: Boolean,
 )
 
 @Composable
@@ -354,7 +366,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
     if (showCopyTokenDialog) {
         PKJSCopyTokenDialog(onDismissRequest = { setShowCopyTokenDialog(false) })
     }
-    var showHealthStatsDialog by remember { mutableStateOf(false) }
     var showSignInDialog by remember { mutableStateOf(false) }
     var debugOptionsEnabled by remember { mutableStateOf(settings.showDebugOptions()) }
     var pendingSTTModeDialog by remember { mutableStateOf<CactusSTTMode?>(null) }
@@ -446,12 +457,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             }
         )
     }
-    if (showHealthStatsDialog) {
-        HealthStatsDialog(
-            libPebble = libPebble,
-            onDismissRequest = { showHealthStatsDialog = false },
-        )
-    }
     if (showSignInDialog) {
         SignInDialog(
             onDismiss = { showSignInDialog = false }
@@ -528,7 +533,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             listOfNotNull(
                 basicSettingsActionItem(
                     title = "App Update Available",
-                    description = "Please update the Pebble App!",
+                    description = "Please update the Boulder app!",
                     topLevelType = TopLevelType.Phone,
                     section = Section.About,
                     action = {
@@ -1150,8 +1155,65 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     checked = healthSettings.hrmActivityTrackingEnabled,
                     show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
                     onCheckChanged = {
+                        // Turning HR During Activities off also disables activity SpO2 — the watch
+                        // clears it locally, but keep the app's synced setting in sync too.
                         libPebble.updateHealthSettings(
-                            healthSettings.copy(hrmActivityTrackingEnabled = it)
+                            healthSettings.copy(
+                                hrmActivityTrackingEnabled = it,
+                                bloodOxygenActivityEnabled = if (!it) false else healthSettings.bloodOxygenActivityEnabled,
+                            )
+                        )
+                    },
+                ),
+                basicSettingsToggleItem(
+                    id = SettingsIds.BloodOxygenEnabled,
+                    title = "Blood Oxygen",
+                    description = "Allow the watch to measure blood oxygen (SpO2). The sampling rate is configurable below.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = healthSettings.bloodOxygenEnabled,
+                    show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
+                    onCheckChanged = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(bloodOxygenEnabled = it)
+                        )
+                    },
+                ),
+                basicSettingsDropdownItem(
+                    id = SettingsIds.Spo2MeasurementInterval,
+                    title = "SpO2 Monitoring Rate",
+                    description = "How often the watch takes a background blood oxygen (SpO2) reading. Set to Off to pause background sampling. A faster rate can have an impact on battery life.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    selectedItem = healthSettings.spo2MeasurementInterval,
+                    items = HRMonitoringInterval.entries,
+                    onItemSelected = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(spo2MeasurementInterval = it)
+                        )
+                    },
+                    itemText = {
+                        when (it) {
+                            HRMonitoringInterval.TenMin -> "Every 10 minutes"
+                            HRMonitoringInterval.ThirtyMin -> "Every 30 minutes"
+                            HRMonitoringInterval.OneHour -> "Every hour"
+                            HRMonitoringInterval.Disabled -> "Off"
+                        }
+                    },
+                    show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled && healthSettings.bloodOxygenEnabled },
+                ),
+                basicSettingsToggleItem(
+                    id = SettingsIds.BloodOxygenActivityEnabled,
+                    title = "Blood Oxygen During Activities",
+                    description = "Take a blood oxygen (SpO2) reading roughly every 5 minutes during detected activities. Requires 'HR During Activities' to be enabled.",
+                    topLevelType = TopLevelType.Phone,
+                    section = Section.Health,
+                    checked = healthSettings.bloodOxygenActivityEnabled,
+                    enabled = healthSettings.hrmActivityTrackingEnabled,
+                    show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
+                    onCheckChanged = {
+                        libPebble.updateHealthSettings(
+                            healthSettings.copy(bloodOxygenActivityEnabled = it)
                         )
                     },
                 ),
@@ -1295,38 +1357,6 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                             }
                         }
                     },
-                ),
-                basicSettingsActionItem(
-                    title = "Open Google Fit",
-                    description = "View your synced health data in Google Fit",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    show = { healthPlatformSyncEnabled && platform == Platform.Android },
-                    action = {
-                        openGoogleFitApp(uiContext)
-                    },
-                ),
-                basicSettingsToggleItem(
-                    title = "Show Health Tab",
-                    description = "Show Health instead of Notifications in the bottom bar",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    checked = coreConfig.preferHealthTab,
-                    show = { coreConfig.enableIndex && healthSettings.trackingEnabled },
-                    onCheckChanged = {
-                        coreConfigHolder.update(coreConfig.copy(preferHealthTab = it))
-                    },
-                ),
-                basicSettingsActionItem(
-                    title = "View debug stats",
-                    description = "Health statistics and averages",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    keywords = "health steps sleep stats debug",
-                    action = {
-                        showHealthStatsDialog = true
-                    },
-                    show = { debugOptionsEnabled },
                 ),
                 // Boulder: kein "Populate fake health data" - es loeschte alle echten Gesundheitsdaten
                 // (siehe DebugDatenTest in libpebble3).
@@ -2098,12 +2128,14 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             ) + watchPrefs
         }
 
+    // Boulder: die Einstellungen aus Kiesel-Helper - ausserhalb des remember oben, weil
+    // sie ihren Stand (Rechte, OsmAnd) selbst nachfuehren.
+    val boulderItems = boulderSettingsItems(navBarNav)
     return SettingsItemsState(
-        rawSettingsItems = rawSettingsItems,
+        rawSettingsItems = rawSettingsItems + boulderItems,
         debugOptionsEnabled = debugOptionsEnabled,
         anyWatchSupportsSettingsSync = anyWatchSupportsSettingsSync,
         coreConfig = coreConfig,
-        healthTrackingEnabled = healthSettings.trackingEnabled,
     )
 }
 
@@ -2263,48 +2295,16 @@ fun WatchSettingsScreen(navBarNav: NavBarNav, topBarParams: TopBarParams) {
                         }
                     }
                 } else {
-                    val notificationsDisplaced = state.coreConfig.enableIndex &&
-                        state.healthTrackingEnabled && state.coreConfig.preferHealthTab
-                    val healthDisplaced = state.coreConfig.enableIndex &&
-                        state.healthTrackingEnabled && !state.coreConfig.preferHealthTab
-
                     // When not searching, show category list
                     LazyColumn(state = listState) {
-                        if (notificationsDisplaced) {
-                            item(key = "displaced_notifications") {
-                                ListItem(
-                                    leadingContent = {
-                                        Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = null)
-                                    },
-                                    headlineContent = { Text("Notifications") },
-                                    shadowElevation = ELEVATION,
-                                    modifier = Modifier.clickable {
-                                        navBarNav.navigateTo(PebbleNavBarRoutes.NotificationsRoute)
-                                    },
-                                )
-                            }
-                        }
-                        if (healthDisplaced) {
-                            item(key = "displaced_health") {
-                                ListItem(
-                                    leadingContent = {
-                                        Icon(Icons.AutoMirrored.Default.ArrowForward, contentDescription = null)
-                                    },
-                                    headlineContent = { Text("Health") },
-                                    shadowElevation = ELEVATION,
-                                    modifier = Modifier.clickable {
-                                        navBarNav.navigateTo(PebbleNavBarRoutes.HealthRoute)
-                                    },
-                                )
-                            }
-                        }
                         items(
                             items = sectionsToShowInList,
                             key = { it.name },
                         ) { section ->
                             val sectionBadgeCount = filteredItems
                                 .filter { it.section == section && it.badge != null && it.show() }
-                                .sumOf { it.badge?.toIntOrNull() ?: 0 }
+                                // Boulder: ein "!" zaehlt als eins - sonst fehlte es hier und in der Leiste.
+                                .sumOf { it.badge?.toIntOrNull() ?: 1 }
                             ListItem(
                                 leadingContent = {
                                     Icon(
@@ -2419,8 +2419,10 @@ fun basicSettingsActionItem(
                         Badge {
                             Text(text = badge)
                         }
+                        // Boulder: der Abstand gehoert zum Abzeichen - ohne es rueckte der
+                        // Titel gegen seine Beschreibung ein.
+                        Spacer(modifier = Modifier.width(5.dp))
                     }
-                    Spacer(modifier = Modifier.width(5.dp))
                     if (button != null) {
                         button()
                     } else {
@@ -2464,6 +2466,7 @@ fun basicSettingsToggleItem(
     keywords: String = "",
     show: () -> Boolean = { true },
     isDebugSetting: Boolean = false,
+    enabled: Boolean = true,
 ) = SettingsItem(
     id = id,
     title = title,
@@ -2481,6 +2484,7 @@ fun basicSettingsToggleItem(
                 Checkbox(
                     checked = checked,
                     onCheckedChange = onCheckChanged,
+                    enabled = enabled,
                 )
             },
             supportingContent = {
@@ -2986,7 +2990,6 @@ private fun SpokenLanguageRow(
 
 expect fun makeTokenClipEntry(token: String): ClipEntry
 
-expect fun openGoogleFitApp(uiContext: PlatformUiContext?)
 
 object SettingsKeys {
     const val KEY_ENABLE_MEMFAULT_UPLOADS = "enable_memfault_uploads"

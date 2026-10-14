@@ -10,6 +10,7 @@ import coredevices.database.insertDefaultWeatherLocationOnce
 import coredevices.firestore.UsersDao
 import coredevices.pebble.firmware.BatteryChargedNotifier
 import coredevices.pebble.firmware.FirmwareUpdateUiTracker
+import coredevices.pebble.health.UhrNachfrage
 import coredevices.pebble.services.AppstoreSourceInitializer
 import coredevices.pebble.services.AnalyticsHeartbeatQueue
 import coredevices.pebble.services.MemfaultChunkQueue
@@ -70,6 +71,8 @@ class PebbleAppDelegate(
     private val permissionRequestNotifier: PermissionRequestNotifier,
 ) {
     private val logger = Logger.withTag("PebbleAppDelegate")
+    // Boulder: beim Oeffnen der App die Uhr nach frischen Gesundheitsdaten fragen.
+    private val uhrNachfrage = UhrNachfrage({ libPebble.requestHealthData() }, clock)
 
     fun init() {
         logger.d { "init()" }
@@ -113,6 +116,9 @@ class PebbleAppDelegate(
                 }
             }
             GlobalScope.launch {
+                uhrNachfrage.beobachte(libPebble.watches)
+            }
+            GlobalScope.launch {
                 libPebble.analyticsEvents.collect {
                     analytics.logEvent(it.name, it.parameters)
                 }
@@ -133,6 +139,8 @@ class PebbleAppDelegate(
                 }
             }
             GlobalScope.launch {
+                // Boulder: die Liste kommt bei jeder Akkuzahl neu, die Seriennummer bleibt.
+                var letzteSerie: String? = null
                 libPebble.watches.collect { watches ->
                     watches.forEach { watch ->
                         if (watch is ConnectedPebble.Firmware) {
@@ -150,7 +158,10 @@ class PebbleAppDelegate(
                             firmwareUpdateUiTracker.firmwareUpdateIsInProgress(watch.identifier)
                         }
                         if (watch is CommonConnectedDevice) {
-                            usersDao.updateLastConnectedWatch(watch.serial)
+                            if (watch.serial != letzteSerie) {
+                                letzteSerie = watch.serial
+                                usersDao.updateLastConnectedWatch(watch.serial)
+                            }
                             batteryChargedNotifier.onBatteryLevel(
                                 watch.identifier,
                                 watch.name,
@@ -247,6 +258,9 @@ class PebbleAppDelegate(
     fun onAppResumed() {
         logger.d { "onAppResumed" }
         appResumed.onAppResumed()
+        // Direkt, nicht ueber appResumed: dessen Sammler steht erst nach dem
+        // Onboarding, und das erste Oeffnen nach einem Kaltstart ginge verloren.
+        uhrNachfrage.beimOeffnen()
     }
 
     suspend fun performBackgroundWork(scope: CoroutineScope) {

@@ -1,0 +1,544 @@
+package coredevices.pebble.kiesel
+
+import java.time.Duration
+import java.time.Instant
+import kotlin.math.abs
+
+/**
+ * Was sich aus Strecke und Puls eines Trainings herausrechnen laesst.
+ *
+ * NUR RECHNEN, NICHTS ZEICHNEN. Die Bilder stehen in der Trainingsansicht;
+ * hier steht, was sie zeigen - und das laesst sich pruefen, ohne einen Schirm.
+ *
+ * DIE STRECKE IST DIE ACHSE, nicht die Zeit. Wer eine Fahrt nachschlaegt,
+ * denkt in Kilometern: "am Anstieg bei Kilometer vier". Puls, Tempo und Hoehe
+ * stehen deshalb ueber der Strecke, und die Zeit ist nur noch eine Zahl je
+ * Kilometer.
+ */
+internal object Trainingsanalyse {
+
+    /** Ein Punkt der Strecke mit allem, was sich bis dorthin ergibt. */
+    data class Streckenpunkt(
+        val meter: Double,      //< seit dem Start
+        val sekunde: Long,      //< seit dem Start
+        val hoehe: Double?,
+        val tempo: Double,      //< m/s, geglaettet
+        val lat: Double,
+        val lon: Double,
+        /** Liegt ein Sprung davor (verlorener Empfang)? Die Karte reisst dort ab. */
+        val nachSprung: Boolean = false,
+    )
+
+    /**
+     * Die Strecke mit Distanz und geglaettetem Tempo je Punkt.
+     *
+     * GEGLAETTET UEBER ZEHN SEKUNDEN: GPS springt um Meter, und aus zwei
+     * Punkten im Sekundenabstand wird ein Tempo, das zwischen 10 und 40 km/h
+     * flattert. Ueber ein Fenster von rund zehn Sekunden wird daraus die
+     * Fahrt, die man wirklich gemacht hat.
+     *
+     * EIN SPRUNG ZAEHLT NICHT ALS WEG - wie bei Spur.laenge, sonst stuende
+     * in der Kilometertabelle eine andere Strecke als oben in der Karte.
+     */
+    fun strecke(punkte: List<Spur.Punkt>): List<Streckenpunkt> {
+        if (punkte.size < 2) return emptyList()
+        val start = punkte.first().zeit
+        val weg = Spur.weg(punkte)
+        // Ausreisser (NaN in weg) sind weder Weg noch Ort - sie fehlen hier.
+        val roh = punkte.indices.filter { !weg[it].isNaN() }.map { i ->
+            val p = punkte[i]
+            val sprung = i > 0 && Spur.abstand(punkte[i - 1], p) > Spur.SPRUNG_MAX
+            Streckenpunkt(weg[i], p.zeit - start, p.hoehe, 0.0, p.lat, p.lon, sprung)
+        }
+        if (roh.size < 2) return emptyList()
+        val geglaettet = roh.mapIndexed { i, p ->
+            // Das Fenster: alle Punkte, die hoechstens fuenf Sekunden vor
+            // und nach diesem liegen - aber nicht ueber einen Sprung: dort
+            // vergeht Zeit ohne Weg, und das Tempo fiele auf null.
+            var a = i
+            while (a > 0 && !roh[a].nachSprung && p.sekunde - roh[a - 1].sekunde <= 5) a--
+            var b = i
+            while (b < roh.size - 1 && !roh[b + 1].nachSprung && roh[b + 1].sekunde - p.sekunde <= 5) b++
+            val dt = (roh[b].sekunde - roh[a].sekunde)
+            val tempo = if (dt > 0) (roh[b].meter - roh[a].meter) / dt else 0.0
+            p.copy(tempo = tempo.coerceIn(0.0, 30.0))
+        }
+        // DER MEDIAN UEBER DREI NACHBARN NIMMT DIE SPITZE: ein einzelner
+        // GPS-Versatz bleibt auch im Fenster als Zacken auf 35 km/h stehen
+        // und wurde zur "Spitze" des Tages. Eine echte Abfahrt dauert laenger
+        // als ein Punkt und bleibt.
+        return geglaettet.mapIndexed { i, p ->
+            val vor = geglaettet.getOrNull(i - 1)?.takeIf { !p.nachSprung }
+            val nach = geglaettet.getOrNull(i + 1)?.takeIf { !it.nachSprung }
+            if (vor == null || nach == null) p
+            else p.copy(tempo = Statistik.median(listOf(vor.tempo, p.tempo, nach.tempo)))
+        }
+    }
+
+    // --- Kalorien ---
+
+    /**
+     * Der Verbrauch aus dem Puls, in kcal: Anteil der Pulsreserve = Anteil der
+     * Sauerstoffreserve (Swain 1997), 5 kcal je Liter Sauerstoff.
+     *
+     * NICHT MEHR KEYTEL: der rechnet mit dem Puls an sich und gab fuer eine
+     * Radfahrt mit Puls 127 rund 250 kcal, Fitbit 180. Die Reserve zaehlt vom
+     * eigenen Ruhepuls aus. DIE VO2MAX IST DIE MITTE DER ALTERSGRUPPE (FRIEND,
+     * Kaminsky 2015), nicht Uth: der teilt durch den Ruhepuls, und der aus dem
+     * Schlaf liegt unter dem wachen - 53 statt ~40 und wieder 240 kcal.
+     * In der Reserve wiegt derselbe Unterschied wenig (Ruhepuls 60 statt 54:
+     * 4 % weniger), deshalb gilt dort der Schlafpuls.
+     *
+     * GEPRUEFT AN EINER FAHRT: Norm und Uth unterscheiden sich gerade in dem,
+     * was dort passt. Wer fitter ist als die Mitte, bekommt zu wenig.
+     */
+    fun kalorien(
+        puls: List<Pulspunkt>, gewichtKg: Double, alter: Int, geschlecht: Geschlecht,
+        ruhepuls: Int?, maxpuls: Int?,
+    ): Double? {
+        if (puls.isEmpty() || gewichtKg < 20 || alter <= 0) return null
+        val ruhe = (ruhepuls?.takeIf { it in RUHEPULS_GUELTIG } ?: RUHEPULS_ERSATZ).toDouble()
+        // Den Maximalpuls prueft allein Herzgrenzen - eine zweite Pruefung hier verwarf
+        // einen Wert, mit dem die Zonen derselben Seite rechneten. Ohne Wert Tanaka.
+        val max = maxpuls?.toDouble() ?: (208 - 0.7 * alter)
+        if (max <= ruhe + 20) return null
+        val vo2max = vo2maxMitte(alter, geschlecht)
+        var kcal = 0.0
+        for (i in puls.indices) {
+            // Unter dem Ruhepuls bleibt der Ruheumsatz, ueber dem Maximum die VO2max.
+            val anteil = ((puls[i].bpm - ruhe) / (max - ruhe)).coerceIn(0.0, 1.0)
+            val vo2 = VO2_RUHE + anteil * (vo2max - VO2_RUHE)   // ml je kg und Minute
+            kcal += vo2 * gewichtKg / 1000 * KCAL_JE_LITER * minuten(puls, i)
+        }
+        return kcal
+    }
+
+    /**
+     * Die aktiven Kalorien fuer die Akte: [kalorien] ohne den Ruheumsatz.
+     *
+     * DIE AKTE ZAEHLT DEN RUHEUMSATZ SELBST (Grundumsatz). Stuende er auch
+     * hier drin, zaehlte die Tagessumme die Trainingsminuten doppelt.
+     */
+    fun aktiveKalorien(
+        puls: List<Pulspunkt>, gewichtKg: Double, alter: Int, geschlecht: Geschlecht,
+        ruhepuls: Int?, maxpuls: Int?,
+    ): Double? {
+        val gesamt = kalorien(puls, gewichtKg, alter, geschlecht, ruhepuls, maxpuls) ?: return null
+        val ruhe = puls.indices.sumOf { VO2_RUHE * gewichtKg / 1000 * KCAL_JE_LITER * minuten(puls, it) }
+        return (gesamt - ruhe).coerceAtLeast(0.0)
+    }
+
+    /** Wie lange ein Pulspunkt gilt, in Minuten: bis zum naechsten, hoechstens eine. */
+    private fun minuten(puls: List<Pulspunkt>, i: Int): Double =
+        (if (i + 1 < puls.size) (puls[i + 1].sekunde - puls[i].sekunde).coerceIn(0, 60) else 10L) / 60.0
+
+    /** Sauerstoff in Ruhe (1 MET), ml je kg und Minute. */
+    const val VO2_RUHE = 3.5
+    const val KCAL_JE_LITER = 5.0
+    /** Ruhepuls, solange keine Nacht einen liefert - ein ueblicher Wert, eher wach als im Schlaf. */
+    const val RUHEPULS_ERSATZ = 60
+
+    /** Nur ein Ruhepuls darin zaehlt, sonst der Ersatz - EINE STELLE fuer [kalorien] und Trainingswerte.ruheAusNaechten. */
+    val RUHEPULS_GUELTIG = 30..110
+
+    /** VO2max in der Mitte (50. Perzentil) je Altersjahrzehnt, Mitte der Jahrzehnte 25 ... 75. */
+    private val VO2MAX_MANN = doubleArrayOf(48.0, 42.4, 37.8, 32.6, 28.2, 24.4)
+    private val VO2MAX_FRAU = doubleArrayOf(37.6, 30.9, 27.9, 24.3, 21.7, 19.0)
+
+    fun vo2maxMitte(alter: Int, geschlecht: Geschlecht): Double {
+        fun aus(t: DoubleArray): Double {
+            val x = ((alter - 25) / 10.0).coerceIn(0.0, t.size - 1.0)
+            val i = x.toInt().coerceAtMost(t.size - 2)
+            return t[i] + (t[i + 1] - t[i]) * (x - i)
+        }
+        return when (geschlecht) {
+            Geschlecht.Mann -> aus(VO2MAX_MANN)
+            Geschlecht.Frau -> aus(VO2MAX_FRAU)
+            Geschlecht.Andere -> (aus(VO2MAX_MANN) + aus(VO2MAX_FRAU)) / 2
+        }
+    }
+
+    /**
+     * Der Ruhepuls fuer die Kalorien: der Median der letzten Naechte.
+     *
+     * DER MEDIAN, weil eine Nacht nach Alkohol oder mit Fieber fuenf Schlaege
+     * hoeher liegt und sonst jedes Training dieser Woche billiger machte.
+     */
+    fun ruhepulsAusNaechten(werte: List<Int>, naechte: Int = Fenster.HERZGRENZEN_NAECHTE): Int? {
+        val gute = werte.filter { it > 0 }.takeLast(naechte)
+        if (gute.isEmpty()) return null
+        // Der echte Median, abgeschnitten wie immer schon: 52.5 bpm zaehlen als 52.
+        return Statistik.median(gute).toInt()
+    }
+
+    enum class Geschlecht { Mann, Frau, Andere }
+
+    // --- Puls der Sitzung ---
+
+    /**
+     * Die Pulspunkte einer Sitzung aus den Messungen der Akte: nur [von, bis),
+     * nach der Zeit, die Sekunde ab [von].
+     *
+     * DASSELBE FENSTER WIE DIE ROUTE: Ansicht und Kalorien in der Akte rechnen
+     * mit genau diesen Punkten. Ein Pulswert nach dem Ende gehoert nicht mehr
+     * zum Training, auch wenn sein Eintrag noch hineinreicht.
+     */
+    fun pulsInSitzung(messungen: List<Pair<Instant, Long>>, von: Instant, bis: Instant): List<Pulspunkt> =
+        messungen.filter { (t, _) -> !t.isBefore(von) && t.isBefore(bis) }
+            .sortedBy { it.first }
+            .map { (t, bpm) -> Pulspunkt(Duration.between(von, t).seconds, bpm) }
+
+    /**
+     * Der Puls ohne die Pausen [von, bis) der Sitzung. Die Uhr zaehlt in der
+     * Pause nicht, und die zwanzig Minuten im Cafe sind kein Training - sie
+     * zoegen Schnitt und Zonen nach unten.
+     */
+    fun ohnePausen(puls: List<Pulspunkt>, pausen: List<Pair<Long, Long>>): List<Pulspunkt> =
+        if (pausen.isEmpty()) puls else puls.filter { p -> pausen.none { (a, b) -> p.sekunde >= a && p.sekunde < b } }
+
+    // --- Aussetzer des Sensors ---
+
+    /** Ein Einbruch um mehr als so viel unter den letzten guten Wert ... */
+    const val EINBRUCH_BPM = 25
+    /** ... der binnen so vieler Sekunden dorthin zurueckkehrt (drei Kurvenpunkte der Uhr) ... */
+    const val EINBRUCH_S = 45L
+    /** ... wobei "dorthin" so viel Spiel hat. */
+    const val RUECKKEHR_BPM = 15
+
+    /**
+     * Kurze Einbrueche aus der Pulskurve nehmen.
+     *
+     * DER SENSOR VERLIERT AM LENKER KURZ DEN KONTAKT und meldet dann zehn,
+     * zwanzig Sekunden lang einen Wert weit unter dem Puls - oft den Tritt
+     * statt des Herzens. Die Kurve faellt auf 90 und springt zurueck; ein
+     * Herz macht das nicht. Solche Punkte fallen weg: die Kurve laeuft
+     * darueber hinweg, und Schnitt, Maximum und Zonen rechnen ohne sie.
+     *
+     * NUR NACH UNTEN: der Anstieg am Anfang eines Trainings ist echt und
+     * schnell, und wer sprintet, hat den Sprung nach oben verdient. Ein
+     * echter Abfall (Ampel, Pause) kommt nicht binnen einer halben Minute
+     * zurueck und bleibt ebenfalls.
+     */
+    fun entstoert(puls: List<Pulspunkt>): List<Pulspunkt> {
+        if (puls.size < 3) return puls
+        val aus = ArrayList<Pulspunkt>(puls.size)
+        var i = 0
+        while (i < puls.size) {
+            val p = puls[i]
+            val gut = aus.lastOrNull()
+            if (gut == null || gut.bpm - p.bpm <= EINBRUCH_BPM) {
+                aus += p
+                i++
+                continue
+            }
+            // Ein Sprung nach unten: kommt die Kurve gleich wieder hoch?
+            var j = i + 1
+            while (j < puls.size && puls[j].sekunde - gut.sekunde <= EINBRUCH_S && abs(puls[j].bpm - gut.bpm) > RUECKKEHR_BPM) j++
+            val aussetzer = j < puls.size && puls[j].sekunde - gut.sekunde <= EINBRUCH_S
+            if (aussetzer) {
+                i = j
+            } else {
+                aus += p
+                i++
+            }
+        }
+        return aus
+    }
+
+    // --- Pulszonen ---
+
+    /** Die Zonen wie auf der Uhr: Anteile des Maximalpulses. */
+    val ZONEN_PROZENT = intArrayOf(50, 60, 70, 80, 90)
+
+    fun zone(bpm: Long, maxpuls: Int): Int {
+        for (z in 5 downTo 1) {
+            if (bpm >= maxpuls * ZONEN_PROZENT[z - 1] / 100) return z
+        }
+        return 0
+    }
+
+    /**
+     * Sekunden je Zone, Index 0 = unter Zone 1, 1..5 = Zone.
+     *
+     * JEDER PUNKT GILT BIS ZUM NAECHSTEN, hoechstens eine Minute lang: ein
+     * Loch in der Kurve - Sensor am Lenker - soll nicht eine Viertelstunde
+     * einer Zone zuschreiben, die niemand gemessen hat.
+     */
+    fun zonenSekunden(puls: List<Pulspunkt>, maxpuls: Int): LongArray {
+        val aus = LongArray(6)
+        for (i in puls.indices) {
+            val dauer = if (i + 1 < puls.size) (puls[i + 1].sekunde - puls[i].sekunde).coerceIn(0, 60) else 10L
+            aus[zone(puls[i].bpm, maxpuls)] += dauer
+        }
+        return aus
+    }
+
+    /**
+     * Minuten und Prozent je Zone AUS DENSELBEN SEKUNDEN: beide gerundet statt
+     * abgeschnitten, und die Prozente nach dem groessten Rest, damit sie 100
+     * ergeben. Abgeschnitten stand dort "0 min · 2 %" und zusammen 98 %.
+     */
+    fun zonenAnteile(sekunden: LongArray): List<Pair<Long, Int>> {
+        val summe = sekunden.sum()
+        if (summe <= 0) return sekunden.map { 0L to 0 }
+        val genau = sekunden.map { it * 100.0 / summe }
+        val prozent = genau.map { it.toInt() }.toMutableList()
+        // Die fehlenden Prozente an die Zonen mit dem groessten abgeschnittenen Rest.
+        genau.indices.sortedByDescending { genau[it] - prozent[it] }
+            .take(100 - prozent.sum())
+            .forEach { prozent[it]++ }
+        return sekunden.indices.map { Math.round(sekunden[it] / 60.0) to prozent[it] }
+    }
+
+    // --- Puls ueber die Strecke ---
+
+    /** Ein Wert ueber der Strecke: bei so vielen Metern dieser Wert. */
+    data class Verlaufspunkt(val meter: Double, val wert: Double)
+
+    /**
+     * Den Puls von der Zeit auf die Strecke legen.
+     *
+     * Zu jedem Pulspunkt die Distanz, die zu seiner Sekunde erreicht war -
+     * zwischen zwei Streckenpunkten geradlinig. Was vor dem ersten oder nach
+     * dem letzten Streckenpunkt liegt, faellt weg: dort weiss niemand, wo
+     * man war.
+     */
+    fun pulsUeberStrecke(puls: List<Pulspunkt>, strecke: List<Streckenpunkt>): List<Verlaufspunkt> {
+        if (strecke.size < 2 || puls.isEmpty()) return emptyList()
+        val aus = ArrayList<Verlaufspunkt>(puls.size)
+        var j = 0
+        for (p in puls) {
+            while (j < strecke.size - 2 && strecke[j + 1].sekunde < p.sekunde) j++
+            val a = strecke[j]
+            val b = strecke[j + 1]
+            if (p.sekunde < a.sekunde || p.sekunde > b.sekunde) continue
+            val t = if (b.sekunde > a.sekunde) (p.sekunde - a.sekunde).toDouble() / (b.sekunde - a.sekunde) else 0.0
+            aus += Verlaufspunkt(a.meter + (b.meter - a.meter) * t, p.bpm.toDouble())
+        }
+        return aus
+    }
+
+    /** Das Tempo ueber die Strecke, in km/h. */
+    fun tempoUeberStrecke(strecke: List<Streckenpunkt>): List<Verlaufspunkt> =
+        strecke.map { Verlaufspunkt(it.meter, it.tempo * 3.6) }
+
+    // --- Hoehe ---
+
+    /** Halbe Breite der Hoehenglaettung, in Metern Strecke. */
+    const val HOEHE_FENSTER_M = 50.0
+
+    /**
+     * Die geglaettete Hoehe je Streckenpunkt, null wo das GPS keine lieferte.
+     *
+     * EINE REIHE FUER ALLES: Aufstieg oben, Profil, Kilometertabelle und
+     * Steigung rechnen mit ihr. Frueher hatte jede ihre eigene - auf einer
+     * Seite standen 188 m Aufstieg, ein Profil von 89 m und Kilometer, die
+     * zusammen 406 m ergaben.
+     *
+     * UEBER DIE STRECKE, NICHT UEBER PUNKTE: die GPS-Hoehe wandert ueber
+     * Minuten um Meter. Hundert Meter Weg mitteln das weg, ohne einen echten
+     * Anstieg zu verschlucken; im Stehen (kein Weg) mitteln sie die ganze Rast.
+     * Nicht ueber einen Sprung hinweg: dort liegt Zeit ohne Weg dazwischen.
+     */
+    fun hoehen(strecke: List<Streckenpunkt>): List<Double?> {
+        val aus = arrayOfNulls<Double>(strecke.size)
+        var a = 0
+        while (a < strecke.size) {
+            var b = a + 1
+            while (b < strecke.size && !strecke[b].nachSprung) b++
+            for (i in a until b) {
+                if (strecke[i].hoehe == null) continue
+                var summe = 0.0
+                var n = 0
+                var j = i
+                while (j >= a && strecke[i].meter - strecke[j].meter <= HOEHE_FENSTER_M) {
+                    strecke[j].hoehe?.let { summe += it; n++ }
+                    j--
+                }
+                j = i + 1
+                while (j < b && strecke[j].meter - strecke[i].meter <= HOEHE_FENSTER_M) {
+                    strecke[j].hoehe?.let { summe += it; n++ }
+                    j++
+                }
+                aus[i] = summe / n
+            }
+            a = b
+        }
+        return aus.toList()
+    }
+
+    /**
+     * Der Aufstieg bis zu jedem Punkt, aus [hoehen]. MIT EINER SCHWELLE
+     * ([Spur.STEIGUNG_MIN]): was geglaettet noch zittert, zaehlt nicht. Nach
+     * einem Sprung beginnt die Hoehe neu - ein wiedergefundener Empfang ist
+     * kein Anstieg. Weil jeder Kilometer die Differenz dieser Reihe nimmt,
+     * ergeben die Kilometer zusammen genau den Aufstieg oben.
+     */
+    fun aufstiegBis(strecke: List<Streckenpunkt>): DoubleArray {
+        val h = hoehen(strecke)
+        val aus = DoubleArray(strecke.size)
+        var summe = 0.0
+        var bezug: Double? = null
+        // Bis zur ersten Hoehe hinter einem Sprung: kam der erste Fix nach dem
+        // Tunnel ohne Hoehe, verglich der zweite sonst mit der Hoehe davor.
+        var neu = true
+        for (i in strecke.indices) {
+            if (strecke[i].nachSprung) neu = true
+            val hi = h[i]
+            if (hi != null) {
+                val b = bezug
+                when {
+                    b == null || neu -> { bezug = hi; neu = false }
+                    hi - b >= Spur.STEIGUNG_MIN -> { summe += hi - b; bezug = hi }
+                    b - hi >= Spur.STEIGUNG_MIN -> bezug = hi
+                }
+            }
+            aus[i] = summe
+        }
+        return aus
+    }
+
+    /** Der Aufstieg eines Trainings - fuer Sportseite, Detail und Akte dieselbe Zahl. */
+    fun aufstieg(punkte: List<Spur.Punkt>): Double = aufstiegBis(strecke(punkte)).lastOrNull() ?: 0.0
+
+    /** Die Hoehe ueber die Strecke - leer, wenn das GPS keine lieferte. */
+    fun hoeheUeberStrecke(strecke: List<Streckenpunkt>): List<Verlaufspunkt> {
+        val h = hoehen(strecke)
+        val mit = strecke.indices.filter { h[it] != null }
+        if (mit.size < strecke.size / 2) return emptyList()
+        return mit.map { Verlaufspunkt(strecke[it].meter, h[it]!!) }
+    }
+
+    // --- Kilometer ---
+
+    data class Kilometer(
+        val nummer: Int,        //< 1 = der erste
+        val meter: Double,      //< meist 1000, der letzte weniger
+        val sekunden: Long,
+        val pulsMittel: Double?,
+        val aufstieg: Double,
+    )
+
+    /**
+     * Die Strecke in Kilometern, mit Zeit, Puls und Aufstieg je Stueck.
+     *
+     * Der letzte Rest zaehlt, wenn er wenigstens hundert Meter lang ist;
+     * dreissig Meter Auslaufen sind kein Kilometer. [puls] und [pausen]
+     * (von, bis) zaehlen ihre Sekunden wie die Strecke ab dem ersten Punkt.
+     * DIE PAUSEN DER UHR ZAEHLEN NICHT ALS ZEIT: sonst stand der Kilometer mit
+     * dem Cafe bei 16 Minuten. [stueck] ist die Laenge eines Abschnitts - mit
+     * "Imperial Units" eine Meile statt eines Kilometers.
+     */
+    fun kilometer(
+        strecke: List<Streckenpunkt>, puls: List<Pulspunkt>, pausen: List<Pair<Long, Long>> = emptyList(), stueck: Double = 1000.0,
+    ): List<Kilometer> {
+        if (strecke.size < 2) return emptyList()
+        val auf = aufstiegBis(strecke)
+        fun pause(von: Long, bis: Long) = pausen.sumOf { (a, b) -> (minOf(b, bis) - maxOf(a, von)).coerceAtLeast(0) }
+        val aus = mutableListOf<Kilometer>()
+        var startIndex = 0
+        var nummer = 1
+        var i = 1
+        while (i < strecke.size) {
+            val grenze = nummer * stueck
+            val letzter = i == strecke.size - 1
+            if (strecke[i].meter >= grenze || letzter) {
+                val von = strecke[startIndex]
+                val bis = strecke[i]
+                val laenge = bis.meter - von.meter
+                if (laenge >= 100) {
+                    val pulsHier = puls.filter { it.sekunde in von.sekunde..bis.sekunde }
+                    aus += Kilometer(
+                        nummer, laenge, bis.sekunde - von.sekunde - pause(von.sekunde, bis.sekunde),
+                        Statistik.mittel(pulsHier.map { it.bpm.toDouble() }),
+                        auf[i] - auf[startIndex],
+                    )
+                }
+                startIndex = i
+                nummer++
+            }
+            i++
+        }
+        return aus
+    }
+
+    /**
+     * Die Steigung je Punkt in Prozent, ueber rund fuenfzig Meter Strecke.
+     *
+     * Aus zwei Nachbarpunkten waere es Rauschen: GPS-Hoehe zittert um Meter,
+     * und zwei Meter auf drei Meter Weg waeren siebzig Prozent.
+     */
+    fun steigung(strecke: List<Streckenpunkt>): List<Double> {
+        if (strecke.size < 2 || strecke.count { it.hoehe != null } < strecke.size / 2) {
+            return strecke.map { 0.0 }
+        }
+        // Aus der geglaetteten Reihe wie das Profil - aus der rohen stand
+        // auf einer Steigung von 1,5 % ein "steilster Punkt" von 25 %.
+        val h = hoehen(strecke)
+        return strecke.indices.map { i ->
+            var a = i
+            while (a > 0 && strecke[i].meter - strecke[a - 1].meter < 25) a--
+            var b = i
+            while (b < strecke.size - 1 && strecke[b + 1].meter - strecke[i].meter < 25) b++
+            val ha = h[a]
+            val hb = h[b]
+            val dm = strecke[b].meter - strecke[a].meter
+            if (ha == null || hb == null || dm < 5) 0.0 else ((hb - ha) / dm * 100).coerceIn(-40.0, 40.0)
+        }
+    }
+
+    /** Der Puls zu einer Sekunde - der naechste Messpunkt, hoechstens eine Minute weg. */
+    fun pulsBei(puls: List<Pulspunkt>, sekunde: Long): Long? =
+        puls.minByOrNull { abs(it.sekunde - sekunde) }
+            ?.takeIf { abs(it.sekunde - sekunde) <= 60 }?.bpm
+
+    /** Der mittlere Puls in einer Spanne, null wenn keiner drin liegt. */
+    fun pulsMittel(puls: List<Pulspunkt>, von: Long, bis: Long): Double? =
+        Statistik.mittel(puls.filter { it.sekunde in von..bis }.map { it.bpm.toDouble() })
+
+    /**
+     * Wie schnell der Puls in den Pausen faellt, in Schlaegen je Minute.
+     *
+     * DAS IST DIE ZAHL, DIE BEIM KRAFTTRAINING ETWAS SAGT: nicht der Puls im
+     * Satz, sondern wie schnell er danach wieder unten ist. Je Pause der
+     * Abfall zwischen Anfang und Ende, auf die Minute gerechnet, im Mittel.
+     */
+    fun erholung(puls: List<Pulspunkt>, pausen: List<Pair<Long, Long>>): Double? {
+        val werte = pausen.mapNotNull { (von, bis) ->
+            if (bis - von < 30) return@mapNotNull null
+            val a = pulsBei(puls, von) ?: return@mapNotNull null
+            val b = pulsBei(puls, bis) ?: return@mapNotNull null
+            (a - b).toDouble() / ((bis - von) / 60.0)
+        }
+        return Statistik.mittel(werte)
+    }
+
+    /** Wie gleichmaessig Werte sind: die Standardabweichung aller Werte (durch n) - die Runden stehen fuer sich. */
+    fun schwankung(werte: List<Double>): Double = if (werte.size < 2) 0.0 else Statistik.streuungAllerWerte(werte)!!
+
+    /**
+     * Die Sekunden in Bewegung: Stuecke mit mehr als 0,5 m/s. HALT AN DER
+     * AMPEL ZAEHLT NICHT, und ein Loch in der Spur (mehr als eine Minute
+     * ohne Punkt) auch nicht - dort weiss niemand, ob man fuhr.
+     */
+    fun bewegt(strecke: List<Streckenpunkt>): Long {
+        var summe = 0L
+        for (i in 1 until strecke.size) {
+            val dt = strecke[i].sekunde - strecke[i - 1].sekunde
+            if (dt in 1..60 && !strecke[i].nachSprung && strecke[i].tempo > 0.5) summe += dt
+        }
+        return summe
+    }
+
+    /** Zwischen welchen Werten das Tempo liegt, ohne die Ausreisser oben. */
+    fun tempoSpanne(strecke: List<Streckenpunkt>): Pair<Double, Double> {
+        val werte = strecke.map { it.tempo }.filter { it > 0.3 }.sorted()
+        if (werte.isEmpty()) return 0.0 to 1.0
+        val unten = werte[(werte.size * 0.05).toInt().coerceIn(0, werte.size - 1)]
+        val oben = werte[(werte.size * 0.95).toInt().coerceIn(0, werte.size - 1)]
+        return if (abs(oben - unten) < 0.1) unten to unten + 1.0 else unten to oben
+    }
+}
+
+/** Ein Pulswert eines Trainings: Sekunde ab Beginn, Schlaege je Minute. */
+internal data class Pulspunkt(val sekunde: Long, val bpm: Long)

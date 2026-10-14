@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Das Gesundheits-Widget - aus Kiesel-Helper (GesundheitWidget, Widgetlage). -->
+<resources>
+    <string name="ks_wl_erholsam">%1$s restful</string>
+    <string name="ks_wl_laenger">longer than usual</string>
+    <string name="ks_wl_kuerzer">shorter than usual</string>
+    <string name="ks_wl_wie_sonst">as usual</string>
+    <string name="ks_wl_nacht_eingetragen">The night is logged.</string>
+    <string name="ks_wl_nacht">Night</string>
+    <string name="ks_wl_geschlafen">Slept</string>
+    <string name="ks_wl_puls_schnitt">Avg HR %1$s</string>
+    <string name="ks_wl_beendet_min">finished %1$d min ago</string>
+    <string name="ks_wl_beendet_h">finished %1$d h ago</string>
+    <string name="ks_wl_noch_offen">%1$s still open</string>
+    <string name="ks_wl_erinnerung">Reminder</string>
+    <string name="ks_wl_offen">open</string>
+    <string name="ks_wl_schrittziel_erreicht">Step goal reached</string>
+    <string name="ks_wl_schritte_zum_ziel">%1$s steps to go</string>
+    <string name="ks_wl_koffein_mg">Caffeine %1$s mg</string>
+    <string name="ks_wl_bilanz">Summary</string>
+    <string name="ks_wl_tag_eingetragen">The day is logged.</string>
+    <string name="ks_wl_keine_schritte">No steps counted yet.</string>
+    <string name="ks_wl_schritte_bis_jetzt">%1$s steps so far.</string>
+    <string name="ks_wl_ziel_erreicht">Goal reached.</string>
+    <string name="ks_wl_bis_zum_ziel">%1$s to go</string>
+    <plurals name="ks_wl_glaeser_hinterher">
+        <item quantity="one">%1$d glass behind</item>
+        <item quantity="other">%1$d glasses behind</item>
+    </plurals>
+    <plurals name="ks_wl_glaeser_fehlen">
+        <item quantity="one">%1$d glass missing</item>
+        <item quantity="other">%1$d glasses missing</item>
+    </plurals>
+    <string name="ks_w_praeparate">Supplements</string>
+    <string name="ks_w_ruhepuls_wert">Resting HR %1$s</string>
+    <string name="ks_w_beschreibung">What matters right now: the night in the morning, the workout after training, the steps otherwise</string>
+    <string name="ks_w_auffrischen">Refresh now</string>
+    <string name="ks_w_gerade_eben">just now</string>
+    <string name="ks_w_name">Boulder Health</string>
+    <string name="ks_w_app">Boulder</string>
+    <string name="ks_w_nichts">Nothing logged yet</string>
+</resources>

@@ -62,6 +62,8 @@ reorderable = "3.1.0"
 zxing = "3.5.4"
 compass = "3.2.0"
 health-kmp = "1.4.0"
+# Boulder: Ablauftests mit echtem Context (Dateien, Prefs, Texte) - nur in Hosttests.
+robolectric = "4.17"
 documentfile = "1.1.0"
 
 [plugins]
@@ -175,3 +177,10 @@ compass-geocoder-mobile = { module = "dev.jordond.compass:geocoder-mobile", vers
 compass-autocomplete = { module = "dev.jordond.compass:autocomplete", version.ref = "compass" }
 compass-autocomplete-mobile = { module = "dev.jordond.compass:autocomplete-mobile", version.ref = "compass" }
 health-kmp = { module = "com.viktormykhailiv:health-kmp", version.ref = "health-kmp" }
+# Boulder: health-kmp 1.4.0 kennt OxygenSaturation, Hydration, Nutrition u. a. nicht.
+health-connect = { module = "androidx.health.connect:connect-client", version = "1.1.0" }
+# Boulder: Karten fuer die Trainingsansicht (Kieselsport), wie in Kiesel-Helper.
+osmdroid = { module = "org.osmdroid:osmdroid-android", version = "6.1.20" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+# Boulder: fuer :osmand-api (@NonNull/@Nullable im OsmAnd-Code).
+androidx-annotation = { module = "androidx.annotation:annotation", version = "1.10.0" }

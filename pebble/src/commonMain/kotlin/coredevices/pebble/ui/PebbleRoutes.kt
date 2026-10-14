@@ -68,8 +68,59 @@ object PebbleNavBarRoutes {
     @Serializable
     data object IndexRoute : NavBarRoute
 
+    // Boulder: die Trainingsansicht von Kieselsport.
     @Serializable
-    data object HealthRoute : NavBarRoute
+    data object TrainingRoute : NavBarRoute
+
+    @Serializable
+    data class TrainingDetailRoute(val id: String) : NavBarRoute
+
+    @Serializable
+    data class TrainingAlleRoute(val tag: String? = null) : NavBarRoute
+
+    @Serializable
+    data object SportTrendRoute : NavBarRoute
+
+    @Serializable
+    data object SpurenRoute : NavBarRoute
+
+    // Boulder: die Gesundheitsuebersicht (aus Kiesel-Helper).
+    @Serializable
+    data object GesundheitRoute : NavBarRoute
+
+    @Serializable
+    data class NachtRoute(val beginnUtc: Long) : NavBarRoute
+
+    @Serializable
+    data class TrendRoute(val gruppe: String) : NavBarRoute
+
+    @Serializable
+    data object HerzRoute : NavBarRoute
+
+    // Boulder 0.51: Water und Stack (Praeparate und Koffein) - Unterseiten von Health.
+    @Serializable
+    data object WasserRoute : NavBarRoute
+
+    @Serializable
+    data object StackRoute : NavBarRoute
+
+    @Serializable
+    data object KoerperRoute : NavBarRoute
+
+    @Serializable
+    data object SicherungRoute : NavBarRoute
+
+    @Serializable
+    data object KieselsportRoute : NavBarRoute
+
+    @Serializable
+    data object ZieleRoute : NavBarRoute
+
+    @Serializable
+    data object ProtokollRoute : NavBarRoute
+
+    @Serializable
+    data object AkkuRoute : NavBarRoute
 
     @Serializable
     data class AppstoreSettingsRoute(
@@ -187,8 +238,60 @@ fun NavGraphBuilder.addNavBarRoutes(
     composableWithAnimations<PebbleNavBarRoutes.NotificationsRoute>(viewModel) {
         NotificationsScreen(topBarParams, nav)
     }
-    composableWithAnimations<PebbleNavBarRoutes.HealthRoute>(viewModel) {
-        HealthScreen(topBarParams, nav)
+    composableWithAnimations<PebbleNavBarRoutes.TrainingRoute>(viewModel) {
+        TrainingScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.TrainingDetailRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.TrainingDetailRoute = it.toRoute()
+        TrainingDetailScreen(topBarParams, nav, route.id)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.TrainingAlleRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.TrainingAlleRoute = it.toRoute()
+        TrainingAlleScreen(topBarParams, nav, route.tag)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.SportTrendRoute>(viewModel) {
+        SportTrendScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.SpurenRoute>(viewModel) {
+        SpurenScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.GesundheitRoute>(viewModel) {
+        GesundheitScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.NachtRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.NachtRoute = it.toRoute()
+        NachtScreen(topBarParams, nav, route.beginnUtc)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.TrendRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.TrendRoute = it.toRoute()
+        TrendScreen(topBarParams, nav, route.gruppe)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.HerzRoute>(viewModel) {
+        HerzScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.WasserRoute>(viewModel) {
+        WasserScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.StackRoute>(viewModel) {
+        StackScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.KoerperRoute>(viewModel) {
+        KoerperScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.SicherungRoute>(viewModel) {
+        SicherungScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.KieselsportRoute>(viewModel) {
+        KieselsportScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.ZieleRoute>(viewModel) {
+        ZieleScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.ProtokollRoute>(viewModel) {
+        ProtokollScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.AkkuRoute>(viewModel) {
+        AkkuScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.IndexRoute>(viewModel) {
         indexScreen(topBarParams, nav, scopedCoreNav)

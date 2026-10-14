@@ -95,6 +95,14 @@ class PlatformHealthSyncTest {
             intervals,
         )
     }
+
+    @Test
+    fun overlaysInEinerFirmwareNachtFallenWeg() {
+        fun o(start: Long, dauer: Long) = overlay(start, dauer, OverlayType.Sleep)
+        val nacht = 10_000L..40_000L
+        val bleiben = ohneFirmwareNacht(listOf(o(5_000, 3_000), o(9_000, 2_000), o(20_000, 1_000), o(50_000, 1_000)), listOf(nacht))
+        assertEquals(listOf(5_000L, 50_000L), bleiben.map { it.startTime })
+    }
 }
 
 private fun overlay(start: Long, duration: Long, type: OverlayType) = OverlayDataEntity(

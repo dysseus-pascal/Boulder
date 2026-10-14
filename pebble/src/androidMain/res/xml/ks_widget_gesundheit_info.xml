@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Die Anmeldung des Widgets.
+
+     KEIN TAKT VON ANDROID (updatePeriodMillis 0, Nutzerentscheid): der
+     weckte das Telefon 48-mal am Tag, obwohl jeder Schub der Uhr (alle 15 min)
+     und jeder eigene Eintrag das Widget ohnehin neu zeichnen. Fuer die Wechsel
+     der Lage (Morgen, Abend, Kachelwunsch) und ohne Uhr plant GesundheitWidget
+     einen Alarm, der nicht weckt: zur naechsten Wende, spaetestens nach 30 min,
+     sobald das Telefon wach ist. Wer es sofort will, tippt den Knopf an.
+
+     previewLayout statt previewImage: die Vorschau im Auswahlblatt ist dann
+     das Widget selbst, ohne dass irgendwo ein Bild gepflegt werden muss. Alte
+     Telefone uebersehen die Zeile einfach. -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp"
+    android:minHeight="150dp"
+    android:targetCellWidth="4"
+    android:targetCellHeight="3"
+    android:minResizeWidth="180dp"
+    android:minResizeHeight="140dp"
+    android:resizeMode="horizontal|vertical"
+    android:updatePeriodMillis="0"
+    android:initialLayout="@layout/ks_widget_gesundheit"
+    android:previewLayout="@layout/ks_widget_gesundheit"
+    android:description="@string/ks_w_beschreibung"
+    android:widgetCategory="home_screen" />

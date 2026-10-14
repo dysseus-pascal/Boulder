@@ -1,5 +1,6 @@
 package coredevices.pebble
 
+import io.rebble.libpebblecommon.connection.NoBuiltInCompanions
 import co.touchlab.kermit.Logger
 import com.algolia.client.api.SearchClient
 import com.viktormykhailiv.kmp.health.HealthManagerFactory
@@ -57,7 +58,6 @@ import coredevices.pebble.ui.NotificationAppScreenViewModel
 import coredevices.pebble.ui.NotificationAppsScreenViewModel
 import coredevices.pebble.ui.NotificationScreenViewModel
 import coredevices.pebble.ui.SharedLockerViewModel
-import coredevices.pebble.ui.HealthViewModel
 import coredevices.pebble.ui.WatchHomeViewModel
 import coredevices.pebble.ui.WatchOnboardingFinished
 import coredevices.pebble.ui.WatchSettingsScreenViewModel
@@ -130,6 +130,8 @@ val watchModule = module {
             get(),
             get(),
             get(),
+            // Boulder: vom Plattformmodul gebunden (Kieselsport u. a. auf Android).
+            builtInCompanions = getOrNull() ?: NoBuiltInCompanions,
         )
     } binds arrayOf(LibPebble3::class, NotificationApps::class, SystemGeolocation::class)
 
@@ -307,7 +309,6 @@ val watchModule = module {
         )
     }
     viewModelOf(::ModelManagementScreenViewModel)
-    viewModelOf(::HealthViewModel)
 
     single { SearchClient(appId = "7683OW76EQ", apiKey = "252f4938082b8693a8a9fc0157d1d24f") }
 }

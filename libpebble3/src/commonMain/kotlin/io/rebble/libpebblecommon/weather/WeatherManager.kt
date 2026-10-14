@@ -7,30 +7,48 @@ import io.rebble.libpebblecommon.database.entity.WeatherAppEntry
 import io.rebble.libpebblecommon.database.entity.WeatherPrefsValue
 import io.rebble.libpebblecommon.database.entity.setWeatherSettings
 import io.rebble.libpebblecommon.di.LibPebbleCoroutineScope
+import co.touchlab.kermit.Logger
+import io.rebble.libpebblecommon.util.datenbereich
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlin.uuid.Uuid
 
 class WeatherManager(
     private val weatherAppEntryDao: WeatherAppRealDao,
-    private val libPebbleCoroutineScope: LibPebbleCoroutineScope,
+    libPebbleCoroutineScope: LibPebbleCoroutineScope,
     private val appPrefsEntryDao: AppPrefsEntryDao,
 ): Weather {
     override val currentWeather = weatherAppEntryDao.getAllFlow()
 
+    private val logger = Logger.withTag("WeatherManager")
+    private val bereich = libPebbleCoroutineScope.datenbereich("WeatherManager")
+
+    // Boulder: zwei schnelle Updates liefen nebeneinander und konnten sich
+    // verschraenken; dann gewann das aeltere. Die Sperre ist fair, und
+    // UNDISPATCHED stellt sich noch im Aufruf an - so gilt die Reihenfolge der Aufrufe.
+    private val sperre = Mutex()
+
     override fun updateWeatherData(weatherData: List<WeatherLocationData>) {
-        libPebbleCoroutineScope.launch {
-            val existing = weatherAppEntryDao.getAll()
-            val toDelete = existing.filter { existingEntry ->
-                weatherData.none { it.key == existingEntry.key }
+        bereich.launch(start = CoroutineStart.UNDISPATCHED) {
+            sperre.withLock {
+                try {
+                    weatherAppEntryDao.ersetzeOrte(
+                        behalten = weatherData.map { it.key }.toSet(),
+                        neue = weatherData.mapNotNull {
+                            (it as? WeatherLocationData.WeatherLocationDataPopulated)?.toWeatherAppEntry()
+                        },
+                    )
+                    appPrefsEntryDao.setWeatherSettings(WeatherPrefsValue(weatherData.map { it.key }))
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    logger.e(e) { "Weather update failed" }
+                }
             }
-            toDelete.forEach {
-                weatherAppEntryDao.markForDeletion(it.key)
-            }
-            weatherAppEntryDao.insertOrReplace(weatherData.mapNotNull {
-                (it as? WeatherLocationData.WeatherLocationDataPopulated)?.toWeatherAppEntry()
-            })
-            appPrefsEntryDao.setWeatherSettings(WeatherPrefsValue(weatherData.map { it.key }))
         }
     }
 }

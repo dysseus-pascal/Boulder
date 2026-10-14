@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kieselstrasse: OsmAnd-Navigation auf die Uhr - aus Kiesel-Helper (OsmandNavigation). -->
+<resources>
+    <string name="ks_o_abo_fehler">Subscribing failed: %1$s</string>
+    <string name="ks_o_abonniert">connected, turn data subscribed</string>
+    <string name="ks_o_bereit">ready, connects while Kieselstrasse is open on the watch</string>
+    <string name="ks_o_ausfahrt">Exit %1$d</string>
+    <string name="ks_o_beendet">OsmAnd closed — waiting for it to return</string>
+    <string name="ks_o_ende">OsmAnd: navigation ended</string>
+    <string name="ks_o_freischalten">enable in OsmAnd: Menu › Plugins › Boulder</string>
+    <string name="ks_o_freischalten_v">OsmAnd: not enabled yet (Menu › Plugins)</string>
+    <string name="ks_o_geloest_v">OsmAnd released, callbacks: %1$d</string>
+    <string name="ks_o_nie">not checked yet</string>
+    <string name="ks_o_rueckruf_v">OsmAnd: turn callbacks arrive</string>
+    <string name="ks_o_unbekannt">unknown</string>
+    <string name="ks_o_unerreichbar">OsmAnd not reachable — installed? (otherwise visibility in the manifest)</string>
+    <string name="ks_o_verbinde">%1$s found — connecting</string>
+    <string name="ks_o_verbunden">connected to %1$s</string>
+    <string name="ks_o_verbunden_v">OsmAnd connected (%1$s)</string>
+    <string name="ks_k_titel">To OsmAnd</string>
+    <string name="ks_k_lese">Reading link …</string>
+    <string name="ks_k_kein_link">No link included.</string>
+    <string name="ks_k_kein_ziel">No destination could be read from this link.</string>
+    <string name="ks_k_abgelehnt">OsmAnd did not take the destination. Is OsmAnd installed?</string>
+    <string name="ks_k_an_osmand">Map link to OsmAnd (%1$s)</string>
+    <string name="ks_k_weg_adresse">%1$s, address converted</string>
+    <string name="ks_k_weg_koordinate">%1$s, coordinate from the link</string>
+    <string name="ks_k_ort_gezeigt">Place shown</string>
+    <string name="ks_k_suche">Search handed to OsmAnd</string>
+    <string name="ks_k_ziel">Destination</string>
+</resources>

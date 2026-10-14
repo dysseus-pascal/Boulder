@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Boulder: die Worte der gemeinsamen Formate (kiesel/Formate.kt) und des Seitenbaukastens (ansicht/Baukasten.kt). -->
+<resources>
+    <string name="ks_fmt_heute">Today</string>
+    <string name="ks_fmt_gestern">Yesterday</string>
+    <string name="ks_fmt_heute_klein">today</string>
+    <string name="ks_fmt_gestern_klein">yesterday</string>
+    <!-- Tag und Uhrzeit: "Yesterday, 9:14 PM", "Sep 27, 9:14 PM". -->
+    <string name="ks_fmt_tag_zeit">%1$s, %2$s</string>
+    <string name="ks_fmt_eben">just now</string>
+    <!-- TalkBack: was ein langer Druck auf eine Zeile tut. -->
+    <string name="ks_bk_bearbeiten">Edit</string>
+</resources>

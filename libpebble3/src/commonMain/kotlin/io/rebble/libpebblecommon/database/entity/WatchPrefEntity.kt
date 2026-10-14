@@ -627,6 +627,19 @@ enum class NumberWatchPref(
     override val isDebugSetting: Boolean = false,
     override val description: String? = null,
 ) : WatchPref<Long> {
+    // Boulder-Firmware: der Regler zwischen Genauigkeit und Akkulaufzeit
+    // (boulder/messstufe.h). Aeltere Firmware kennt den Schluessel nicht und
+    // weist ihn ab; dann bleibt es bei ihren eigenen Takten.
+    BoulderMessstufe(
+        id = "boulderMessstufe",
+        displayName = "Precision",
+        description = "Trade battery life for detail: how often the watch measures heart rate, HRV and SpO2. Needs the Boulder firmware.",
+        defaultValue = 3,
+        type = WatchPrefType.TypeUInt8,
+        min = 1,
+        max = 5,
+        unit = "",
+    ),
     BacklightTimeoutMs(
         id = "lightTimeoutMs",
         displayName = "Backlight Timeout",
@@ -847,9 +860,18 @@ fun DbWrite.asWatchPrefItem(params: ValueParams): WatchPrefItem? {
             logger.e(e) { "Error decoding watch pref record $id" }
             return null
         }
+        // Boulder: eine Messstufe ausserhalb 1..5 nimmt die Firmware als Vorgabe
+        // (messstufe.c) - so steht sie dann auch hier.
+        val stufe = NumberWatchPref.BoulderMessstufe
+        val geprueft = if (type == stufe) {
+            strValue.takeIf { it.toLongOrNull() in stufe.min.toLong()..stufe.max.toLong() }
+                ?: stufe.defaultValue.toString().also { logger.w { "Watch reported $id=$strValue, using ${stufe.defaultValue}" } }
+        } else {
+            strValue
+        }
         return WatchPrefItem(
             id = id,
-            value = strValue,
+            value = geprueft,
             timestamp = Instant.fromEpochSeconds(timestamp.toLong()).asMillisecond(),
         )
     } catch (e: Exception) {

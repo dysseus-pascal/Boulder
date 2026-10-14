@@ -238,6 +238,12 @@ val erlaubteExporte = setOf(
     "service|androidx.work.impl.background.systemjob.SystemJobService|perm=android.permission.BIND_JOB_SERVICE|read=|write=",
     "receiver|androidx.work.impl.diagnostics.DiagnosticsReceiver|perm=android.permission.DUMP|read=|write=",
     "receiver|androidx.profileinstaller.ProfileInstallReceiver|perm=android.permission.DUMP|read=|write=",
+    // Boulder: Kartenlinks kommen aus fremden Apps (Teilen, geo:, Maps-Links) - dafuer
+    // ist die Activity da; sie oeffnet nur OsmAnd und schickt nichts weiter.
+    "activity|coredevices.pebble.kiesel.KartenlinkActivity|perm=|read=|write=",
+    // Boulder: ein Homescreen-Widget muss fuer den Launcher erreichbar sein; es
+    // zeichnet nur und nimmt keine Daten an.
+    "receiver|coredevices.pebble.kiesel.GesundheitWidget|perm=|read=|write=",
     // Cores Ring/Index (Modul experimental); Boulder nutzt sie nicht, Entscheid in AP7.
     "receiver|coredevices.ring.reminders.ReminderBootReceiver|perm=|read=|write=",
     "service|coredevices.ring.service.RingCompanionDeviceService|perm=android.permission.BIND_COMPANION_DEVICE_SERVICE|read=|write=",

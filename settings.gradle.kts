@@ -43,3 +43,5 @@ include(":cactus-native")
 include(":libindex")
 include(":experimental")
 include(":krisp-stubs")
+// Boulder: OsmAnds AIDL-Schnittstelle fuer Kieselstrasse.
+include(":osmand-api")

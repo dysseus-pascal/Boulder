@@ -1,6 +1,16 @@
 package coredevices.pebble
 
+import android.content.Context
+import coredevices.pebble.kiesel.GesundheitWidget
+import coredevices.pebble.kiesel.Gesundheitsziele
+import coredevices.pebble.kiesel.Kieselstrasse
+import coredevices.pebble.kiesel.Rechtefrage
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import coredevices.util.Permission
+import io.rebble.libpebblecommon.connection.HealthDataApi
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import kotlinx.coroutines.flow.Flow
@@ -8,9 +18,32 @@ import kotlinx.coroutines.flow.map
 
 class PebbleAndroidDelegate(
     private val libPebble: LibPebble,
+    private val context: Context,
+    private val healthDataApi: HealthDataApi,
 ) {
+    // Boulder: die Sammler unten leben so lange wie der Prozess. Jedes Oeffnen
+    // der App ruft hierher - ohne die Sperre kam jedes Mal ein weiterer dazu.
+    private var boulderGestartet = false
+
     fun initPostPermissions() {
         libPebble.doStuffAfterPermissionsGranted()
+        if (boulderGestartet) return
+        boulderGestartet = true
+        // Boulder: OsmAnds Abzweigungen an die Uhr-App Kieselstrasse.
+        Kieselstrasse.begleite(context, libPebble)
+        // Boulder: neue Daten von der Uhr zeichnen das Gesundheits-Widget neu.
+        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+            libPebble.healthDataUpdated.collect { GesundheitWidget.stosseAn(context) }
+        }
+        // Boulder: das Widget hat keinen Takt von Android mehr - einmal je Prozess zeichnen und neu planen,
+        // sonst stuende es nach "Beenden erzwingen" ohne Uhr still, gleich welcher Reiter offen ist.
+        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch { GesundheitWidget.sichereTakt(context) }
+        // Boulder: alle Rechte der Akte in einem Dialog, einmal je Fassung.
+        CoroutineScope(SupervisorJob() + Dispatchers.Main).launch { Rechtefrage.beimStart(context) }
+        // Boulder: Schritte und Naechte taeglich festschreiben, bevor das Housekeeping sie nach 90 Tagen loescht.
+        coredevices.pebble.kiesel.Tagesarchiv.plane(context)
+        // Boulder: die Ziele aus "Goals" wieder in der Datenbank Health, falls sie neu ist.
+        Gesundheitsziele.beimStart(context, healthDataApi)
     }
 
     /**

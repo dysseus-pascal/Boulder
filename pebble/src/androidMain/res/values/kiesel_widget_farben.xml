@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Die Farben des Widgets. Eigene, weil ein Widget nicht das Thema der App bekommt. -->
+<resources>
+    <color name="ks_w_karte">#FFFFFF</color>
+    <color name="ks_w_linie">#E3E5E0</color>
+    <color name="ks_w_schrift">#1C2226</color>
+    <color name="ks_w_schrift_zart">#5D666C</color>
+    <color name="ks_w_akzent">#4A7C59</color>
+</resources>

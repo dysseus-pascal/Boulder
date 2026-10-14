@@ -24,28 +24,45 @@ import org.jetbrains.compose.resources.StringResource
 import org.koin.compose.koinInject
 import theme.CoreAppTheme.Companion.asCoreAppTheme
 
-val coreOrange = Color(0xFFFA4A36)
+// Boulder: Moosgruen, die Farbe des Hintergrunds im App-Symbol.
+val boulderGruen = Color(0xFF4E7D5B)
+// Boulder: dasselbe Gruen, hell genug fuer Text auf den dunklen Schemata.
+// Das Markengruen erreicht auf #333333 nur 2,65:1 - Titel und Buttons waren
+// ausgewaschen und unter AA. Auf dem hellen Gruen steht dunkler Text; die
+// Kontraste haelt DunkleSchemataKontrastTest fest.
+val boulderGruenHell = Color(0xFF7DBB8A)
+val aufBoulderGruenHell = Color(0xFF0B2412)
+private val gruenContainerDunkel = Color(0xFF2F5A3A)
+private val aufGruenContainerDunkel = Color(0xFFD9F0DC)
+// Boulder: Fehlerfarben aus Material 3; die geerbte #FA6B66 kam mit Weiss auf 2,85:1.
+private val errorDunkel = Color(0xFFFF8A80)
+private val onErrorDunkel = Color(0xFF3A0A08)
+private val errorContainerDunkel = Color(0xFF93000A)
+private val onErrorContainerDunkel = Color(0xFFFFDAD6)
+private val errorHell = Color(0xFFB3261E)
+private val errorContainerHell = Color(0xFFF9DEDC)
+private val onErrorContainerHell = Color(0xFF410E0B)
 val coreGrey = Color(0xFF333333)
 val coreDarkGrey = Color(0xFF2B2930)
 val coreDarkGreen = Color(0xFF157a30)
 private val error = Color(0xFFFA6B66)
 val greyScheme = darkColorScheme(
-    primary = coreOrange,
-    onPrimary = Color.White,
-    primaryContainer = coreOrange,
+    primary = boulderGruenHell,
+    onPrimary = aufBoulderGruenHell,
+    primaryContainer = boulderGruen,
     onPrimaryContainer = Color.White,
-    secondary = coreOrange,
-    onSecondary = Color.White,
-    secondaryContainer = coreOrange,
+    secondary = boulderGruenHell,
+    onSecondary = aufBoulderGruenHell,
+    secondaryContainer = boulderGruen,
     onSecondaryContainer = Color.White,
-    tertiary = coreOrange,
-    onTertiary = Color.White,
-    tertiaryContainer = tertiaryContainerDark,
-    onTertiaryContainer = onTertiaryContainerDark,
-    error = error,
-    onError = Color.White,
-    errorContainer = error,
-    onErrorContainer = Color.White,
+    tertiary = boulderGruenHell,
+    onTertiary = aufBoulderGruenHell,
+    tertiaryContainer = gruenContainerDunkel,
+    onTertiaryContainer = aufGruenContainerDunkel,
+    error = errorDunkel,
+    onError = onErrorDunkel,
+    errorContainer = errorContainerDunkel,
+    onErrorContainer = onErrorContainerDunkel,
     background = coreGrey,
     onBackground = onBackgroundDark,
     surface = coreGrey,
@@ -80,22 +97,22 @@ val blackScheme = greyScheme.copy(
 )
 
 val lightScheme = lightColorScheme(
-    primary = coreOrange,
+    primary = boulderGruen,
     onPrimary = Color.White,
-    primaryContainer = coreOrange,
+    primaryContainer = boulderGruen,
     onPrimaryContainer = Color.Black,
-    secondary = coreOrange,
+    secondary = boulderGruen,
     onSecondary = Color.Black,
-    secondaryContainer = coreOrange,
+    secondaryContainer = boulderGruen,
     onSecondaryContainer = Color.White,
-    tertiary = coreOrange,
+    tertiary = boulderGruen,
     onTertiary = Color(0xFFFFFFFF),
     tertiaryContainer = tertiaryContainerLight,
     onTertiaryContainer = onTertiaryContainerLight,
-    error = error,
+    error = errorHell,
     onError = Color.White,
-    errorContainer = error,
-    onErrorContainer = Color.White,
+    errorContainer = errorContainerHell,
+    onErrorContainer = onErrorContainerHell,
     background = Color.White,
     onBackground = onBackgroundLight,
     surface = Color.White,
@@ -105,7 +122,9 @@ val lightScheme = lightColorScheme(
     outline = outlineLight,
     outlineVariant = outlineVariantLight,
     scrim = Color.White,
-    surfaceContainer = Color.White,
+    // Boulder: Menues und Popups zeichnen sich auf surfaceContainer - gleich der Seite
+    // haetten sie keine Kante (wie bei blackScheme oben).
+    surfaceContainer = Color(0xFFF3F3F3),
     surfaceContainerHighest = Color(0xFFF0F0F0),
     surfaceContainerHigh = Color(0xFFF5F5F5),
     surfaceContainerLow = Color(0xFFFAFAFA),
@@ -117,23 +136,23 @@ val onboardingScheme = lightColorScheme(
     primary = Color.White,
     onPrimary = Color.Black,
     primaryContainer = Color.White,
-    onPrimaryContainer = coreOrange,
+    onPrimaryContainer = boulderGruen,
     secondary = Color.White,
-    onSecondary = coreOrange,
+    onSecondary = boulderGruen,
     secondaryContainer = Color.White,
-    onSecondaryContainer = coreOrange,
+    onSecondaryContainer = boulderGruen,
     tertiary = Color.White,
-    onTertiary = coreOrange,
-    background = coreOrange,
+    onTertiary = boulderGruen,
+    background = boulderGruen,
     onBackground = Color.White,
-    surface = coreOrange,
+    surface = boulderGruen,
     onSurface = Color.White,
-    surfaceVariant = coreOrange,
+    surfaceVariant = boulderGruen,
     onSurfaceVariant = Color.White.copy(alpha = 0.8f),
     outline = Color.White.copy(alpha = 0.5f),
     outlineVariant = Color.White.copy(alpha = 0.3f),
-    scrim = coreOrange,
-    surfaceContainer = coreOrange,
+    scrim = boulderGruen,
+    surfaceContainer = boulderGruen,
     surfaceContainerHighest = Color.White.copy(alpha = 0.15f),
     error = error,
     onError = Color.White,

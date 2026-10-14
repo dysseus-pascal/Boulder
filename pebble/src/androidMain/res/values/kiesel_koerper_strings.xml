@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Boulder: Gewicht und Koerperzusammensetzung einer Waage aus Health Connect. -->
+<resources>
+    <string name="ks_kp_titel">Body</string>
+    <string name="ks_kp_karte">Body</string>
+    <string name="ks_kp_fett_anteil">%1$s%% fat</string>
+    <string name="ks_kp_in_tagen">%1$s in %2$d days</string>
+    <string name="ks_kp_gewicht_k">WEIGHT</string>
+    <string name="ks_kp_fett_k">BODY FAT</string>
+    <string name="ks_kp_tage_zusatz">last %1$d days</string>
+    <string name="ks_kp_zusammensetzung_k">COMPOSITION</string>
+    <string name="ks_kp_fett">Body fat</string>
+    <string name="ks_kp_magermasse">Lean mass</string>
+    <string name="ks_kp_knochen">Bone mass</string>
+    <string name="ks_kp_wasser">Body water</string>
+    <string name="ks_kp_grundumsatz">BMR</string>
+    <string name="ks_kp_kcal_tag">kcal/day</string>
+    <string name="ks_kp_bmi">BMI</string>
+    <string name="ks_kp_groesse">Height</string>
+    <string name="ks_kp_keine">No body measurements</string>
+</resources>

@@ -23,7 +23,11 @@ kotlin {
             enable = true
         }
 
-        withHostTestBuilder {}
+        // Boulder: die R-Klasse auch in den Hosttests - WidgetlageTest
+        // prueft die Texte des Widgets ueber ihre Ressourcennamen.
+        withHostTestBuilder {}.configure {
+            isIncludeAndroidResources = true
+        }
 
         optimization {
             consumerKeepRules.file("consumer-rules.pro")
@@ -137,7 +141,20 @@ kotlin {
                 implementation(libs.androidx.activity.compose)
                 // gitlive's compile variant declares com.google.firebase:* without versions.
                 implementation(project.dependencies.platform(libs.firebase.bom))
+                // Boulder: Kiesel-Teile (Health Connect direkt, Trainingskarten, OsmAnd).
+                implementation(libs.health.connect)
+                implementation(libs.osmdroid)
+                implementation(project(":osmand-api"))
+                // Boulder: Sicherung in einen gewaehlten Ordner (SAF), taeglich per WorkManager.
+                implementation(libs.androidx.documentfile)
+                implementation(libs.androidx.work)
             }
+        }
+
+        // Boulder: Ablauftests (Kieselsport, Mithoerer, SupCycle, Drinktervall)
+        // brauchen einen Context mit Dateien, Prefs und Texten.
+        getByName("androidHostTest").dependencies {
+            implementation(libs.robolectric)
         }
 
         iosMain {

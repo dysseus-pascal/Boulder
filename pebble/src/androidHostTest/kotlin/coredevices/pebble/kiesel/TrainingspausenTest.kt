@@ -1,0 +1,235 @@
+package coredevices.pebble.kiesel
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/**
+ * Die Pausen eines Trainings: aus den Meldungen der Uhr, gegen ihre Dauer
+ * geprueft, und die aktive Sekunde der Uhr als Uhrzeit.
+ */
+class TrainingspausenTest {
+    private val anfang = 1_000_000L
+    private fun p(t: Long) = true to anfang + t
+    private fun w(t: Long) = false to anfang + t
+
+    @Test
+    fun meldungenWerdenPausen() {
+        // Fahrt 10:00-11:20: 30 min, 20 min Kaffee, 30 min, dann die Pause zum Speichern.
+        val plan = Trainingspausen.ausMeldungen(listOf(p(1800), w(3000), p(4800)))
+        assertEquals(listOf(Trainingspausen.Pause(anfang + 1800, anfang + 3000)), plan.pausen)
+        assertEquals(anfang + 4800, plan.offen)
+    }
+
+    @Test
+    fun wiederholteMeldungenZaehlenEinmal() {
+        // Die Uhr wiederholt, was sie fuer verloren haelt: zwei Pausen, zwei Weiter.
+        val plan = Trainingspausen.ausMeldungen(listOf(p(100), p(102), w(200), w(201), p(500)))
+        assertEquals(listOf(Trainingspausen.Pause(anfang + 100, anfang + 200)), plan.pausen)
+        assertEquals(anfang + 500, plan.offen)
+        assertFalse(plan.bruch)
+    }
+
+    @Test
+    fun eineFehlendeMeldungIstEinBruch() {
+        // Das Weiter nach der kurzen Pause bei 600 ging verloren: aus p600 ... w3000
+        // wuerde sonst eine Pause von 40 min, und alles danach rutschte um sie.
+        val plan = Trainingspausen.ausMeldungen(listOf(p(600), p(1800), w(3000)))
+        assertTrue(plan.bruch)
+        assertEquals(emptyList(), Trainingspausen.stimmig(plan, anfang, 3600, anfang + 9000).pausen)
+        // Ein Weiter ohne Pause, das keine Wiederholung ist: die Pause fehlt.
+        assertTrue(Trainingspausen.ausMeldungen(listOf(w(50))).bruch)
+        assertTrue(Trainingspausen.ausMeldungen(listOf(p(100), w(200), w(900))).bruch)
+        // Beim Nachtragen gilt dann nur noch die letzte Pause.
+        val nach = Trainingspausen.ohneBruch(Trainingspausen.ausMeldungen(listOf(w(50), p(4800))))
+        assertEquals(Trainingspausen.Plan(emptyList(), anfang + 4800), nach)
+    }
+
+    @Test
+    fun dieAktiveZeitEndetNichtVorDemLetztenWeiter() {
+        // Die letzte Pause kam nicht an. Bekannt sind 10 min Pause bei 50 min -
+        // bei nur 30 min aktiv kann das Weiter aber nicht bei 60 min liegen.
+        val plan = Trainingspausen.ausMeldungen(listOf(p(3000), w(3600)))
+        assertEquals(emptyList(), Trainingspausen.stimmig(plan, anfang, 1800, anfang + 9000).pausen)
+    }
+
+    @Test
+    fun kaputteZeilenFallenWeg() {
+        val m = Trainingspausen.meldungenAus(listOf("p,1000100", "w,", "x,5", "w,1000200", ""))
+        assertEquals(listOf(true to 1_000_100L, false to 1_000_200L), m)
+    }
+
+    @Test
+    fun aktiveSekundeAlsUhrzeit() {
+        val pausen = listOf(Trainingspausen.Pause(anfang + 1800, anfang + 3000))
+        // Vor der Pause unveraendert, die Sekunde der Pause selbst noch davor.
+        assertEquals(anfang + 600, Trainingspausen.wand(pausen, anfang, 600))
+        assertEquals(anfang + 1800, Trainingspausen.wand(pausen, anfang, 1800))
+        // Danach um 20 min spaeter: Sekunde 2400 der Uhr ist 10:50, nicht 10:40.
+        assertEquals(anfang + 3600, Trainingspausen.wand(pausen, anfang, 2400))
+        assertEquals(anfang + 4800, Trainingspausen.wand(pausen, anfang, 3600))
+    }
+
+    @Test
+    fun zweiPausenSchiebenZusammen() {
+        val pausen = listOf(
+            Trainingspausen.Pause(anfang + 600, anfang + 900),     // 5 min nach 10 min
+            Trainingspausen.Pause(anfang + 1500, anfang + 1560),   // 1 min nach weiteren 10 min
+        )
+        assertEquals(anfang + 1200 + 300, Trainingspausen.wand(pausen, anfang, 1200))
+        assertEquals(anfang + 1800 + 360, Trainingspausen.wand(pausen, anfang, 1800))
+    }
+
+    @Test
+    fun stimmigePausenBleiben() {
+        // 60 min aktiv, 20 min Pause: die letzte Pause liegt bei 80 min (Meldung 20 s spaet).
+        val plan = Trainingspausen.ausMeldungen(listOf(p(1800), w(3000), p(4820)))
+        val gut = Trainingspausen.stimmig(plan, anfang, 3600, anfang + 4900)
+        assertEquals(plan, gut)
+    }
+
+    @Test
+    fun einVerlorenesWeiterVerwirftDiePausen() {
+        // Das Weiter nach dem Kaffee kam nie an: zwei Pausen ohne Weiter. Die
+        // Pausen gelten nicht, die juengste bleibt das Ende der Spur.
+        val plan = Trainingspausen.ausMeldungen(listOf(p(1800), p(4800)))
+        val gut = Trainingspausen.stimmig(plan, anfang, 3600, anfang + 4900)
+        assertEquals(emptyList(), gut.pausen)
+        assertEquals(anfang + 4800, gut.offen)
+        // Lag die juengste vor dem Ende der aktiven Zeit, taugt auch sie nicht.
+        assertNull(Trainingspausen.stimmig(plan, anfang, 5400, anfang + 9000).offen)
+    }
+
+    @Test
+    fun eineVerlorenePauseVerwirftDieAnderen() {
+        // Die Kaffeepause kam nicht an, nur eine kurze spaeter: die Summe passt nicht.
+        val plan = Trainingspausen.ausMeldungen(listOf(p(3300), w(3360), p(4860)))
+        val gut = Trainingspausen.stimmig(plan, anfang, 3600, anfang + 4900)
+        assertEquals(emptyList(), gut.pausen)
+        // Die letzte Pause liegt hinter der aktiven Zeit - an ihr wurde gespeichert.
+        assertEquals(anfang + 4860, gut.offen)
+    }
+
+    @Test
+    fun ohneLetztePauseZaehltDieSummeGegenJetzt() {
+        val plan = Trainingspausen.ausMeldungen(listOf(p(1800), w(3000)))
+        assertEquals(plan, Trainingspausen.stimmig(plan, anfang, 3600, anfang + 4900))
+        // Kaeme die Zusammenfassung vor dem Ende, das die Pausen ergeben, stimmt etwas nicht.
+        assertEquals(emptyList(), Trainingspausen.stimmig(plan, anfang, 3600, anfang + 4000).pausen)
+    }
+
+    // --- Die Pausenliste der Uhr (Boulder-Firmware) ---
+
+    /** Die Liste, wie die Uhr sie schickt: Fassung, Zahl, je Pause aktive Sekunde und Dauer (uint16 LE). */
+    private fun liste(vararg pausen: Pair<Int, Int>, gesamt: Int = pausen.size): ByteArray {
+        val b = ByteArray(2 + 4 * pausen.size)
+        b[0] = Trainingspausen.UHR_FASSUNG.toByte()
+        b[1] = gesamt.toByte()
+        pausen.forEachIndexed { i, (aktiv, dauer) ->
+            b[2 + 4 * i] = (aktiv and 0xFF).toByte(); b[3 + 4 * i] = (aktiv shr 8).toByte()
+            b[4 + 4 * i] = (dauer and 0xFF).toByte(); b[5 + 4 * i] = (dauer shr 8).toByte()
+        }
+        return b
+    }
+
+    @Test
+    fun dieListeDerUhrIstSekundengenau() {
+        // Fahrt: 30 min, 20 min Kaffee, 30 min, 1 min Ampel, 20 min, dann die Pause zum Speichern.
+        val ende = anfang + 4800 + 1200 + 60
+        val plan = Trainingspausen.ausUhr(liste(1800 to 1200, 3600 to 60), anfang, 4800, ende)!!
+        assertEquals(
+            listOf(
+                Trainingspausen.Pause(anfang + 1800, anfang + 3000),
+                Trainingspausen.Pause(anfang + 4800, anfang + 4860),
+            ),
+            plan.pausen,
+        )
+        assertEquals(ende, plan.offen)
+        // Die aktive Sekunde 2400 liegt hinter dem Kaffee.
+        assertEquals(anfang + 3600, Trainingspausen.wand(plan.pausen, anfang, 2400))
+    }
+
+    @Test
+    fun ohnePausenNurDerKopf() {
+        // Die Uhr kennt Pausen, es gab nur die letzte: das Ende ist Beginn + Dauer.
+        val plan = Trainingspausen.ausUhr(liste(), anfang, 3600, anfang + 3600)!!
+        assertEquals(emptyList(), plan.pausen)
+        assertEquals(anfang + 3600, plan.offen)
+    }
+
+    @Test
+    fun eineUnvollstaendigeListeGiltNicht() {
+        // 33 Pausen, nur 32 stehen da: die Uhr hatte keinen Platz mehr - dann die Meldungen.
+        val voll = Array(32) { (it * 10) to 5 }
+        assertNull(Trainingspausen.ausUhr(liste(*voll, gesamt = 33), anfang, 3600, null))
+        // Aeltere Firmware schickt nichts, kaputte Laengen und fremde Fassungen taugen nicht.
+        assertNull(Trainingspausen.ausUhr(null, anfang, 3600, null))
+        assertNull(Trainingspausen.ausUhr(liste(10 to 5).copyOf(5), anfang, 3600, null))
+        assertNull(Trainingspausen.ausUhr(liste(10 to 5).also { it[0] = 2 }, anfang, 3600, null))
+        // Rueckwaerts oder hinter der aktiven Zeit ist keine Liste dieses Trainings.
+        assertNull(Trainingspausen.ausUhr(liste(600 to 5, 300 to 5), anfang, 3600, null))
+        assertNull(Trainingspausen.ausUhr(liste(4000 to 5), anfang, 3600, null))
+    }
+
+    @Test
+    fun einEndeDasNichtPasstWirdGerechnet() {
+        // Die Uhr wurde mitten im Training um eine Stunde gestellt: das Ende passt nicht.
+        val plan = Trainingspausen.ausUhr(liste(1800 to 600), anfang, 3600, anfang + 3600 + 600 + 3600)!!
+        assertEquals(anfang + 4200, plan.offen)
+        // Fehlt es, ebenso.
+        assertEquals(anfang + 4200, Trainingspausen.ausUhr(liste(1800 to 600), anfang, 3600, null)!!.offen)
+        // Ein paar Takte Abweichung nach Stunden sind keine gestellte Uhr.
+        assertEquals(anfang + 4230, Trainingspausen.ausUhr(liste(1800 to 600), anfang, 3600, anfang + 4230)!!.offen)
+    }
+
+    @Test
+    fun eineLeerePauseZaehltNicht() {
+        // Pause und Weiter in derselben Sekunde: keine Pause, aber auch kein Fehler.
+        val plan = Trainingspausen.ausUhr(liste(100 to 0, 200 to 30), anfang, 600, anfang + 630)!!
+        assertEquals(listOf(Trainingspausen.Pause(anfang + 200, anfang + 230)), plan.pausen)
+    }
+
+    @Test
+    fun mitDemEndeDerUhrEndetDieSpurHoechstensEineMinuteNachDerPause() {
+        // Die letzte Pause ging verloren, die Zusammenfassung kam nach der Heimfahrt:
+        // die Spur endet trotzdem eine Minute nach der Pause, nicht zwanzig. Der
+        // Puffer bleibt - der GPS-Nachlauf ist Pause (siehe dieNachlaufminuteIstPause).
+        val plan = Trainingspausen.ausUhr(liste(), anfang, 3600, anfang + 3600)!!
+        val punkte = (0..7200L step 60).map { Spur.Punkt(anfang + it, 47.0, 8.0, null, 5f) }
+        val ende = Kieselsport.sitzungsEnde(
+            java.time.Instant.ofEpochSecond(anfang), 3600, punkte, java.time.Instant.ofEpochSecond(anfang + 7200), plan,
+        )
+        assertTrue(ende.epochSecond <= anfang + 3600 + Kieselsport.PUFFER_S + 1)
+    }
+
+    @Test
+    fun dieNachlaufminuteIstPause() {
+        val plan = Trainingspausen.Plan(listOf(Trainingspausen.Pause(anfang + 600, anfang + 900)), offen = anfang + 1500)
+        // Die Spur lief 41 s ueber die letzte Pause: die Zeit danach ist Pause, nicht Training.
+        assertEquals(
+            listOf(Trainingspausen.Pause(anfang + 600, anfang + 900), Trainingspausen.Pause(anfang + 1500, anfang + 1541)),
+            Kieselsport.mitNachlauf(plan, java.time.Instant.ofEpochSecond(anfang + 1541)),
+        )
+        // Endet die Sitzung an der letzten Pause (ohne Spur), kommt nichts dazu.
+        assertEquals(plan.pausen, Kieselsport.mitNachlauf(plan, java.time.Instant.ofEpochSecond(anfang + 1500)))
+        // Ohne bekannte letzte Pause weiss niemand, wo die aktive Zeit endete: nichts dazu.
+        assertEquals(plan.pausen, Kieselsport.mitNachlauf(plan.copy(offen = null), java.time.Instant.ofEpochSecond(anfang + 1541)))
+    }
+
+    @Test
+    fun ueberAchtzehnStundenTraegtDieListeNicht() {
+        // So schickt die Firmware eine Pause bei aktiver Sekunde 70 000: gar nicht, nur mitgezaehlt
+        // (pausen.c) - die Zahl passt nicht, die Liste faellt.
+        assertNull(Trainingspausen.ausUhr(liste(600 to 300, gesamt = 2), anfang, 70_000, null))
+        // Ein Sender, der abschnitte, schriebe sie als 70 000 - 65 536 = 4 464: auch das faellt.
+        val abgeschnitten = liste(4464 to 600)
+        assertNull(Trainingspausen.ausUhr(abgeschnitten, anfang, 70_000, null))
+        // Bis zur Grenze gilt sie: 65 535 aktive Sekunden passen noch in das Feld.
+        val plan = Trainingspausen.ausUhr(abgeschnitten, anfang, Trainingspausen.U16_MAX, null)!!
+        assertEquals(listOf(Trainingspausen.Pause(anfang + 4464, anfang + 5064)), plan.pausen)
+        assertNull(Trainingspausen.ausUhr(abgeschnitten, anfang, Trainingspausen.U16_MAX + 1, null))
+        assertEquals(65_535L, Trainingspausen.U16_MAX)
+    }
+}

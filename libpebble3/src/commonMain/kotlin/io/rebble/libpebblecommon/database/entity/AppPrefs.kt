@@ -57,6 +57,13 @@ suspend fun AppPrefsEntryDao.setWeatherSettings(weatherPrefs: WeatherPrefsValue)
     )
 }
 
+/**
+ * Boulder: die Reihenfolge der Wetterorte, wie Boulder sie der Uhr zuletzt
+ * geschickt hat (Ort 0 ist der Standardort der Uhr). Null, wenn nie gesetzt.
+ */
+suspend fun AppPrefsEntryDao.getWeatherSettings(): WeatherPrefsValue? =
+    WeatherPrefsValue.fromString(getEntry(KEY_WEATHER_APP)?.value)
+
 @Serializable
 data class WeatherPrefsValue(
     val locationUuids: List<Uuid>,

@@ -53,14 +53,17 @@ jobs:
           echo "LOCAL_RELEASE_BUILD=true" > local.properties
           ./gradlew --stop
           ./gradlew :androidApp:assembleRelease -Pkotlin.compiler.execution.strategy=in-process -Dorg.gradle.jvmargs=-Xmx3g
-      - uses: actions/upload-artifact@v4
+      # Die Uebergabe an den Release-Job geht ueber den Cache des Repos, nicht als Artefakt:
+      # Artefakte zaehlen zum Speicherkontingent des Kontos, und das blieb voll - die Laeufe 76
+      # bis 79 scheiterten beim Hochladen, auch 15 h nachdem die alten APKs geloescht waren.
+      - name: APK fuer den Release-Job
+        if: steps.v.outputs.neu == 'ja'
+        run: mkdir -p apk && cp androidApp/build/outputs/apk/release/*.apk apk/
+      - if: steps.v.outputs.neu == 'ja'
+        uses: actions/cache/save@v4
         with:
-          name: boulder-apk
-          path: androidApp/build/outputs/apk/release/*.apk
-          if-no-files-found: error
-          # Nur die Uebergabe an den Release-Job: nach 90 Tagen Aufbewahrung fuellten die APKs
-          # das Kontingent fuer Artefakte, und der Lauf von 0.53 scheiterte beim Hochladen.
-          retention-days: 1
+          path: apk
+          key: boulder-apk-${{ github.sha }}
 
   release:
     needs: android
@@ -70,10 +73,11 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/cache/restore@v4
         with:
-          name: boulder-apk
           path: apk
+          key: boulder-apk-${{ github.sha }}
+          fail-on-cache-miss: true
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}

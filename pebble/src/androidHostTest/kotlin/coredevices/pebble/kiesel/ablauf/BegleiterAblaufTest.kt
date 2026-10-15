@@ -24,7 +24,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.After
 import org.junit.Before
 import org.junit.runner.RunWith
@@ -73,7 +73,7 @@ class BegleiterAblaufTest {
     private fun ablage(uuid: Uuid) = File(context.filesDir, "uhrapp-wartend-$uuid")
 
     private fun warte(was: String, bedingung: () -> Boolean) = runBlocking {
-        withTimeout(10_000) { while (!bedingung()) delay(20) }
+        withTimeoutOrNull(10_000) { while (!bedingung()) delay(20) }
         assertTrue(bedingung(), was)
     }
 
@@ -192,7 +192,11 @@ class BegleiterAblaufTest {
         for (start in 1..2) {
             val versuche = akte.schreibversuche
             runBlocking { Mithoerer(context, Drinktervall.UUID, geraet(FakeUhr(ablage(Drinktervall.UUID)))).start(emptyFlow()) }
-            warte("Start $start versucht") { akte.schreibversuche > versuche }
+            // Bis auch der Vermerk im Namen steht: der Versuch kommt kurz davor, und ein Start dazwischen
+            // faende die Datei noch unter dem alten Namen, die der Arbeiter gleich darauf umbenennt.
+            warte("Start $start versucht") {
+                akte.schreibversuche > versuche && ablage(Drinktervall.UUID).listFiles().orEmpty().all { Wartend.gemeldet(it) }
+            }
         }
         runBlocking { delay(300) }
         // Beide Versuche sind Nachtraege - im Protokoll steht das Glas trotzdem einmal.
@@ -311,7 +315,10 @@ class BegleiterAblaufTest {
         for (start in 1..2) {
             val versuche = akte.schreibversuche
             runBlocking { KieselsportBegleiter(context, geraet(FakeUhr(kieselAblage))).start(emptyFlow()) }
-            warte("Start $start versucht") { akte.schreibversuche > versuche }
+            // Wie oben: erst mit dem Vermerk im Namen ist der Versuch abgeschlossen.
+            warte("Start $start versucht") {
+                akte.schreibversuche > versuche && kieselAblage.listFiles().orEmpty().all { Wartend.gemeldet(it) }
+            }
         }
         runBlocking { delay(300) }
         // Beide Versuche sind Nachtraege - im Protokoll steht es trotzdem einmal.

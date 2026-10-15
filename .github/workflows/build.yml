@@ -47,9 +47,12 @@ jobs:
       - name: Bauen
         # Release-Build (R8, nicht debuggable), signiert mit dem festen Debug-Schluessel:
         # so installiert er sich als Update ueber jede bisherige Boulder-Fassung.
+        # Der Runner hat 7 GB: ohne die Daemons der Tests, mit Kotlin im Gradle-Prozess und 3 GB
+        # Heap kam R8 lokal mit 4,6 GB aus; daneben der Kotlin-Daemon der Tests war zu viel.
         run: |
           echo "LOCAL_RELEASE_BUILD=true" > local.properties
-          ./gradlew :androidApp:assembleRelease
+          ./gradlew --stop
+          ./gradlew :androidApp:assembleRelease -Pkotlin.compiler.execution.strategy=in-process -Dorg.gradle.jvmargs=-Xmx3g
       - uses: actions/upload-artifact@v4
         with:
           name: boulder-apk

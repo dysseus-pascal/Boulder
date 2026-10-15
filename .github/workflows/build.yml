@@ -16,11 +16,13 @@ jobs:
       ver: ${{ steps.v.outputs.ver }}
       neu: ${{ steps.v.outputs.neu }}
     steps:
-      # Core pinnt die Toolchain auf JDK 17 (jvm-toolchain im Versionskatalog).
+      # Gradle und die Hosttests laufen auf JDK 21: health-kmp 1.4.0 ist fuer Java 21 uebersetzt,
+      # auf 17 scheitern Boulders Health-Tests mit UnsupportedClassVersionError. Die Module mit
+      # Cores jvmToolchain(17) nehmen das JDK 17, das der Runner unter /usr/lib/jvm mitbringt.
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
       - uses: actions/checkout@v4
         with:
           submodules: recursive

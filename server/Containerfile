@@ -1,0 +1,19 @@
+# Boulder-Server: der Spiegel von Boulders Daten und die MCP-Werkzeuge fuer Claude.
+# Gebaut wird im entpackten Buendel (bin/, lib/ daneben), siehe LIESMICH.md.
+FROM docker.io/library/eclipse-temurin:21-jre
+
+# Ein eigener Nutzer ohne Rechte ausser auf /daten. Podman uebernimmt Besitzer und Rechte von
+# /daten in ein neues, leeres Volume.
+RUN useradd --uid 10001 --no-create-home --home-dir /daten --shell /usr/sbin/nologin boulder \
+    && mkdir /daten && chown 10001:10001 /daten && chmod 0700 /daten
+COPY bin/ /opt/boulder-server/bin/
+COPY lib/ /opt/boulder-server/lib/
+
+# Ein Nutzer, wenige Anfragen: der kleine Kollektor und 256 MB reichen auch fuer eine volle
+# Lieferung (hoechstens 20 MB JSON).
+ENV JAVA_OPTS="-XX:+UseSerialGC -Xmx256m" \
+    BOULDER_DATENBANK=/daten/boulder.db
+USER 10001
+VOLUME /daten
+EXPOSE 8080
+ENTRYPOINT ["/opt/boulder-server/bin/boulder-server"]

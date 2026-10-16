@@ -215,8 +215,8 @@ class Anmeldung(
             append("<label for=\"token\">MCP token of your Boulder server</label>")
             append("<input id=\"token\" name=\"token\" type=\"password\" autocomplete=\"current-password\" autofocus>")
             if (fehler != null) append("<p class=\"fehler\">${html(fehler)}</p>")
-            append("<button name=\"entscheid\" value=\"ja\">Allow</button> ")
-            append("<button name=\"entscheid\" value=\"nein\" class=\"nein\">Deny</button></form>")
+            append("<button name=\"entscheid\" value=\"ja\" class=\"ja\">Allow</button>")
+            append("<button name=\"entscheid\" value=\"nein\">Deny</button></form>")
         })
     }
 
@@ -325,11 +325,16 @@ class Anmeldung(
             call.respondText(
                 "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">" +
                     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Boulder</title><style>" +
+                    ":root{color-scheme:light dark}" +
                     "body{font-family:system-ui,sans-serif;margin:0;padding:24px 16px;background:#f6f6f4;color:#1d1d1b}" +
                     "main{max-width:420px;margin:0 auto}label{display:block;margin:16px 0 6px}" +
-                    "input[type=password]{width:100%;box-sizing:border-box;padding:10px;font-size:16px}" +
-                    "button{margin-top:16px;padding:10px 18px;font-size:16px}.nein{background:none}.fehler{color:#b3261e}" +
-                    "@media(prefers-color-scheme:dark){body{background:#1d1d1b;color:#ecece8}}" +
+                    "input[type=password]{width:100%;box-sizing:border-box;padding:10px;font-size:16px;" +
+                    "border:1px solid #8a8a85;border-radius:6px;background:transparent;color:inherit}" +
+                    "button{margin:16px 8px 0 0;padding:10px 18px;font-size:16px;border-radius:6px;" +
+                    "border:1px solid currentColor;background:transparent;color:inherit}" +
+                    ".ja{background:#1d1d1b;border-color:#1d1d1b;color:#f6f6f4}.fehler{color:#b3261e}" +
+                    "@media(prefers-color-scheme:dark){body{background:#1d1d1b;color:#ecece8}" +
+                    ".ja{background:#ecece8;border-color:#ecece8;color:#1d1d1b}.fehler{color:#f2b8b5}}" +
                     "</style></head><body><main><h1>Boulder</h1>$inhalt</main></body></html>",
                 ContentType.Text.Html.withCharset(Charsets.UTF_8), status,
             )

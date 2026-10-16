@@ -1,0 +1,3 @@
+# Die Datenbank des Servers (Spiegel und Anmeldungen).
+[Volume]
+VolumeName=boulder-daten

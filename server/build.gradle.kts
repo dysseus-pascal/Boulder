@@ -24,6 +24,24 @@ application {
     applicationName = "boulder-server"
 }
 
+version = providers.fileContents(rootProject.layout.projectDirectory.file("BOULDER_VERSION")).asText.get().trim()
+
+// Das Buendel fuer den Server (distTar): bin/ und lib/, dazu Containerfile, Quadlet und LIESMICH.
+// Das Image entsteht erst dort aus dem Buendel; Gradle und das Android-SDK braucht der Server nicht.
+distributions {
+    main {
+        contents {
+            from("Containerfile", "LIESMICH.md")
+            from("quadlet") { into("quadlet") }
+        }
+    }
+}
+
+tasks.distTar {
+    compression = Compression.GZIP
+    archiveExtension.set("tar.gz")
+}
+
 dependencies {
     implementation(project(":austausch"))
     implementation(libs.modelcontextprotocol.server)

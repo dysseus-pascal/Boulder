@@ -1,0 +1,7 @@
+# Boulder-Server und Cloudflare Tunnel teilen sich das Netz dieses Pods: cloudflared erreicht den
+# Server unter localhost:8080. Veroeffentlicht wird kein Port, herein kommt man nur ueber den Tunnel.
+[Pod]
+PodName=boulder
+
+[Install]
+WantedBy=default.target

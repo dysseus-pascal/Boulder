@@ -1,0 +1,22 @@
+[Unit]
+Description=Boulder-Server (Spiegel und MCP fuer Claude)
+
+[Container]
+Image=localhost/boulder-server:latest
+ContainerName=boulder-server
+Pod=boulder.pod
+Volume=boulder-daten.volume:/daten
+Secret=boulder-sync,uid=10001,mode=0400
+Secret=boulder-mcp,uid=10001,mode=0400
+Environment=BOULDER_SYNC_TOKEN_FILE=/run/secrets/boulder-sync
+Environment=BOULDER_MCP_TOKEN_FILE=/run/secrets/boulder-mcp
+# Die Adresse des Tunnels, genau so, wie sie in Claude eingetragen wird (ohne /mcp). Ohne sie
+# kann sich die Claude-App nicht anmelden; nur ein fester Header ginge dann noch.
+Environment=BOULDER_ADRESSE=https://boulder.example.ch
+# Nur Claudes Server an /mcp lassen. Sperrt Claude Code von zu Hause aus.
+#Environment=BOULDER_MCP_NETZE=160.79.104.0/21
+NoNewPrivileges=true
+DropCapability=all
+
+[Service]
+Restart=always

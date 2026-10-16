@@ -1,0 +1,18 @@
+[Unit]
+Description=Cloudflare Tunnel fuer den Boulder-Server
+
+[Container]
+Image=docker.io/cloudflare/cloudflared:latest
+ContainerName=boulder-tunnel
+Pod=boulder.pod
+Exec=tunnel run
+Secret=boulder-tunnel,uid=65532,mode=0400
+Environment=TUNNEL_TOKEN_FILE=/run/secrets/boulder-tunnel
+# cloudflared kommt neu, sobald Cloudflare eine neue Fassung veroeffentlicht
+# (podman-auto-update.timer, siehe LIESMICH.md).
+AutoUpdate=registry
+NoNewPrivileges=true
+DropCapability=all
+
+[Service]
+Restart=always

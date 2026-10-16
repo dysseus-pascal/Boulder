@@ -45,3 +45,6 @@ include(":experimental")
 include(":krisp-stubs")
 // Boulder: OsmAnds AIDL-Schnittstelle fuer Kieselstrasse.
 include(":osmand-api")
+// Boulder: Austauschformat und eigener Server fuer die KI-Anbindung (MCP).
+include(":austausch")
+include(":server")

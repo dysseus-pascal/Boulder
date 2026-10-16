@@ -64,6 +64,11 @@ actual fun MinutenexportScreen(topBarParams: TopBarParams, nav: NavBarNav) {
 }
 
 @Composable
+actual fun SpiegelScreen(topBarParams: TopBarParams, nav: NavBarNav) {
+    Text("Only available on Android.")
+}
+
+@Composable
 actual fun AkkuScreen(topBarParams: TopBarParams, nav: NavBarNav) {
     Text("Only available on Android.")
 }

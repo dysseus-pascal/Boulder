@@ -25,9 +25,10 @@ internal typealias Reihen = Map<String, List<Pair<LocalDate, Double>>>
 /**
  * Was die Trends zeigen, mit Herkunft: [eigen] misst Boulder selbst (aus Uhr
  * und Akte, aeltere Tage aus dem Tagesspeicher), [vorgeschichte] stammt aus
- * einer Sicherung. [reihen] fuegt beides zusammen.
+ * einer Sicherung. [reihen] fuegt beides zusammen. [akteHeil]: keine Abfrage
+ * der Akte schlug fehl - sonst fehlen Wasser und Koffein in [eigen].
  */
-internal class Trendstand(val eigen: Reihen, val vorgeschichte: Reihen) {
+internal class Trendstand(val eigen: Reihen, val vorgeschichte: Reihen, val akteHeil: Boolean = true) {
     val reihen: Reihen = Trenddaten.mitVorgeschichte(eigen, vorgeschichte)
 
     /** Der erste eigene Tag je Reihe; davor spricht die Vorgeschichte. */
@@ -318,7 +319,7 @@ internal object Trenddaten {
         // Abgeschlossene Tage der Uhr festschreiben, bevor das Housekeeping sie loescht.
         Tagesspeicher.halte(context, festzuschreiben(neu, heute), merken)
         val eigen = mitArchiv(neu, Tagesspeicher.eigene(context, merken), heute)
-        Trendstand(eigen, mitEinschlafen(Tagesspeicher.alle(context, merken))).also { if (merken) zuletzt = it }
+        Trendstand(eigen, mitEinschlafen(Tagesspeicher.alle(context, merken)), akte.heil).also { if (merken) zuletzt = it }
     }
 
     private suspend fun ausDerAkte(context: Context, heute: LocalDate, zone: ZoneId): Akteteil {

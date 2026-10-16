@@ -148,6 +148,8 @@ kotlin {
                 // Boulder: Sicherung in einen gewaehlten Ordner (SAF), taeglich per WorkManager.
                 implementation(libs.androidx.documentfile)
                 implementation(libs.androidx.work)
+                // Boulder: das Format fuer den eigenen Server (Spiegel), dasselbe wie dort.
+                implementation(project(":austausch"))
             }
         }
 

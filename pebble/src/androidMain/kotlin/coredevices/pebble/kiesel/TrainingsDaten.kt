@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
+import kotlin.math.roundToInt
 
 /**
  * Die Sportarten, wie die Ansicht sie zeigt. Ihre Farben stehen bei allen
@@ -519,6 +520,31 @@ internal object TrainingsDaten {
         if (zuAlt(s.endTime, jetzt, endeVorHoechstens)) return@withContext null
         val laengen = Laengen(context)
         eintrag(context, s, distanzen(klient, context, von, jetzt), laengen).also { laengen.sichere() }
+    }
+
+    /**
+     * Boulder: die Trainings der letzten [Fenster.SPORT_TAGE] Tage fuer den Spiegel ([Spiegel]),
+     * gewaehlt und vermessen wie in der Liste. IM HINTERGRUND ohne Sonderrecht nur die eigenen
+     * ([Herkunft.ALLE_SONST_EIGENE]). Null, wenn die Akte nicht liest - das ist kein leeres Vierteljahr.
+     */
+    suspend fun fuerSpiegel(context: Context): List<TrainingEintrag>? = withContext(Dispatchers.IO) {
+        val klient = Akte(context).bereit() ?: return@withContext null
+        val jetzt = Instant.now()
+        val von = jetzt.minus(Duration.ofDays(Fenster.SPORT_TAGE))
+        val sitzungen = versuche(TAG, "Trainings fuer den Spiegel") {
+            klient.lies(context, ExerciseSessionRecord::class, TimeRangeFilter.between(von, jetzt), Herkunft.ALLE_SONST_EIGENE)
+                .filterNot { erkannt(context, it) }
+        } ?: return@withContext null
+        val distanzen = distanzen(klient, context, von, jetzt)
+        val laengen = Laengen(context)
+        gewaehlt(context, sitzungen).map { eintrag(context, it, distanzen, laengen) }.also { laengen.sichere() }
+    }
+
+    /** Boulder: mittlerer und hoechster Puls eines Trainings, entstoert wie im Detail; null ohne Puls. */
+    suspend fun pulsKennzahlen(context: Context, s: ExerciseSessionRecord): Pair<Int, Int>? = withContext(Dispatchers.IO) {
+        val klient = Akte(context).bereit() ?: return@withContext null
+        val bpm = puls(klient, context, s).map { it.bpm }
+        if (bpm.isEmpty()) null else bpm.average().roundToInt() to bpm.max().toInt()
     }
 
     /**

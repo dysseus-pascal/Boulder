@@ -23,4 +23,7 @@
          darum liegen beide in eigenen Ordnern. -->
     <exclude domain="database" path="beiseite" />
     <exclude domain="file" path="dls-quarantaene" />
+    <!-- Boulder: Adresse und Sync-Token des eigenen Servers (Spiegel). Das Token darf dort
+         schreiben und bleibt auf diesem Telefon. -->
+    <exclude domain="sharedpref" path="boulder-server.xml" />
 </full-backup-content>

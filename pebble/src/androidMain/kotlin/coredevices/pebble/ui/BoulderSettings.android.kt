@@ -29,6 +29,7 @@ import coredevices.pebble.kiesel.KieselEinstellungen
 import coredevices.pebble.kiesel.Kieselstrasse
 import coredevices.pebble.kiesel.Nachtexport
 import coredevices.pebble.kiesel.Sichern
+import coredevices.pebble.kiesel.Spiegel
 import coredevices.pebble.kiesel.SpurDienst
 import coredevices.pebble.kiesel.TrainingsDaten
 import coredevices.pebble.kiesel.versuche
@@ -45,8 +46,8 @@ import org.koin.compose.koinInject
  * Health die Rechte der Akte - die EINE Stelle, an der Boulder sie in den
  * Einstellungen anbietet - und, solange Gravel ihn verbirgt, der Schalter
  * fuer die Einheiten; unter Sport Kieselsport und die Routen, unter
- * Navigation OsmAnd und die Kartenlinks, unter Boulder Sicherung und
- * Protokoll: beide betreffen die ganze App, nicht nur Health oder Sport.
+ * Navigation OsmAnd und die Kartenlinks, unter Boulder Sicherung, der eigene
+ * Server und das Protokoll: sie betreffen die ganze App, nicht nur Health oder Sport.
  */
 @Composable
 actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
@@ -80,6 +81,8 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
     // Der Maximalpuls, mit dem gerechnet wird: ohne Einstellung der nach dem Alter, nicht die 190 der Uhr.
     val maximum by produceState<Herzgrenzen.Maximum?>(null, neu) { value = Herzgrenzen.maximum(context, null) }
     val zuletzt = Sichern.zuletzt(context)
+    val spiegel = remember(neu) { Spiegel.ziel(context) }
+    val spiegelStand = remember(neu) { Spiegel.status(context) }
     val strasse by Kieselstrasse.stand.collectAsState()
     val lage = strasse.lage
     val keineNacht = stringResource(R.string.ks_e_nachtexport_keine)
@@ -190,6 +193,19 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
             section = Section.Boulder,
             keywords = "backup restore kiesel-helper take over",
             action = gehe(PebbleNavBarRoutes.SicherungRoute),
+        ),
+        basicSettingsActionItem(
+            title = stringResource(R.string.ks_sv_titel),
+            description = when {
+                spiegel == null -> stringResource(R.string.ks_sv_kein)
+                spiegelStand.fehler -> spiegelStand.meldung.orEmpty()
+                spiegelStand.erfolg == 0L -> stringResource(R.string.ks_sv_nie)
+                else -> stringResource(R.string.ks_sv_zuletzt, Formate.relativ(context, spiegelStand.erfolg))
+            },
+            topLevelType = TopLevelType.Phone,
+            section = Section.Boulder,
+            keywords = "server claude mcp ai mirror upload sync",
+            action = gehe(PebbleNavBarRoutes.SpiegelRoute),
         ),
         basicSettingsActionItem(
             title = stringResource(R.string.ks_n_protokoll),

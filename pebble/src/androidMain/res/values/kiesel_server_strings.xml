@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Boulder: der eigene Server fuer Claude (Spiegel.kt, SpiegelAnsicht.kt). -->
+<resources>
+    <string name="ks_sv_titel">Boulder server</string>
+    <string name="ks_sv_kein">Not set up</string>
+    <string name="ks_sv_server">Server</string>
+    <string name="ks_sv_adresse">Address</string>
+    <string name="ks_sv_token">Sync token</string>
+    <string name="ks_sv_token_text">The sync token from your server, at least 32 characters</string>
+    <string name="ks_sv_token_gespeichert">Saved. Enter a new one only to replace it.</string>
+    <string name="ks_sv_speichern">Save</string>
+    <string name="ks_sv_adresse_falsch">The address must start with https:// and end with the host name, without a path.</string>
+    <string name="ks_sv_token_falsch">The sync token needs at least 32 characters and no spaces.</string>
+    <string name="ks_sv_eingerichtet">Saved. Boulder uploads now.</string>
+    <string name="ks_sv_was">What is sent</string>
+    <string name="ks_sv_tage">Days</string>
+    <string name="ks_sv_tage_text">Steps, sleep, resting heart rate, HRV, water, caffeine</string>
+    <string name="ks_sv_naechte">Nights</string>
+    <string name="ks_sv_naechte_text">Sleep times, stages and HRV of each night</string>
+    <string name="ks_sv_trainings">Workouts</string>
+    <string name="ks_sv_trainings_text">Sport, duration, distance and heart rate</string>
+    <string name="ks_sv_minuten">Minute data</string>
+    <string name="ks_sv_minuten_text">Steps, movement and heart rate of each minute, about 130 KB per day</string>
+    <string name="ks_sv_senden">Upload</string>
+    <string name="ks_sv_jetzt_text">Upload changes now</string>
+    <string name="ks_sv_jetzt">Send now</string>
+    <string name="ks_sv_alles">Send everything again</string>
+    <string name="ks_sv_alles_text">If the server lost its data</string>
+    <string name="ks_sv_alles_knopf">Send all</string>
+    <string name="ks_sv_entfernen">Remove server</string>
+    <string name="ks_sv_entfernen_text">Stops uploading and forgets address and token</string>
+    <string name="ks_sv_entfernen_knopf">Remove</string>
+    <string name="ks_sv_nie">Nothing sent yet</string>
+    <string name="ks_sv_zuletzt">Last upload %1$s</string>
+    <string name="ks_sv_gesendet">Sent: days %1$d · nights %2$d · workouts %3$d · minutes %4$d</string>
+    <string name="ks_sv_wieder">uploading again</string>
+    <string name="ks_sv_fehler_token">The server rejected the sync token.</string>
+    <string name="ks_sv_fehler_adresse">There is no Boulder server at this address.</string>
+    <string name="ks_sv_fehler_antwort">The server answered, but not like a Boulder server.</string>
+    <string name="ks_sv_fehler_status">The server answered with error %1$d.</string>
+    <string name="ks_sv_fehler_netz">Server not reachable: %1$s</string>
+    <string name="ks_sv_fehler_lesen">Could not read the data to send: %1$s</string>
+    <string name="ks_sv_hinweis">Boulder sends only to your own server. Claude reads there what a question needs.</string>
+</resources>

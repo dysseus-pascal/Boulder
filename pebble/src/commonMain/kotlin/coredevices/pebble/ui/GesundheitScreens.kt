@@ -49,6 +49,10 @@ expect fun ProtokollScreen(topBarParams: TopBarParams, nav: NavBarNav)
 @Composable
 expect fun MinutenexportScreen(topBarParams: TopBarParams, nav: NavBarNav)
 
+// Boulder: der eigene Server fuer Claude - aus den Einstellungen (Boulder).
+@Composable
+expect fun SpiegelScreen(topBarParams: TopBarParams, nav: NavBarNav)
+
 // Boulder: der Akku der Uhr aus den Naechten der Firmware - an der Stelle
 // der Akkuseite, die Gravel mit der Telemetrie herausnahm.
 @Composable

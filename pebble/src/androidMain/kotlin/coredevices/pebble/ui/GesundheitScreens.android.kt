@@ -11,6 +11,7 @@ import coredevices.pebble.kiesel.ansicht.Gesundheitswege
 import coredevices.pebble.kiesel.ansicht.HerzAnsicht
 import coredevices.pebble.kiesel.ansicht.KieselsportAnsicht
 import coredevices.pebble.kiesel.ansicht.MinutenexportAnsicht
+import coredevices.pebble.kiesel.ansicht.SpiegelAnsicht
 import coredevices.pebble.kiesel.ansicht.KoerperAnsicht
 import coredevices.pebble.kiesel.ansicht.NachtAnsicht
 import coredevices.pebble.kiesel.ansicht.ProtokollAnsicht
@@ -145,6 +146,10 @@ actual fun ProtokollScreen(topBarParams: TopBarParams, nav: NavBarNav) =
 @Composable
 actual fun MinutenexportScreen(topBarParams: TopBarParams, nav: NavBarNav) =
     EinfacheSeite(topBarParams, R.string.ks_m_titel) { MinutenexportAnsicht() }
+
+@Composable
+actual fun SpiegelScreen(topBarParams: TopBarParams, nav: NavBarNav) =
+    EinfacheSeite(topBarParams, R.string.ks_sv_titel) { SpiegelAnsicht() }
 
 @Composable
 actual fun AkkuScreen(topBarParams: TopBarParams, nav: NavBarNav) =

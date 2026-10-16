@@ -123,6 +123,9 @@ object PebbleNavBarRoutes {
     data object MinutenexportRoute : NavBarRoute
 
     @Serializable
+    data object SpiegelRoute : NavBarRoute
+
+    @Serializable
     data object AkkuRoute : NavBarRoute
 
     @Serializable
@@ -295,6 +298,9 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composableWithAnimations<PebbleNavBarRoutes.MinutenexportRoute>(viewModel) {
         MinutenexportScreen(topBarParams, nav)
+    }
+    composableWithAnimations<PebbleNavBarRoutes.SpiegelRoute>(viewModel) {
+        SpiegelScreen(topBarParams, nav)
     }
     composableWithAnimations<PebbleNavBarRoutes.AkkuRoute>(viewModel) {
         AkkuScreen(topBarParams, nav)

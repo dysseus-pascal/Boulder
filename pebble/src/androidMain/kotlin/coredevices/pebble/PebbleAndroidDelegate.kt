@@ -5,6 +5,7 @@ import coredevices.pebble.kiesel.GesundheitWidget
 import coredevices.pebble.kiesel.Gesundheitsziele
 import coredevices.pebble.kiesel.Kieselstrasse
 import coredevices.pebble.kiesel.Rechtefrage
+import coredevices.pebble.kiesel.Spiegel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -29,6 +30,11 @@ class PebbleAndroidDelegate(
     fun beimProzessstart() {
         // OsmAnds Abzweigungen an die Uhr-App Kieselstrasse.
         Kieselstrasse.begleite(context, libPebble)
+        // Der eigene Server fuer Claude: Takt planen und nach jedem Schub der Uhr senden - auch ohne Oberflaeche.
+        Spiegel.plane(context)
+        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
+            libPebble.healthDataUpdated.collect { Spiegel.stosseAn(context) }
+        }
     }
 
     // Boulder: die Sammler unten leben so lange wie der Prozess. Jedes Oeffnen

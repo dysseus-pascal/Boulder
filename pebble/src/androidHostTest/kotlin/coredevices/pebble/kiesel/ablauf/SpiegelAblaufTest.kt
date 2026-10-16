@@ -83,7 +83,7 @@ class SpiegelAblaufTest {
         }
     }
 
-    private fun sende(alles: Boolean = false) = runBlocking { Spiegel.sende(context, api, FakeLibPebble(), alles, post) }
+    private fun sende(alles: Boolean = false, uhr: Long = jetzt) = runBlocking { Spiegel.sende(context, api, FakeLibPebble(), alles, post) { uhr } }
 
     private fun minute(t: Long) = HealthDataEntity(
         timestamp = t, steps = 10, orientation = 55, intensity = 800, lightIntensity = 0,
@@ -186,11 +186,28 @@ class SpiegelAblaufTest {
         sende()
         assertEquals(bisher + 1, lieferungen.size, "nichts Neues: nur die Hauptlieferung")
 
+        // Zehn Minuten spaeter: die Uhr hat sie inzwischen geschickt.
         val neu = (3600 until 3610).map { minute(beginn + it * 60L) }
         minuten += neu
-        sende()
+        sende(uhr = jetzt + 900)
         val zuletzt = lieferungen.last().minuten.map { it.zeit }
         assertTrue(zuletzt.containsAll(neu.map { it.timestamp }))
         assertTrue(zuletzt.size <= 10 + Spiegelrechnung.MINUTEN_RUECKBLICK_S / 60 + 1, "${zuletzt.size}")
+    }
+
+    @Test
+    fun eineMinuteMitFalscherUhrzeitHaeltNichtsAuf() {
+        Spiegel.speichere(context, ziel)
+        Spiegel.merke(context, Spiegel.Art.MINUTEN, true)
+        val beginn = (jetzt - 3600) / 60 * 60
+        minuten += (0 until 10).map { minute(beginn + it * 60L) }
+        // Die Uhr lief einmal falsch und schrieb eine Minute ein Jahr in die Zukunft.
+        minuten += minute(jetzt + 400 * 86_400L)
+        sende()
+        assertTrue(lieferungen.flatMap { it.minuten }.none { it.zeit > jetzt })
+        val neu = minute(jetzt + 600)
+        minuten += neu
+        sende(uhr = jetzt + 900)
+        assertTrue(neu.timestamp in lieferungen.last().minuten.map { it.zeit })
     }
 }

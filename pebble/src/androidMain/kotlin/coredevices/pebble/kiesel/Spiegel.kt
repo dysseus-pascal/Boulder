@@ -190,13 +190,14 @@ internal object Spiegel {
         libPebble: LibPebble,
         alles: Boolean = false,
         post: Spiegelpost = Spiegelpost.standard,
+        uhr: () -> Long = { Instant.now().epochSecond },
     ): Ausgang = einzeln.withLock {
         withContext(Dispatchers.IO) {
             val ziel = ziel(context) ?: return@withContext Ausgang.Aus
             if (alles) prefs(context).edit().also(::vergissGesendet).apply()
             prefs(context).edit().putLong("versuch", System.currentTimeMillis()).apply()
             val aus = try {
-                sendeAn(context, api, libPebble, ziel, post)
+                sendeAn(context, api, libPebble, ziel, post, uhr())
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -209,9 +210,8 @@ internal object Spiegel {
         }
     }
 
-    private suspend fun sendeAn(context: Context, api: HealthDataApi, libPebble: LibPebble, ziel: Ziel, post: Spiegelpost): Ausgang {
+    private suspend fun sendeAn(context: Context, api: HealthDataApi, libPebble: LibPebble, ziel: Ziel, post: Spiegelpost, jetzt: Long): Ausgang {
         val p = prefs(context)
-        val jetzt = Instant.now().epochSecond
         val zone = ZoneId.systemDefault().id
         val fassung = versuche("Spiegel", "Fassung lesen") { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.orEmpty()
 
@@ -297,7 +297,9 @@ internal object Spiegel {
         context: Context, api: HealthDataApi, ziel: Ziel, post: Spiegelpost, jetzt: Long, zone: String, fassung: String,
     ): Ausgang {
         val p = prefs(context)
-        val neueste = api.getLatestTimestamp() ?: return Ausgang.Fertig(Quittung(0, 0, 0, 0))
+        // NIE UEBER JETZT HINAUS: eine Minute mit falscher Uhrzeit aus der Zukunft setzte den Stand
+        // dorthin, und jede echte Minute danach laege davor - nie mehr gesendet.
+        val neueste = minOf(api.getLatestTimestamp() ?: return Ausgang.Fertig(Quittung(0, 0, 0, 0)), jetzt)
         val bis = p.getLong(G_MINUTEN, -1L).takeIf { it >= 0 }
         if (bis != null && neueste <= bis) return Ausgang.Fertig(Quittung(0, 0, 0, 0))
         // Mehr als 90 Tage haelt die Datenbank nicht (Housekeeping), der Server auch nicht.

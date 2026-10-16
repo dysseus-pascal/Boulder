@@ -45,4 +45,20 @@
     <string name="ks_s_platz_n">Slot %1$d</string>
     <string name="ks_e_nachtexport">Export last night</string>
     <string name="ks_e_nachtexport_text">Minute data as CSV</string>
+    <string name="ks_m_titel">Export minutes</string>
+    <string name="ks_m_text">Minute data of a chosen period as CSV</string>
+    <string name="ks_m_zeitraum">Period</string>
+    <string name="ks_m_beginn">Start</string>
+    <string name="ks_m_ende">End</string>
+    <string name="ks_m_vorschau">%1$d min · %2$d with data · %3$d trainings</string>
+    <string name="ks_m_zaehle">Counting…</string>
+    <string name="ks_m_ende_vor_beginn">The end is before the start</string>
+    <string name="ks_m_zu_lang">At most 7 days</string>
+    <string name="ks_m_aus_training">From a training</string>
+    <string name="ks_m_training_text">Takes 15 minutes before and after</string>
+    <string name="ks_m_keine_trainings">No trainings</string>
+    <string name="ks_m_datei">CSV file</string>
+    <string name="ks_m_datei_text">Minutes, trainings, watch sessions and nights</string>
+    <string name="ks_m_exportieren">Export</string>
+    <string name="ks_m_fehlgeschlagen">Could not read the minute data</string>
 </resources>

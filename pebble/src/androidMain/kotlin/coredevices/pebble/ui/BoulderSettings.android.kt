@@ -217,6 +217,16 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
                 }
             },
         ),
+        // Voruebergehend wie der Nachtexport, bis die Velo-Erkennung an echten Fahrten steht (F33).
+        basicSettingsActionItem(
+            title = stringResource(R.string.ks_m_titel),
+            description = stringResource(R.string.ks_m_text),
+            topLevelType = TopLevelType.Phone,
+            section = Section.Debug,
+            keywords = "export minutes csv period training ride",
+            isDebugSetting = true,
+            action = gehe(PebbleNavBarRoutes.MinutenexportRoute),
+        ),
     )
 }
 

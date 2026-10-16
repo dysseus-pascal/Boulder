@@ -45,6 +45,10 @@ expect fun ZieleScreen(topBarParams: TopBarParams, nav: NavBarNav)
 @Composable
 expect fun ProtokollScreen(topBarParams: TopBarParams, nav: NavBarNav)
 
+// Boulder: die Minuten eines Zeitraums als CSV - voruebergehend, aus dem Debug-Teil (F33).
+@Composable
+expect fun MinutenexportScreen(topBarParams: TopBarParams, nav: NavBarNav)
+
 // Boulder: der Akku der Uhr aus den Naechten der Firmware - an der Stelle
 // der Akkuseite, die Gravel mit der Telemetrie herausnahm.
 @Composable

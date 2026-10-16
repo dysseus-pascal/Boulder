@@ -15,4 +15,8 @@
     <cache-path
         name="bugreports"
         path="bugreports/" />
+    <!-- Boulder: der Minutenexport (Minutenexport.kt) -->
+    <cache-path
+        name="exporte"
+        path="exporte/" />
 </paths>

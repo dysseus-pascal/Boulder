@@ -19,9 +19,12 @@ data class Einstellungen(
     val mcpNetze: List<Netz>,
     /** So lange bleiben Minuten; Tage, Naechte und Trainings bleiben ganz. */
     val minutenTage: Int,
+    /** Die oeffentliche Adresse, etwa https://boulder.example.ch. Gesetzt: Claude meldet sich per OAuth an (Anmeldung.kt). */
+    val adresse: String? = null,
 ) {
     companion object {
         const val MIN_TOKEN = 32
+        private val ADRESSE = Regex("""https://[A-Za-z0-9.-]+(:[0-9]{1,5})?""")
 
         fun aus(umgebung: Map<String, String>, liesDatei: (String) -> String = { File(it).readText() }): Einstellungen {
             fun token(name: String): String {
@@ -39,6 +42,11 @@ data class Einstellungen(
                 mcpToken = mcp,
                 mcpNetze = umgebung["BOULDER_MCP_NETZE"].orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }.map(Netz::aus),
                 minutenTage = umgebung["BOULDER_MINUTEN_TAGE"]?.toInt() ?: 90,
+                adresse = umgebung["BOULDER_ADRESSE"]?.trim()?.removeSuffix("/")?.takeIf { it.isNotEmpty() }?.also {
+                    // Ohne Pfad: die Wege der Anmeldung liegen an der Wurzel, und Claude prueft die
+                    // Adressen in den Metadaten Zeichen fuer Zeichen.
+                    require(ADRESSE.matches(it)) { "BOULDER_ADRESSE: https://name[:port] ohne Pfad, nicht $it" }
+                },
             )
         }
     }

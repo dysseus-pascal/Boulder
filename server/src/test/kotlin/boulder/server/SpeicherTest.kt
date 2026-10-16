@@ -51,4 +51,29 @@ class SpeicherTest {
             assertEquals(1L, s.umfang().minuten)
         }
     }
+
+    @Test
+    fun zuVieleClientsVerdraengenDieAeltestenOhneZugang() {
+        Speicher.oeffne(":memory:").use { s ->
+            s.legeClientAn(Speicher.Client("angemeldet", "Claude", listOf("https://claude.ai/api/mcp/auth_callback")), jetzt)
+            s.speichereZugang("pruefwert", "erneuerung", "angemeldet", jetzt + 86_400, jetzt)
+            for (i in 0..Speicher.HOECHSTENS_CLIENTS) s.legeClientAn(Speicher.Client("k$i", "x", listOf("http://localhost/callback")), jetzt)
+            assertEquals(null, s.client("k0"))
+            assertEquals(listOf("http://localhost/callback"), s.client("k1")?.umleitungen)
+            assertEquals("Claude", s.client("angemeldet")?.name)
+        }
+    }
+
+    @Test
+    fun einZugangGiltBisZumAblaufUndEinmal() {
+        Speicher.oeffne(":memory:").use { s ->
+            s.speichereZugang("a", "zugang", "c", jetzt + 60, jetzt)
+            s.speichereZugang("e", "erneuerung", "c", jetzt + 60, jetzt)
+            assertEquals(true, s.zugangGilt("a", "zugang", jetzt + 60))
+            assertEquals(false, s.zugangGilt("a", "zugang", jetzt + 61))
+            assertEquals(false, s.zugangGilt("e", "zugang", jetzt))
+            assertEquals("c", s.nimmZugang("e", "erneuerung", jetzt))
+            assertEquals(null, s.nimmZugang("e", "erneuerung", jetzt))
+        }
+    }
 }

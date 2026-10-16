@@ -14,6 +14,7 @@ import io.ktor.server.application.log
 import io.ktor.server.plugins.origin
 import io.ktor.server.request.path
 import io.ktor.server.request.receiveChannel
+import io.ktor.server.response.header
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -28,19 +29,25 @@ import java.security.MessageDigest
 const val HOECHSTENS_BYTES = 20L * 1024 * 1024
 
 fun Application.boulder(e: Einstellungen, speicher: Speicher, jetzt: () -> Long = { System.currentTimeMillis() / 1000 }) {
+    val anmeldung = e.adresse?.let { Anmeldung(it, e.mcpToken, speicher, jetzt) }
     // ERST PRUEFEN, DANN ROUTEN: ein Aufruf ohne das passende Token erreicht weder den Speicher
-    // noch den MCP-Teil. Jeder Weg ausser /gesund braucht eines.
+    // noch den MCP-Teil. Jeder Weg ausser /gesund und denen der Anmeldung braucht eines.
     intercept(ApplicationCallPipeline.Plugins) {
         val pfad = call.request.path()
         val fehler = when {
             pfad == "/gesund" -> null
+            anmeldung != null && pfad in Anmeldung.WEGE -> null
             pfad == "/sync" -> if (traegt(call, e.syncToken)) null else HttpStatusCode.Unauthorized
             pfad == "/mcp" || pfad.startsWith("/mcp/") -> when {
                 e.mcpNetze.isNotEmpty() && e.mcpNetze.none { it.enthaelt(absender(call)) } -> HttpStatusCode.Forbidden
-                !traegt(call, e.mcpToken) -> HttpStatusCode.Unauthorized
-                else -> null
+                traegt(call, e.mcpToken) || bearer(call)?.let { anmeldung?.gilt(it) } == true -> null
+                else -> HttpStatusCode.Unauthorized
             }
             else -> HttpStatusCode.NotFound
+        }
+        if (fehler == HttpStatusCode.Unauthorized) {
+            call.response.header(HttpHeaders.WWWAuthenticate,
+                if (anmeldung != null && pfad != "/sync") anmeldung.herausforderung(bearer(call) != null) else "Bearer")
         }
         if (fehler != null) {
             call.application.log.info("Abgewiesen: $pfad ($fehler)")
@@ -49,6 +56,7 @@ fun Application.boulder(e: Einstellungen, speicher: Speicher, jetzt: () -> Long 
         }
     }
     routing {
+        anmeldung?.let { anmeldung(it) }
         get("/gesund") { call.respondText("ok") }
         post("/sync") {
             val bytes = call.receiveChannel().readRemaining(HOECHSTENS_BYTES + 1).readByteArray()
@@ -76,10 +84,12 @@ fun Application.boulder(e: Einstellungen, speicher: Speicher, jetzt: () -> Long 
 
 /** Traegt der Aufruf "Authorization: Bearer [token]"? Der Vergleich dauert gleich lang, wo er auch abweicht. */
 internal fun traegt(call: ApplicationCall, token: String): Boolean {
-    val kopf = call.request.headers[HttpHeaders.Authorization] ?: return false
-    if (!kopf.startsWith("Bearer ")) return false
-    return MessageDigest.isEqual(kopf.removePrefix("Bearer ").trim().toByteArray(), token.toByteArray())
+    val b = bearer(call) ?: return false
+    return MessageDigest.isEqual(b.toByteArray(), token.toByteArray())
 }
+
+internal fun bearer(call: ApplicationCall): String? =
+    call.request.headers[HttpHeaders.Authorization]?.takeIf { it.startsWith("Bearer ") }?.removePrefix("Bearer ")?.trim()
 
 /**
  * Wer fragt. Hinter dem Cloudflare Tunnel ruft cloudflared aus demselben Pod an, also von

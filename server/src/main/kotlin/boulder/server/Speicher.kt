@@ -8,6 +8,7 @@ import boulder.austausch.Stand
 import boulder.austausch.Tag
 import boulder.austausch.Training
 import boulder.austausch.austauschJson
+import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import java.sql.Connection
@@ -16,7 +17,8 @@ import java.sql.DriverManager
 /**
  * Der Spiegel von Boulders Daten in SQLite. Jede Lieferung ersetzt, was sie mitbringt: ein Tag,
  * eine Nacht oder ein Training kommt neu, solange er sich auf dem Telefon noch aendert (der
- * laufende Tag, ein spaet bestaetigtes Training) - darum Upsert statt Anfuegen.
+ * laufende Tag, ein spaet bestaetigtes Training) - darum Upsert statt Anfuegen. Dazu die Clients
+ * und Zugaenge der Anmeldung (Anmeldung.kt), damit Claude nach einem Neustart angemeldet bleibt.
  *
  * EINE VERBINDUNG, ALLES SYNCHRONISIERT: Boulder schickt hoechstens alle paar Minuten, Claude
  * fragt selten; ein Pool brauchte nur zusaetzliche Regeln fuer SQLite.
@@ -166,7 +168,85 @@ class Speicher private constructor(private val db: Connection) : AutoCloseable {
         )
     }
 
+    /** Legt einen Client der Anmeldung an; die aeltesten ohne Zugang fallen, sobald es mehr als [HOECHSTENS_CLIENTS] sind. */
+    @Synchronized
+    fun legeClientAn(c: Client, jetzt: Long) {
+        db.prepareStatement("INSERT INTO client(kennung, name, umleitungen, angelegt) VALUES(?, ?, ?, ?)").use { s ->
+            s.setString(1, c.kennung)
+            s.setString(2, c.name)
+            s.setString(3, austauschJson.encodeToString(LISTE, c.umleitungen))
+            s.setLong(4, jetzt)
+            s.executeUpdate()
+        }
+        // Registrieren darf jeder (so verlangt es Claude); ohne Grenze fuellte ein Fremder die Datenbank.
+        // Ein Client mit Zugang bleibt: er gehoert zu einer gelungenen Anmeldung.
+        db.prepareStatement("DELETE FROM zugang WHERE ablauf < ?").use { s ->
+            s.setLong(1, jetzt)
+            s.executeUpdate()
+        }
+        db.prepareStatement(
+            "DELETE FROM client WHERE kennung IN (SELECT kennung FROM client WHERE kennung NOT IN (SELECT client FROM zugang) " +
+                "ORDER BY angelegt DESC, rowid DESC LIMIT -1 OFFSET ?)"
+        ).use { s ->
+            s.setInt(1, HOECHSTENS_CLIENTS)
+            s.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun client(kennung: String): Client? =
+        db.prepareStatement("SELECT name, umleitungen FROM client WHERE kennung = ?").use { s ->
+            s.setString(1, kennung)
+            s.executeQuery().use { r ->
+                if (r.next()) Client(kennung, r.getString(1), austauschJson.decodeFromString(LISTE, r.getString(2))) else null
+            }
+        }
+
+    /** Merkt sich einen Zugang der Anmeldung; [pruefwert] statt des Tokens, siehe Anmeldung. */
+    @Synchronized
+    fun speichereZugang(pruefwert: String, art: String, client: String, ablauf: Long, jetzt: Long) {
+        db.prepareStatement("DELETE FROM zugang WHERE ablauf < ?").use { s ->
+            s.setLong(1, jetzt)
+            s.executeUpdate()
+        }
+        db.prepareStatement("INSERT INTO zugang(pruefwert, art, client, ablauf) VALUES(?, ?, ?, ?)").use { s ->
+            s.setString(1, pruefwert)
+            s.setString(2, art)
+            s.setString(3, client)
+            s.setLong(4, ablauf)
+            s.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun zugangGilt(pruefwert: String, art: String, jetzt: Long): Boolean =
+        db.prepareStatement("SELECT 1 FROM zugang WHERE pruefwert = ? AND art = ? AND ablauf >= ?").use { s ->
+            s.setString(1, pruefwert)
+            s.setString(2, art)
+            s.setLong(3, jetzt)
+            s.executeQuery().use { it.next() }
+        }
+
+    /** Loest einen Zugang ein: er gilt danach nicht mehr. Der Client, wenn er noch galt. */
+    @Synchronized
+    fun nimmZugang(pruefwert: String, art: String, jetzt: Long): String? {
+        val client = db.prepareStatement("SELECT client FROM zugang WHERE pruefwert = ? AND art = ? AND ablauf >= ?").use { s ->
+            s.setString(1, pruefwert)
+            s.setString(2, art)
+            s.setLong(3, jetzt)
+            s.executeQuery().use { r -> if (r.next()) r.getString(1) else null }
+        }
+        db.prepareStatement("DELETE FROM zugang WHERE pruefwert = ?").use { s ->
+            s.setString(1, pruefwert)
+            s.executeUpdate()
+        }
+        return client
+    }
+
     override fun close() = db.close()
+
+    /** Ein Programm, das sich bei der Anmeldung registriert hat (bei Claude eines je Verbindung). */
+    data class Client(val kennung: String, val name: String, val umleitungen: List<String>)
 
     data class Umfang(
         val ersterTag: String?,
@@ -179,6 +259,8 @@ class Speicher private constructor(private val db: Connection) : AutoCloseable {
 
     companion object {
         private val WERTE = MapSerializer(String.serializer(), Double.serializer())
+        private val LISTE = ListSerializer(String.serializer())
+        const val HOECHSTENS_CLIENTS = 100
 
         /** Oeffnet oder legt an; ":memory:" fuer Tests. */
         fun oeffne(pfad: String): Speicher {
@@ -190,6 +272,8 @@ class Speicher private constructor(private val db: Connection) : AutoCloseable {
                 s.execute("CREATE INDEX IF NOT EXISTS training_beginn ON training(beginn)")
                 s.execute("CREATE TABLE IF NOT EXISTS minute(zeit INTEGER PRIMARY KEY, schritte INTEGER, vmc INTEGER, puls INTEGER, lage INTEGER)")
                 s.execute("CREATE TABLE IF NOT EXISTS stand(schluessel TEXT PRIMARY KEY, wert TEXT NOT NULL)")
+                s.execute("CREATE TABLE IF NOT EXISTS client(kennung TEXT PRIMARY KEY, name TEXT NOT NULL, umleitungen TEXT NOT NULL, angelegt INTEGER NOT NULL)")
+                s.execute("CREATE TABLE IF NOT EXISTS zugang(pruefwert TEXT PRIMARY KEY, art TEXT NOT NULL, client TEXT NOT NULL, ablauf INTEGER NOT NULL)")
             }
             return Speicher(db)
         }

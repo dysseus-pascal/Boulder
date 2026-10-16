@@ -44,4 +44,15 @@ class EinstellungenTest {
         val mitNetz = Einstellungen.aus(mapOf("BOULDER_SYNC_TOKEN" to sync, "BOULDER_MCP_TOKEN" to mcp, "BOULDER_MCP_NETZE" to "160.79.104.0/21, 2607:6bc0::/48"))
         assertEquals(listOf("160.79.104.0/21", "2607:6bc0:0:0:0:0:0:0/48"), mitNetz.mcpNetze.map { it.toString() })
     }
+
+    @Test
+    fun adresseFuerDieAnmeldung() {
+        val basis = mapOf("BOULDER_SYNC_TOKEN" to sync, "BOULDER_MCP_TOKEN" to mcp)
+        assertEquals(null, Einstellungen.aus(basis).adresse)
+        assertEquals("https://boulder.example.ch", Einstellungen.aus(basis + ("BOULDER_ADRESSE" to " https://boulder.example.ch/ ")).adresse)
+        assertEquals("https://boulder.example.ch:8443", Einstellungen.aus(basis + ("BOULDER_ADRESSE" to "https://boulder.example.ch:8443")).adresse)
+        for (falsch in listOf("http://boulder.example.ch", "https://boulder.example.ch/mcp", "boulder.example.ch", "https://a@b.ch")) {
+            assertFailsWith<IllegalArgumentException>(falsch) { Einstellungen.aus(basis + ("BOULDER_ADRESSE" to falsch)) }
+        }
+    }
 }

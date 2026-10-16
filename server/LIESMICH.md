@@ -93,8 +93,11 @@ Protokolle zeigt `journalctl --user -u boulder-server -u boulder-tunnel`.
 ## 5. Boulder verbinden
 
 In Boulder unter **Settings > Boulder server** die Adresse (`https://boulder.example.ch`) und das
-Sync-Token eintragen, die Kategorien wählen und **Send now** tippen. Danach sendet Boulder nach
-jedem Abgleich mit der Uhr, sonst alle 30 Minuten.
+Sync-Token eintragen und **Save** tippen; Boulder sendet gleich. Darunter lässt sich wählen, was
+gesendet wird: Tage, Nächte und Trainings sind an, die Minutendaten aus (gut 130 KB je Tag).
+Danach sendet Boulder eine Minute nach jedem Abgleich mit der Uhr, sonst alle 30 Minuten, und nur,
+was sich geändert hat. Der Stand und ein Fehler stehen auf derselben Seite, Fehler auch im
+Protokoll.
 
 ## 6. Claude verbinden
 
@@ -149,7 +152,8 @@ boulder-pod`. Die Daten bleiben im Volume.
 ## Sichern
 
 Der Server ist ein Spiegel: Geht er verloren, schickt Boulder alles neu (**Send everything again**
-in den Einstellungen). Eine Sicherung des Volumes geht so:
+auf der Seite Boulder server). Minutendaten gibt es dann nur so weit, wie Boulder sie noch hat
+(90 Tage). Eine Sicherung des Volumes geht so:
 
 ```sh
 systemctl --user stop boulder-pod

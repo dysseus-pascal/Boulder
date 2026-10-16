@@ -186,7 +186,8 @@ private val NUR_LESEN = ToolAnnotations(readOnlyHint = true, destructiveHint = f
 private const val ANLEITUNG =
     "Read-only health data of one person from a Pebble watch, mirrored by the Boulder app. " +
         "Call 'stand' first: it tells the timezone and which days are available. Dates are local (YYYY-MM-DD), " +
-        "times local (YYYY-MM-DDTHH:MM). A night belongs to the day of waking up."
+        "times local (YYYY-MM-DDTHH:MM). A night belongs to the day of waking up. Steps and active minutes " +
+        "of a day appear once the day is over; for today use 'puls' or 'minuten' (if minute records are uploaded)."
 
 private fun schema(vararg felder: Pair<String, String>): ToolSchema = ToolSchema(
     properties = buildJsonObject {

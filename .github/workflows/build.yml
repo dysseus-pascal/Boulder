@@ -43,7 +43,8 @@ jobs:
       - name: Fester Debug-Schlüssel
         run: mkdir -p ~/.android && cp ci/debug.keystore ~/.android/debug.keystore
       - name: Tests
-        run: ./gradlew testDebugUnitTest testAndroidHostTest jvmTest
+        # :server:test - der eigene Server ist ein JVM-Modul ohne jvmTest-Aufgabe.
+        run: ./gradlew testDebugUnitTest testAndroidHostTest jvmTest :server:test
       - name: Bauen
         # Release-Build (R8, nicht debuggable), signiert mit dem festen Debug-Schluessel:
         # so installiert er sich als Update ueber jede bisherige Boulder-Fassung.

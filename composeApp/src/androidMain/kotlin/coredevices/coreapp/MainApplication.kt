@@ -41,6 +41,7 @@ import coredevices.coreapp.util.initLogging
 import coredevices.coreapp.util.logMindeststufe
 import coredevices.coreapp.util.registerBluetoothPairingDebugLogger
 import coredevices.experimentalModule
+import coredevices.pebble.PebbleAndroidDelegate
 import coredevices.pebble.PebbleAppDelegate
 import coredevices.pebble.watchModule
 import coredevices.util.CoreConfig
@@ -65,6 +66,7 @@ private val logger = Logger.withTag("MainApplication")
 
 class MainApplication : Application(), SingletonImageLoader.Factory, Configuration.Provider {
     private val pebbleAppDelegate: PebbleAppDelegate by inject()
+    private val pebbleAndroidDelegate: PebbleAndroidDelegate by inject()
     private val commonAppDelegate: CommonAppDelegate by inject()
     private val experimentalDevices: ExperimentalDevices by inject()
     private val fileLogWriter: FileLogWriter by inject()
@@ -112,6 +114,8 @@ class MainApplication : Application(), SingletonImageLoader.Factory, Configurati
         experimentalDevices.appInit()
         // Cactus telemetry is initialized via CommonAppDelegate.initCactus()
         pebbleAppDelegate.init()
+        // Boulder: Kieselstrasse braucht die Bruecke zu OsmAnd auch ohne geoeffnete App.
+        pebbleAndroidDelegate.beimProzessstart()
         // Boulder: nur gelesen - die Diagnoseschalter der Verbindung holen Verbose zurueck.
         libPebble.config
             .onEach {

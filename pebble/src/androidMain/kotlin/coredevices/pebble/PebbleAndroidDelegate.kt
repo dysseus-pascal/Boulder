@@ -21,6 +21,16 @@ class PebbleAndroidDelegate(
     private val context: Context,
     private val healthDataApi: HealthDataApi,
 ) {
+    /**
+     * Boulder: aus MainApplication.onCreate, nach libPebble.init(). Beendet Android den Prozess,
+     * startet es ihn ohne Oberflaeche neu (PebbleService ist START_STICKY), und die Uhr verbindet
+     * sich wieder; initPostPermissions kaeme dann erst mit dem naechsten Oeffnen der App.
+     */
+    fun beimProzessstart() {
+        // OsmAnds Abzweigungen an die Uhr-App Kieselstrasse.
+        Kieselstrasse.begleite(context, libPebble)
+    }
+
     // Boulder: die Sammler unten leben so lange wie der Prozess. Jedes Oeffnen
     // der App ruft hierher - ohne die Sperre kam jedes Mal ein weiterer dazu.
     private var boulderGestartet = false
@@ -29,8 +39,6 @@ class PebbleAndroidDelegate(
         libPebble.doStuffAfterPermissionsGranted()
         if (boulderGestartet) return
         boulderGestartet = true
-        // Boulder: OsmAnds Abzweigungen an die Uhr-App Kieselstrasse.
-        Kieselstrasse.begleite(context, libPebble)
         // Boulder: neue Daten von der Uhr zeichnen das Gesundheits-Widget neu.
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             libPebble.healthDataUpdated.collect { GesundheitWidget.stosseAn(context) }

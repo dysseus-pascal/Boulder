@@ -302,6 +302,39 @@ abstract class PruefeExporte : DefaultTask() {
     }
 }
 
+// Boulder: die Keep-Regel steht in osmand-api/consumer-rules.pro; geprueft wird, was R8 daraus
+// gemacht hat. Nur die Klassenzeilen des Mappings stehen ohne Einzug: "alt -> neu:".
+abstract class PruefeOsmandNamen : DefaultTask() {
+
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val mapping: RegularFileProperty
+
+    @TaskAction
+    fun pruefe() {
+        val klassen = mutableMapOf<String, String>()
+        mapping.get().asFile.useLines { zeilen ->
+            for (z in zeilen) {
+                if (!z.startsWith("net.osmand.aidlapi.")) continue
+                val teile = z.removeSuffix(":").split(" -> ")
+                klassen[teile[0]] = teile.getOrElse(1) { "" }
+            }
+        }
+        // Fehlt ALatLon, hiesse "nichts umbenannt" nur, dass nichts geprueft wurde.
+        if ("net.osmand.aidlapi.map.ALatLon" !in klassen) {
+            throw GradleException("R8 mapping has no net.osmand.aidlapi.map.ALatLon; OsmAnd's class names are unchecked.")
+        }
+        val umbenannt = klassen.filter { (alt, neu) -> alt != neu }.map { (alt, neu) -> "$alt -> $neu" }.sorted()
+        if (umbenannt.isNotEmpty()) {
+            throw GradleException(
+                "R8 renamed or removed OsmAnd AIDL classes (keep rule in osmand-api/consumer-rules.pro):\n  " +
+                    umbenannt.joinToString("\n  ")
+            )
+        }
+        logger.lifecycle("OsmAnd AIDL class names verified: ${klassen.size}, none renamed.")
+    }
+}
+
 androidComponents {
     onVariants(selector().withBuildType("release")) { variant ->
         val name = variant.name.replaceFirstChar { it.uppercase() }
@@ -311,10 +344,15 @@ androidComponents {
             manifest.set(variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.MERGED_MANIFEST))
             erlaubt.set(erlaubteExporte)
         }
+        val osmandNamen = tasks.register<PruefeOsmandNamen>("pruefe${name}OsmandNamen") {
+            group = "verification"
+            description = "Fails if R8 renamed or removed a class of OsmAnd's AIDL API."
+            mapping.set(variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.OBFUSCATION_MAPPING_FILE))
+        }
         // An den Packaging-Tasks, nicht an assemble: auch installRelease und bundleRelease laufen
         // ueber sie. Lazy, weil es sie waehrend onVariants noch nicht gibt.
         val packaging = setOf("package$name", "package${name}Bundle")
-        tasks.matching { it.name in packaging }.configureEach { dependsOn(pruefung) }
+        tasks.matching { it.name in packaging }.configureEach { dependsOn(pruefung, osmandNamen) }
         // tasks.matching schweigt, wenn nichts passt: nach einer Umbenennung in AGP liefe kein
         // Release mehr durch die Pruefung. Darum bricht der Bau ab, wenn sie im Graphen fehlt.
         gradle.taskGraph.whenReady {

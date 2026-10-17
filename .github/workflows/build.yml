@@ -57,9 +57,13 @@ jobs:
       # Die Uebergabe an den Release-Job geht ueber den Cache des Repos, nicht als Artefakt:
       # Artefakte zaehlen zum Speicherkontingent des Kontos, und das blieb voll - die Laeufe 76
       # bis 79 scheiterten beim Hochladen, auch 15 h nachdem die alten APKs geloescht waren.
-      - name: APK fuer den Release-Job
+      # Das Buendel des eigenen Servers (server/LIESMICH.md) kommt mit ins Release.
+      - name: APK und Server-Buendel fuer den Release-Job
         if: steps.v.outputs.neu == 'ja'
-        run: mkdir -p apk && cp androidApp/build/outputs/apk/release/*.apk apk/
+        run: |
+          mkdir -p apk && cp androidApp/build/outputs/apk/release/*.apk apk/
+          ./gradlew :server:distTar
+          cp "server/build/distributions/boulder-server-$(cat BOULDER_VERSION).tar.gz" apk/
       - if: steps.v.outputs.neu == 'ja'
         uses: actions/cache/save@v4
         with:
@@ -86,5 +90,5 @@ jobs:
           ver="${{ needs.android.outputs.ver }}"
           notes=".github/release/$ver.md"
           cp "$(ls apk/*.apk | head -n1)" boulder.apk
-          gh release create "v$ver" boulder.apk --target "$GITHUB_SHA" \
+          gh release create "v$ver" boulder.apk "apk/boulder-server-$ver.tar.gz" --target "$GITHUB_SHA" \
             --title "$ver - $(head -n1 "$notes")" --notes "$(tail -n +2 "$notes")"

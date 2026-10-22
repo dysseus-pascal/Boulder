@@ -16,7 +16,9 @@ import boulder.austausch.Akteneintrag
 import boulder.austausch.Lieferung
 import boulder.austausch.Nacht
 import boulder.austausch.Quittung
+import boulder.austausch.Sauerstoff
 import boulder.austausch.Stand
+import boulder.austausch.Tag
 import boulder.austausch.Training
 import boulder.austausch.austauschJson
 import co.touchlab.kermit.Logger
@@ -67,6 +69,8 @@ internal object Spiegel {
     private const val G_NAECHTE = "gesendet_naechte"
     private const val G_TRAININGS = "gesendet_trainings"
     private const val G_MINUTEN = "gesendet_minuten_bis"
+    private const val G_VORGESCHICHTE = "gesendet_vorgeschichte"
+    private const val G_SAUERSTOFF = "gesendet_spo2_bis"
 
     /** Wann zuletzt ein gruendlicher Lauf ([Spiegelrechnung.GRUENDLICH_S]) quittiert wurde, in Sekunden. */
     private const val G_GRUENDLICH = "gruendlich"
@@ -101,6 +105,9 @@ internal object Spiegel {
 
         /** Die Rohminuten nur auf Wunsch: gut 130 KB je Tag, und Claude braucht sie selten. */
         MINUTEN("minuten", false),
+
+        /** Die SpO2-Messungen der Uhr. */
+        SAUERSTOFF("spo2", true),
 
         /** Jeder Satz aus Health Connect, aus allen Apps ([Aktenspiegel]). */
         AKTE("akte", true),
@@ -184,6 +191,7 @@ internal object Spiegel {
 
     private fun vergissGesendet(context: Context, e: android.content.SharedPreferences.Editor) {
         e.remove(G_TAGE).remove(G_NAECHTE).remove(G_TRAININGS).remove(G_MINUTEN).remove(G_GRUENDLICH).remove(G_TAGE_ZEIT)
+            .remove(G_VORGESCHICHTE).remove(G_SAUERSTOFF)
         Aktenspiegel.vergiss(prefs(context), e)
     }
 
@@ -288,9 +296,14 @@ internal object Spiegel {
         val zone = ZoneId.systemDefault().id
 
         val alteTage = karte(context, G_TAGE)
+        val alteVortage = karte(context, G_VORGESCHICHTE)
         val tageFaellig = an(context, Art.TAGE) && (gruendlich || jetzt - p.getLong(G_TAGE_ZEIT, 0) >= Spiegelrechnung.TAGE_TAKT_S)
+        var vortage = emptyList<Tag>()
         val tage = if (tageFaellig) {
-            Spiegelrechnung.neueTage(Spiegelrechnung.tage(Trenddaten.lies(context, api, merken = false), LocalDate.now()), alteTage)
+            val trends = Trenddaten.lies(context, api, merken = false)
+            // Die Vorgeschichte geht mit den Tagen: sie aendert sich nur, wenn eine Sicherung zurueckkommt.
+            vortage = Spiegelrechnung.neueTage(Spiegelrechnung.vortage(trends), alteVortage)
+            Spiegelrechnung.neueTage(Spiegelrechnung.tage(trends, LocalDate.now()), alteTage)
         } else emptyList()
 
         val alteNaechte = karte(context, G_NAECHTE)
@@ -312,7 +325,7 @@ internal object Spiegel {
             Lieferung(
                 gesendet = jetzt, zone = zone, app = fassung, tage = tage, naechte = naechte,
                 trainings = trainings?.neu?.map { it.training }.orEmpty(), stand = stand,
-                trainingsEntfernt = trainings?.entfernt.orEmpty(),
+                trainingsEntfernt = trainings?.entfernt.orEmpty(), vorgeschichte = vortage,
             ),
         )
         if (antwort !is Spiegelpost.Antwort.Angenommen) return fehler(context, antwort)
@@ -321,6 +334,10 @@ internal object Spiegel {
         val e = p.edit()
         e.putString(G_TAGE, json(alteTage + tage.associate { it.datum to Spiegelrechnung.abdruck(it) }))
         e.putString(G_NAECHTE, json(alteNaechte + naechte.associate { it.beginn.toString() to Spiegelrechnung.abdruck(it) }))
+        // Ein Server vor 0.57.0 uebergeht die Vorgeschichte: dann geht sie einem neueren noch einmal.
+        if (antwort.quittung.vorgeschichte != null) {
+            e.putString(G_VORGESCHICHTE, json(alteVortage + vortage.associate { it.datum to Spiegelrechnung.abdruck(it) }))
+        }
         if (trainings != null) {
             // Was aus dem Fenster der Akte faellt, kommt nicht wieder; der Rest bleibt, auch was ein
             // Lauf im Hintergrund nicht sah (fremde Trainings ohne Leserecht).
@@ -342,6 +359,11 @@ internal object Spiegel {
             val minuten = sendeMinuten(context, api, ziel, post, jetzt, zone, fassung)
             if (minuten !is Ausgang.Fertig) return minuten
             quittung = quittung.copy(minuten = minuten.quittung.minuten)
+        }
+        if (an(context, Art.SAUERSTOFF)) {
+            val spo2 = sendeSauerstoff(context, api, ziel, post, jetzt, zone, fassung)
+            if (spo2 !is Ausgang.Fertig) return spo2
+            quittung = quittung.copy(sauerstoff = spo2.quittung.sauerstoff)
         }
         if (an(context, Art.AKTE)) {
             val klient = Akte(context).bereit() ?: return Ausgang.Fertig(quittung)
@@ -435,6 +457,30 @@ internal object Spiegel {
             ab = ende
         }
         return Ausgang.Fertig(Quittung(0, 0, 0, zahl))
+    }
+
+    /**
+     * Die SpO2-Messungen der Uhr seit dem letzten Senden. Sie kommen mit den Minuten und so spaet wie
+     * diese: darum gehen die letzten [Spiegelrechnung.MINUTEN_RUECKBLICK_S] noch einmal mit, sobald etwas
+     * Neues da ist. Die Datenbank haelt sie 90 Tage.
+     */
+    private suspend fun sendeSauerstoff(
+        context: Context, api: HealthDataApi, ziel: Ziel, post: Spiegelpost, jetzt: Long, zone: String, fassung: String,
+    ): Ausgang {
+        val p = prefs(context)
+        val bis = p.getLong(G_SAUERSTOFF, -1L)
+        // Nie nach jetzt: eine Messung mit falscher Uhrzeit aus der Zukunft setzte den Stand dorthin.
+        val messungen = api.getSpo2ReadingsAfter(if (bis < 0) -1 else bis - Spiegelrechnung.MINUTEN_RUECKBLICK_S).filter { it.timestamp <= jetzt }
+        if (messungen.none { it.timestamp > bis }) return Ausgang.Fertig(Quittung(0, 0, 0, 0, sauerstoff = 0))
+        var zahl = 0
+        for (teil in messungen.chunked(Spiegelrechnung.SAUERSTOFF_JE_LIEFERUNG)) {
+            val a = post.schicke(ziel, Lieferung(gesendet = jetzt, zone = zone, app = fassung, sauerstoff = teil.map { Sauerstoff(it.timestamp, it.spo2Percent, it.quality) }))
+            if (a !is Spiegelpost.Antwort.Angenommen) return fehler(context, a)
+            if (a.quittung.sauerstoff == null) return Ausgang.Fehler(context.getString(R.string.ks_sv_fehler_server_alt), voruebergehend = false)
+            zahl += teil.size
+            if (!merkeGesendet(context, ziel, p.edit().putLong(G_SAUERSTOFF, teil.last().timestamp))) return Ausgang.Aus
+        }
+        return Ausgang.Fertig(Quittung(0, 0, 0, 0, sauerstoff = zahl))
     }
 
     private fun fehler(context: Context, a: Spiegelpost.Antwort): Ausgang.Fehler = when (a) {

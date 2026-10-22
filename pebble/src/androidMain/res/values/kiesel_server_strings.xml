@@ -14,13 +14,15 @@
     <string name="ks_sv_eingerichtet">Saved. Boulder uploads now.</string>
     <string name="ks_sv_was">What is sent</string>
     <string name="ks_sv_tage">Days</string>
-    <string name="ks_sv_tage_text">Steps, sleep, resting heart rate, HRV, water, caffeine</string>
+    <string name="ks_sv_tage_text">Steps, sleep, resting heart rate, HRV, water, caffeine, and the history from older backups</string>
     <string name="ks_sv_naechte">Nights</string>
     <string name="ks_sv_naechte_text">Sleep times, stages and HRV of each night</string>
     <string name="ks_sv_trainings">Workouts</string>
     <string name="ks_sv_trainings_text">Sport, duration, distance and heart rate</string>
     <string name="ks_sv_minuten">Minute data</string>
     <string name="ks_sv_minuten_text">Steps, movement and heart rate of each minute, about 130 KB per day</string>
+    <string name="ks_sv_spo2">Blood oxygen</string>
+    <string name="ks_sv_spo2_text">SpO2 readings of the watch</string>
     <string name="ks_sv_akte">Health Connect</string>
     <string name="ks_sv_akte_text">Every record of every app: weight, blood pressure, nutrition, heart rate, sleep and more</string>
     <string name="ks_sv_akte_zugang">Health Connect access</string>

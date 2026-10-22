@@ -125,6 +125,7 @@ internal fun SpiegelAnsicht() {
                     Triple(Spiegel.Art.NAECHTE, R.string.ks_sv_naechte, R.string.ks_sv_naechte_text),
                     Triple(Spiegel.Art.TRAININGS, R.string.ks_sv_trainings, R.string.ks_sv_trainings_text),
                     Triple(Spiegel.Art.MINUTEN, R.string.ks_sv_minuten, R.string.ks_sv_minuten_text),
+                    Triple(Spiegel.Art.SAUERSTOFF, R.string.ks_sv_spo2, R.string.ks_sv_spo2_text),
                     Triple(Spiegel.Art.AKTE, R.string.ks_sv_akte, R.string.ks_sv_akte_text),
                 )) {
                     if (art != Spiegel.Art.TAGE) Trenner(INNEN)

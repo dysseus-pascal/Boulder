@@ -30,6 +30,9 @@ internal object Spiegelrechnung {
     /** So weit zurueck gehen Minuten noch einmal mit: was die Uhr nach dem letzten Senden noch nachreichte. */
     const val MINUTEN_RUECKBLICK_S = 900L
 
+    /** SpO2-Messungen je Lieferung; die Uhr misst hoechstens einmal je Minute, meist viel seltener. */
+    const val SAUERSTOFF_JE_LIEFERUNG = 5_000
+
     /**
      * So weit zurueck vergleicht ein gewoehnlicher Lauf Trainings - dort aendern sie sich noch (ein
      * spaet bestaetigtes, eine nachgetragene Kurve). Weiter zurueck nur der gruendliche ([GRUENDLICH_S]).
@@ -96,6 +99,13 @@ internal object Spiegelrechnung {
             Tag(tag.toString(), w, if (imFenster) stand.akteGanz.filter { it !in w }.sorted() else emptyList())
         }.filter { it.werte.isNotEmpty() || it.entfernt.isNotEmpty() }
     }
+
+    /**
+     * Die Tage der Vorgeschichte (Kiesel-Helper, aeltere Sicherungen), wie sie im Tagesspeicher stehen.
+     * Der Server zeigt sie nur vor Boulders erstem eigenen Wert einer Spalte, wie die Trends.
+     */
+    fun vortage(stand: Trendstand): List<Tag> =
+        Tagesspeicher.jeTag(stand.vorgeschichte).toSortedMap().map { (tag, werte) -> Tag(tag.toString(), werte) }
 
     /** Eine Nacht der Firmware im Austauschformat. */
     fun nacht(e: NachtEntity, abschnitte: List<NachtAbschnittEntity>, hrv: List<NachtHrvEntity>): Nacht = Nacht(

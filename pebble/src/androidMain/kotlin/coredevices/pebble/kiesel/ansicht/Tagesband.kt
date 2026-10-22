@@ -150,8 +150,8 @@ private val AUSBLENDEN = 18.dp
 /** Beim Oeffnen steht das Jetzt bei drei Vierteln der sichtbaren Breite: der Morgen davor bleibt im Blick. */
 private const val JETZT_ANTEIL = 0.75f
 
-/** So lange gleitet das Band beim Oeffnen der App zum Jetzt. */
-private const val GLEITEN_MS = 700
+/** So lange gleitet das Band beim Oeffnen der App zum Jetzt: wie Pebbles App ihre Filterzeile scrollt (NotificationAppsScreen). */
+private const val GLEITEN_MS = 600
 
 /** Was ein Symbol des Bands traegt. */
 private sealed class Bandinhalt {

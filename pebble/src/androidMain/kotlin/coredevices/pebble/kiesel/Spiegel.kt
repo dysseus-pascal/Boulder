@@ -259,9 +259,10 @@ internal object Spiegel {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                // Eine Ausnahme beim Lesen (Datenbank, Akte) - beim naechsten Mal kann es gehen.
+                // Eine Ausnahme beim Lesen kommt aus dem Telefon (Datenbank, Akte, ein Fehler hier), nicht
+                // aus dem Netz: kein sofortiges Wiederholen. Der naechste Schub oder Takt versucht es wieder.
                 logger.w(e) { "Senden abgebrochen" }
-                Ausgang.Fehler(context.getString(R.string.ks_sv_fehler_lesen, e.message ?: e.javaClass.simpleName), voruebergehend = true)
+                Ausgang.Fehler(context.getString(R.string.ks_sv_fehler_lesen, e.message ?: e.javaClass.simpleName), voruebergehend = false)
             }
             melde(context, aus)
             aus

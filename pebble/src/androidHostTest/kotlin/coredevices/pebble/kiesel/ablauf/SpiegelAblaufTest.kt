@@ -72,8 +72,13 @@ class SpiegelAblaufTest {
     private val abschnitte = mutableListOf<NachtAbschnittEntity>()
     private val hrv = mutableListOf<NachtHrvEntity>()
     private val minuten = mutableListOf<HealthDataEntity>()
+    @Volatile
+    private var naechteWerfen = false
     private val api = object : HealthDataApi by FakeLibPebble() {
-        override suspend fun getNaechte(von: Long, bis: Long) = naechte.filter { it.beginnUtc >= von && it.beginnUtc < bis }
+        override suspend fun getNaechte(von: Long, bis: Long): List<NachtEntity> {
+            if (naechteWerfen) throw IllegalStateException("Datenbank geschlossen")
+            return naechte.filter { it.beginnUtc >= von && it.beginnUtc < bis }
+        }
         override suspend fun getNachtAbschnitte(von: Long, bis: Long) = abschnitte.filter { it.beginnUtc >= von && it.beginnUtc < bis }
         override suspend fun getNachtHrv(beginnUtc: Long) = hrv.filter { it.beginnUtc == beginnUtc }
         override suspend fun getLatestTimestamp(): Long? = minuten.maxOfOrNull { it.timestamp }
@@ -280,6 +285,16 @@ class SpiegelAblaufTest {
         val wieder = context.getString(R.string.ks_sv_titel) + ": " + context.getString(R.string.ks_sv_wieder)
         assertEquals(wieder, KieselVerlauf.alle(context).first().second)
         assertTrue(!Spiegel.status(context).fehler)
+    }
+
+    @Test
+    fun einFehlerAufDemTelefonWiederholtSichNichtSofort() {
+        Spiegel.speichere(context, ziel)
+        naechteWerfen = true
+        val f = sende()
+        assertIs<Spiegel.Ausgang.Fehler>(f)
+        assertTrue(!f.voruebergehend)
+        assertEquals(emptyList(), lieferungen.toList())
     }
 
     @Test

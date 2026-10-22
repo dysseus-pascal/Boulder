@@ -295,11 +295,16 @@ class GesundheitBildTest {
         assertEquals(0.75 + 40 * g.dichte / band(spaeter).boundsInRoot.width, jetztAnteil(spaeter), 0.01)
 
         // In den Hintergrund und wieder geoeffnet: das Jetzt steht wieder bei drei Vierteln.
+        // restart wie Android (onRestart, dann onStart): erst das hebt den Stopp des Fensters auf.
         g.steuerung.pause().stop()
-        g.steuerung.start().resume()
+        g.steuerung.restart().resume()
         shadowOf(Looper.getMainLooper()).idle()
         assertEquals(1, oeffnung)
         assertEquals(0.75, jetztAnteil(nochmal(g, "health-oeffnen-wieder")), 0.01)
+        // NICHTS LIEGEN LASSEN: Das Zeichnen legt das Band neu aus und schreibt dabei Zustand. Bliebe
+        // dessen Meldung im Loop, verwuerfe Robolectric sie, und Compose zeichnete in den Tests danach
+        // nach keiner Aenderung mehr neu (GlobalSnapshotManager meldet nur, was noch nicht gemeldet ist).
+        shadowOf(Looper.getMainLooper()).idle()
     }
 
     /** Dasselbe noch einmal gezeichnet, nach einer Geste: neues Bild, neue Semantik. */

@@ -31,6 +31,18 @@ internal object Spiegelrechnung {
     const val MINUTEN_RUECKBLICK_S = 900L
 
     /**
+     * So weit zurueck vergleicht ein gewoehnlicher Lauf Trainings - dort aendern sie sich noch (ein
+     * spaet bestaetigtes, eine nachgetragene Kurve). Weiter zurueck nur der gruendliche ([GRUENDLICH_S]).
+     */
+    const val TRAININGS_KURZ_TAGE = 3L
+
+    /**
+     * So oft vergleicht ein Lauf alles: Trainings des ganzen Fensters samt Puls und Routen. Jeder
+     * Lauf - 100 bis 150 am Tag - laese sonst Dutzende Trainings, nur um festzustellen, dass gleich blieb.
+     */
+    const val GRUENDLICH_S = 86_400L
+
+    /**
      * Die Adresse des Servers ohne Schraegstrich am Ende; null, wenn sie nicht taugt. NUR HTTPS:
      * das Sync-Token und die Gesundheitsdaten gingen sonst lesbar durchs Netz. Ohne Pfad, Nutzer,
      * Abfrage und Anker, wie im LIESMICH des Servers.
@@ -112,6 +124,33 @@ internal object Spiegelrechnung {
         naechte.filter { it.beginnUtc.toString() !in gesendet || it.beginnUtc >= jetzt - NACHT_RUHE_TAGE * 86_400L }
 
     fun minute(d: HealthDataEntity): Minute = Minute(d.timestamp, d.steps, d.intensity, d.heartRate, d.orientation)
+
+    /**
+     * Was der Spiegel je gesendetem Training behaelt, als "abdruck@beginn", mit "@b" fuer eines aus
+     * Boulders eigenem Paket - die liest die Akte auch im Hintergrund ohne Sonderrecht.
+     */
+    data class GesendetesTraining(val abdruck: String, val beginn: Long, val eigenesPaket: Boolean) {
+        override fun toString() = "$abdruck@$beginn" + if (eigenesPaket) "@b" else ""
+
+        companion object {
+            /** Auch die Form von 0.55.0 ohne "@b": dann gilt das Training als fremd. */
+            fun aus(text: String): GesendetesTraining {
+                val teile = text.split('@')
+                return GesendetesTraining(teile[0], teile.getOrNull(1)?.toLongOrNull() ?: 0L, teile.getOrNull(2) == "b")
+            }
+        }
+    }
+
+    /**
+     * Die gesendeten Trainings ([gesendet]: Kennung -> [GesendetesTraining]), die ein Lauf nicht
+     * mehr fand ([gefunden]): in der Akte geloescht oder einem Doppel gewichen. Nur die ab [ab] - davor
+     * las er nicht -, und ohne [alleHerkuenfte] nur Boulders eigene: fremde sah er dann gar nicht.
+     */
+    fun entfernteTrainings(gesendet: Map<String, String>, gefunden: Set<String>, ab: Long, alleHerkuenfte: Boolean): List<String> =
+        gesendet.filter { (kennung, text) ->
+            val g = GesendetesTraining.aus(text)
+            kennung !in gefunden && g.beginn >= ab && (alleHerkuenfte || g.eigenesPaket)
+        }.keys.sorted()
 
     /**
      * Ab wann Minuten zu senden sind: nach dem letzten Senden ([bis]) mit [MINUTEN_RUECKBLICK_S]

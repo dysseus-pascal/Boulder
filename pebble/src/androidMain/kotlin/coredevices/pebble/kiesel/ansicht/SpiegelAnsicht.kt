@@ -60,7 +60,7 @@ internal fun SpiegelAnsicht() {
     fun sende(alles: Boolean) {
         laeuft = true
         scope.launch {
-            meldung = when (val aus = Spiegel.sende(context, api, libPebble, alles)) {
+            meldung = when (val aus = Spiegel.sende(context, api, libPebble, alles, gruendlich = true)) {
                 is Spiegel.Ausgang.Fertig -> Spiegel.gesendetText(context, aus.quittung) to false
                 is Spiegel.Ausgang.Fehler -> aus.text to true
                 Spiegel.Ausgang.Aus -> null

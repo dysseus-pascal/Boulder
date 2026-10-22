@@ -21,7 +21,6 @@ import kotlinx.coroutines.withContext
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneId
-import kotlin.math.roundToInt
 
 /**
  * Die Sportarten, wie die Ansicht sie zeigt. Ihre Farben stehen bei allen
@@ -522,29 +521,39 @@ internal object TrainingsDaten {
         eintrag(context, s, distanzen(klient, context, von, jetzt), laengen).also { laengen.sichere() }
     }
 
+    /** Boulder: was [fuerSpiegel] fand. [alleHerkuenfte]: auch fremde Trainings waren lesbar, nicht nur Boulders eigene. */
+    class SpiegelTrainings(val trainings: List<TrainingEintrag>, val alleHerkuenfte: Boolean)
+
     /**
-     * Boulder: die Trainings der letzten [Fenster.SPORT_TAGE] Tage fuer den Spiegel ([Spiegel]),
-     * gewaehlt und vermessen wie in der Liste. IM HINTERGRUND ohne Sonderrecht nur die eigenen
-     * ([Herkunft.ALLE_SONST_EIGENE]). Null, wenn die Akte nicht liest - das ist kein leeres Vierteljahr.
+     * Boulder: die Trainings der letzten [tage] Tage fuer den Spiegel ([Spiegel]), gewaehlt und
+     * vermessen wie in der Liste - neueste zuerst wie dort, so loest [gewaehlt] einen Gleichstand
+     * gleich langer Doppel ebenso auf. IM HINTERGRUND ohne Sonderrecht nur die eigenen
+     * ([Herkunft.ALLE_SONST_EIGENE]). Null, wenn die Akte nicht liest - das ist kein leeres Fenster.
      */
-    suspend fun fuerSpiegel(context: Context): List<TrainingEintrag>? = withContext(Dispatchers.IO) {
+    suspend fun fuerSpiegel(context: Context, tage: Long): SpiegelTrainings? = withContext(Dispatchers.IO) {
         val klient = Akte(context).bereit() ?: return@withContext null
         val jetzt = Instant.now()
-        val von = jetzt.minus(Duration.ofDays(Fenster.SPORT_TAGE))
+        val von = jetzt.minus(Duration.ofDays(tage))
+        var alle = true
         val sitzungen = versuche(TAG, "Trainings fuer den Spiegel") {
-            klient.lies(context, ExerciseSessionRecord::class, TimeRangeFilter.between(von, jetzt), Herkunft.ALLE_SONST_EIGENE)
-                .filterNot { erkannt(context, it) }
+            klient.lies(context, ExerciseSessionRecord::class, TimeRangeFilter.between(von, jetzt), Herkunft.ALLE_SONST_EIGENE) { alle = false }
+                .filterNot { erkannt(context, it) }.sortedByDescending { it.startTime }
         } ?: return@withContext null
         val distanzen = distanzen(klient, context, von, jetzt)
         val laengen = Laengen(context)
-        gewaehlt(context, sitzungen).map { eintrag(context, it, distanzen, laengen) }.also { laengen.sichere() }
+        SpiegelTrainings(gewaehlt(context, sitzungen).map { eintrag(context, it, distanzen, laengen) }.also { laengen.sichere() }, alle)
     }
 
-    /** Boulder: mittlerer und hoechster Puls eines Trainings, entstoert wie im Detail; null ohne Puls. */
-    suspend fun pulsKennzahlen(context: Context, s: ExerciseSessionRecord): Pair<Int, Int>? = withContext(Dispatchers.IO) {
+    /**
+     * Boulder: mittlerer und hoechster Puls eines Trainings fuer den Spiegel, entstoert und
+     * abgeschnitten wie im Detail; (null, null) ohne Puls. Null, wenn die Akte ihn nicht liest -
+     * das ist kein Training ohne Puls.
+     */
+    suspend fun pulsKennzahlen(context: Context, s: ExerciseSessionRecord): Pair<Int?, Int?>? = withContext(Dispatchers.IO) {
         val klient = Akte(context).bereit() ?: return@withContext null
-        val bpm = puls(klient, context, s).map { it.bpm }
-        if (bpm.isEmpty()) null else bpm.average().roundToInt() to bpm.max().toInt()
+        val bpm = versuche(TAG, "Puls fuer den Spiegel") { Trainingsanalyse.entstoert(rohpuls(klient, context, s)) }?.map { it.bpm }
+            ?: return@withContext null
+        if (bpm.isEmpty()) null to null else bpm.average().toInt() to bpm.max().toInt()
     }
 
     /**

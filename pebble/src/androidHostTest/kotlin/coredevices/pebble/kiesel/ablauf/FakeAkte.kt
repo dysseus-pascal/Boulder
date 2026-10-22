@@ -45,6 +45,13 @@ internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient 
     @Volatile
     var erteilt: Set<String> = emptySet()
 
+    /**
+     * Wie im Hintergrund ohne das Recht, dort zu lesen: eine Abfrage, die fremde Eintraege treffen
+     * koennte, weist die Akte ganz ab.
+     */
+    @Volatile
+    var nurEigeneLesbar = false
+
     /** Wirft fuer einen Satz, den die Akte abweisen soll (etwa ein fehlendes Recht); null nimmt ihn. */
     @Volatile
     var weistAb: (Record) -> Exception? = { null }
@@ -160,6 +167,7 @@ internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient 
     override suspend fun <T : Record> readRecords(request: ReadRecordsRequest<T>): ReadRecordsResponse<T> {
         lesungen += request
         val quellen = request.dataOriginFilter.map { it.packageName }.toSet()
+        if (nurEigeneLesbar && quellen != setOf(eigenesPaket)) throw SecurityException("Im Hintergrund nur eigene Eintraege")
         val passend = synchronized(this) {
             eintraege.filter { e ->
                 e.satz::class == request.recordType && (quellen.isEmpty() || e.herkunft in quellen) && trifft(e.satz, request.timeRangeFilter)

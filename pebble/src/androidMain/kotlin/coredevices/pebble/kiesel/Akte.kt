@@ -84,14 +84,15 @@ private val gemeldet: MutableSet<String> = java.util.Collections.synchronizedSet
  * SCHEITERT EINE SPAETERE SEITE (etwa am Rate-Limit), bleibt es bei den
  * gelesenen, mit einer Warnung im Log - nie weniger als frueher die eine
  * Seite. Nur die erste wirft; erst dann greift [Herkunft.ALLE_SONST_EIGENE]
- * auf das Eigene zurueck.
+ * auf das Eigene zurueck und ruft [nurEigene].
  */
 internal suspend fun <T : Record> HealthConnectClient.lies(
     context: Context,
     klasse: KClass<T>,
     zeitraum: TimeRangeFilter,
     herkunft: Herkunft = Herkunft.ALLE,
-): List<T> = mitHerkunft(context, herkunft) { quellen ->
+    nurEigene: () -> Unit = {},
+): List<T> = mitHerkunft(context, herkunft, nurEigene) { quellen ->
     val alle = mutableListOf<T>()
     var marke: String? = null
     var seiten = 0
@@ -124,7 +125,7 @@ internal suspend fun <T : Record> HealthConnectClient.liesEinen(
 }
 
 /** Liest mit den Quellen, die [herkunft] verlangt - bei [Herkunft.ALLE_SONST_EIGENE] notfalls ein zweites Mal. */
-private suspend fun <R> mitHerkunft(context: Context, herkunft: Herkunft, lesen: suspend (Set<DataOrigin>) -> R): R {
+private suspend fun <R> mitHerkunft(context: Context, herkunft: Herkunft, nurEigene: () -> Unit = {}, lesen: suspend (Set<DataOrigin>) -> R): R {
     val eigene = setOf(DataOrigin(context.packageName))
     return when (herkunft) {
         Herkunft.ALLE -> lesen(emptySet())
@@ -138,6 +139,7 @@ private suspend fun <R> mitHerkunft(context: Context, herkunft: Herkunft, lesen:
             // auch der zweite Versuch, wirft er. Einmal je Grund ins Log: das Widget liest im Hintergrund oft so.
             val grund = "${e.javaClass.simpleName}: ${e.message}"
             if (gemeldet.add(grund)) logger.i { "Fremde Eintraege nicht lesbar, nur eigene ($grund)" }
+            nurEigene()
             lesen(eigene)
         }
     }

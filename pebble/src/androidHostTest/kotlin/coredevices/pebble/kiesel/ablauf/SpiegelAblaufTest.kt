@@ -1,6 +1,10 @@
 package coredevices.pebble.kiesel.ablauf
 
 import android.content.Context
+import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.metadata.Device
+import androidx.health.connect.client.records.metadata.Metadata
 import boulder.austausch.Lieferung
 import boulder.austausch.Quittung
 import boulder.austausch.austauschJson
@@ -28,6 +32,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 import java.time.Instant
+import java.time.ZoneOffset
 import java.util.Collections
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -96,6 +101,127 @@ class SpiegelAblaufTest {
         timestamp = t, steps = 10, orientation = 55, intensity = 800, lightIntensity = 0,
         activeMinutes = 0, restingGramCalories = 0, activeGramCalories = 0, distanceCm = 0, heartRate = 90,
     )
+
+    /** Ein Lauf in der Akte, unter [paket] - Boulder selbst oder eine fremde App. */
+    private fun lauf(akte: FakeAkte, beginn: Long, minuten: Long, paket: String = context.packageName): String {
+        akte.legeAb(
+            ExerciseSessionRecord(
+                startTime = Instant.ofEpochSecond(beginn), startZoneOffset = null,
+                endTime = Instant.ofEpochSecond(beginn + minuten * 60), endZoneOffset = null,
+                metadata = Metadata.autoRecorded(Device(type = Device.TYPE_WATCH), "lauf-$beginn-$paket"),
+                exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_RUNNING, title = null,
+            ),
+            paket,
+        )
+        return akte.alle().last().satz.metadata.id
+    }
+
+    /** Boulders Puls ab [beginn], ein Wert je zehn Sekunden. */
+    private fun puls(akte: FakeAkte, beginn: Long, vararg bpm: Long) = akte.legeAb(
+        HeartRateRecord(
+            Instant.ofEpochSecond(beginn), ZoneOffset.UTC, Instant.ofEpochSecond(beginn + bpm.size * 10L), ZoneOffset.UTC,
+            bpm.mapIndexed { i, b -> HeartRateRecord.Sample(Instant.ofEpochSecond(beginn + i * 10L), b) },
+            Metadata.autoRecorded(Device(type = Device.TYPE_WATCH), "puls-$beginn"),
+        ),
+        context.packageName,
+    )
+
+    private fun mitAkte(test: (FakeAkte) -> Unit) {
+        val akte = FakeAkte(context.packageName)
+        Akte.ersatz = akte
+        try {
+            Spiegel.speichere(context, ziel)
+            test(akte)
+        } finally {
+            Akte.ersatz = null
+        }
+    }
+
+    @Test
+    fun einTrainingGehtNochEinmalWennSeinPulsNachkommt() = mitAkte { akte ->
+        val beginn = jetzt - 86_400L
+        val id = lauf(akte, beginn, 30)
+        sende()
+        val erstes = lieferungen.last().trainings.single()
+        assertEquals(id, erstes.kennung)
+        assertEquals(null, erstes.pulsMittel)
+        sende()
+        assertEquals(emptyList(), lieferungen.last().trainings, "unveraendert geht es nicht noch einmal")
+        // Kieselsport traegt die Kurve nach. Der Schnitt wird abgeschnitten wie im Detail: 125.5 -> 125.
+        puls(akte, beginn + 60, 120, 131)
+        sende()
+        val zweites = lieferungen.last().trainings.single()
+        assertEquals(125 to 131, zweites.pulsMittel to zweites.pulsMax)
+    }
+
+    @Test
+    fun geloeschteTrainingeVerschwindenAuchAufDemServer() = mitAkte { akte ->
+        val beginn = jetzt - 86_400L
+        val eigenes = lauf(akte, beginn, 30)
+        val fremd = lauf(akte, beginn - 7200, 40, "com.example.laufapp")
+        val bleibt = lauf(akte, beginn - 14_400, 50, "com.example.laufapp")
+        sende()
+        assertEquals(setOf(eigenes, fremd, bleibt), lieferungen.last().trainings.map { it.kennung }.toSet())
+        // Im Hintergrund ohne Leserecht sieht der Lauf nur Boulders eigene: nur deren Fehlen zaehlt.
+        akte.nurEigeneLesbar = true
+        akte.loesche(eigenes)
+        akte.loesche(fremd)
+        sende()
+        assertEquals(listOf(eigenes), lieferungen.last().trainingsEntfernt)
+        akte.nurEigeneLesbar = false
+        sende()
+        assertEquals(listOf(fremd), lieferungen.last().trainingsEntfernt)
+        sende()
+        assertEquals(emptyList(), lieferungen.last().trainingsEntfernt)
+    }
+
+    @Test
+    fun einDoppelErsetztDasGesendeteTraining() = mitAkte { akte ->
+        val beginn = jetzt - 86_400L
+        val samsung = lauf(akte, beginn, 30, "com.sec.android.app.shealth")
+        sende()
+        // Strava schreibt denselben Lauf zwei Minuten laenger: die App behaelt nur ihn.
+        val strava = lauf(akte, beginn, 32, "com.strava")
+        sende()
+        assertEquals(listOf(strava), lieferungen.last().trainings.map { it.kennung })
+        assertEquals(listOf(samsung), lieferungen.last().trainingsEntfernt)
+    }
+
+    @Test
+    fun gleichLangeDoppelWieInDerListe() = mitAkte { akte ->
+        // Zwei Apps, gleich lang, zehn Minuten versetzt: die Liste behaelt das spaetere (neueste zuerst).
+        val beginn = jetzt - 86_400L
+        lauf(akte, beginn, 30, "com.example.eins")
+        val spaeter = lauf(akte, beginn + 600, 30, "com.example.zwei")
+        sende()
+        assertEquals(listOf(spaeter), lieferungen.last().trainings.map { it.kennung })
+    }
+
+    @Test
+    fun aeltereTrainingsPrueftDerGruendlicheLauf() = mitAkte { akte ->
+        val alt = lauf(akte, jetzt - 20 * 86_400L, 45)
+        sende()
+        assertEquals(listOf(alt), lieferungen.last().trainings.map { it.kennung })
+        akte.loesche(alt)
+        // Ein gewoehnlicher Lauf liest nur die letzten Tage.
+        sende(uhr = jetzt + 3600)
+        assertEquals(emptyList(), lieferungen.last().trainingsEntfernt)
+        // Einen Tag spaeter vergleicht einer alles.
+        sende(uhr = jetzt + Spiegelrechnung.GRUENDLICH_S + 1)
+        assertEquals(listOf(alt), lieferungen.last().trainingsEntfernt)
+    }
+
+    @Test
+    fun allesSendetTrainingsNeuUndEntferntDochNoch() = mitAkte { akte ->
+        val beginn = jetzt - 86_400L
+        val a = lauf(akte, beginn, 30)
+        val b = lauf(akte, beginn - 7200, 30)
+        sende()
+        akte.loesche(b)
+        sende(alles = true)
+        assertEquals(listOf(a), lieferungen.last().trainings.map { it.kennung })
+        assertEquals(listOf(b), lieferungen.last().trainingsEntfernt)
+    }
 
     @Test
     fun ohneEinrichtungGehtNichtsHinaus() {

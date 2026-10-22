@@ -65,6 +65,9 @@ internal object Spiegel {
     private const val G_TRAININGS = "gesendet_trainings"
     private const val G_MINUTEN = "gesendet_minuten_bis"
 
+    /** Wann zuletzt ein gruendlicher Lauf ([Spiegelrechnung.GRUENDLICH_S]) quittiert wurde, in Sekunden. */
+    private const val G_GRUENDLICH = "gruendlich"
+
     /** Wann zuletzt neue Daten von der Uhr kamen (stosseAn), in Millisekunden wie "versuch". */
     private const val G_ANGESTOSSEN = "angestossen"
 
@@ -169,7 +172,7 @@ internal object Spiegel {
     }
 
     private fun vergissGesendet(e: android.content.SharedPreferences.Editor) {
-        e.remove(G_TAGE).remove(G_NAECHTE).remove(G_TRAININGS).remove(G_MINUTEN)
+        e.remove(G_TAGE).remove(G_NAECHTE).remove(G_TRAININGS).remove(G_MINUTEN).remove(G_GRUENDLICH)
     }
 
     /**
@@ -225,21 +228,31 @@ internal object Spiegel {
 
     private val MIT_NETZ = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
 
-    /** [alles]: vergisst vorher, was schon gesendet ist - fuer einen Server, der seine Daten verlor. */
+    /**
+     * [alles]: vergisst vorher, was schon gesendet ist - fuer einen Server, der seine Daten verlor.
+     * [gruendlich]: vergleicht alles wie der Lauf einmal am Tag ([Spiegelrechnung.GRUENDLICH_S]) -
+     * fuer den Knopf, der zeigen soll, was der Server noch nicht hat.
+     */
     suspend fun sende(
         context: Context,
         api: HealthDataApi,
         libPebble: LibPebble,
         alles: Boolean = false,
         post: Spiegelpost = Spiegelpost.standard,
+        gruendlich: Boolean = false,
         uhr: () -> Long = { Instant.now().epochSecond },
     ): Ausgang = einzeln.withLock {
         withContext(Dispatchers.IO) {
             val ziel = ziel(context) ?: return@withContext Ausgang.Aus
-            if (alles) prefs(context).edit().also(::vergissGesendet).apply()
+            if (alles) {
+                // Gesendete Trainings bleiben verzeichnet, nur ohne Abdruck: sie gehen alle neu, und eines,
+                // das es inzwischen nicht mehr gibt, kann der Server trotzdem entfernen.
+                val trainings = karte(context, G_TRAININGS).mapValues { (_, t) -> Spiegelrechnung.GesendetesTraining.aus(t).copy(abdruck = "-").toString() }
+                prefs(context).edit().also(::vergissGesendet).putString(G_TRAININGS, json(trainings)).apply()
+            }
             prefs(context).edit().putLong("versuch", System.currentTimeMillis()).apply()
             val aus = try {
-                sendeAn(context, api, libPebble, ziel, post, uhr())
+                sendeAn(context, api, libPebble, ziel, post, uhr(), gruendlich)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -252,8 +265,12 @@ internal object Spiegel {
         }
     }
 
-    private suspend fun sendeAn(context: Context, api: HealthDataApi, libPebble: LibPebble, ziel: Ziel, post: Spiegelpost, jetzt: Long): Ausgang {
+    private suspend fun sendeAn(
+        context: Context, api: HealthDataApi, libPebble: LibPebble, ziel: Ziel, post: Spiegelpost, jetzt: Long, vonHand: Boolean,
+    ): Ausgang {
         val p = prefs(context)
+        // Nach "alles" und einem neuen Server fehlt G_GRUENDLICH: dann ist der Lauf ebenfalls gruendlich.
+        val gruendlich = vonHand || jetzt - p.getLong(G_GRUENDLICH, 0) >= Spiegelrechnung.GRUENDLICH_S
         val zone = ZoneId.systemDefault().id
         val fassung = versuche("Spiegel", "Fassung lesen") { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.orEmpty()
 
@@ -266,7 +283,8 @@ internal object Spiegel {
         val naechte = if (an(context, Art.NAECHTE)) neueNaechte(api, alteNaechte, jetzt) else emptyList()
 
         val alteTrainings = karte(context, G_TRAININGS)
-        val trainings = if (an(context, Art.TRAININGS)) neueTrainings(context, alteTrainings) else null
+        val trainingsTage = if (gruendlich) Fenster.SPORT_TAGE else Spiegelrechnung.TRAININGS_KURZ_TAGE
+        val trainings = if (an(context, Art.TRAININGS)) trainings(context, alteTrainings, jetzt, trainingsTage) else null
 
         val ziele = Gesundheitsziele.ziele(context)
         val stand = Stand(
@@ -279,7 +297,8 @@ internal object Spiegel {
             ziel,
             Lieferung(
                 gesendet = jetzt, zone = zone, app = fassung, tage = tage, naechte = naechte,
-                trainings = trainings?.map { it.training }.orEmpty(), stand = stand,
+                trainings = trainings?.neu?.map { it.training }.orEmpty(), stand = stand,
+                trainingsEntfernt = trainings?.entfernt.orEmpty(),
             ),
         )
         if (antwort !is Spiegelpost.Antwort.Angenommen) return fehler(context, antwort)
@@ -292,9 +311,12 @@ internal object Spiegel {
             // Was aus dem Fenster der Akte faellt, kommt nicht wieder; der Rest bleibt, auch was ein
             // Lauf im Hintergrund nicht sah (fremde Trainings ohne Leserecht).
             val grenze = jetzt - (Fenster.SPORT_TAGE + 1) * 86_400L
-            val bleiben = alteTrainings.filterValues { (it.substringAfter('@').toLongOrNull() ?: 0L) >= grenze }
-            e.putString(G_TRAININGS, json(bleiben + trainings.associate { it.training.kennung to "${it.abdruck}@${it.training.beginn}" }))
+            val bleiben = alteTrainings.filter { (kennung, text) ->
+                kennung !in trainings.entfernt && Spiegelrechnung.GesendetesTraining.aus(text).beginn >= grenze
+            }
+            e.putString(G_TRAININGS, json(bleiben + trainings.neu.associate { it.training.kennung to it.gesendet.toString() }))
         }
+        if (gruendlich) e.putLong(G_GRUENDLICH, jetzt)
         if (!merkeGesendet(context, ziel, e)) return Ausgang.Aus
 
         if (!an(context, Art.MINUTEN)) return Ausgang.Fertig(antwort.quittung)
@@ -311,24 +333,36 @@ internal object Spiegel {
             .filter { gesendet[it.beginn.toString()] != Spiegelrechnung.abdruck(it) }
     }
 
-    private class NeuesTraining(val training: Training, val abdruck: String)
+    private class NeuesTraining(val training: Training, val gesendet: Spiegelrechnung.GesendetesTraining)
+
+    /** Was ein Lauf an Trainings schickt: die neuen oder geaenderten und die Kennungen der verschwundenen. */
+    private class Trainingslauf(val neu: List<NeuesTraining>, val entfernt: List<String>)
 
     /**
-     * Die neuen oder geaenderten Trainings; null, wenn die Akte nicht liest. Den Puls liest es nur
-     * fuer diese - fuer jedes Training des Vierteljahres waeren es bei jedem Lauf Dutzende Abfragen.
+     * Die Trainings der letzten [tage] Tage, die neu sind oder sich geaendert haben, und die gesendeten,
+     * die es dort nicht mehr gibt ([Spiegelrechnung.entfernteTrainings]); null, wenn die Akte nicht
+     * liest. DER PULS GEHOERT ZUM ABDRUCK: traegt Kieselsport eine Kurve nach, die beim ersten Senden
+     * fehlte, oder las die Akte sie da nicht, geht das Training noch einmal.
      */
-    private suspend fun neueTrainings(context: Context, gesendet: Map<String, String>): List<NeuesTraining>? =
-        TrainingsDaten.fuerSpiegel(context)?.mapNotNull { t ->
-            val ohnePuls = Training(
+    private suspend fun trainings(context: Context, gesendet: Map<String, String>, jetzt: Long, tage: Long): Trainingslauf? {
+        val gelesen = TrainingsDaten.fuerSpiegel(context, tage) ?: return null
+        val neu = gelesen.trainings.mapNotNull { t ->
+            // Liest die Akte den Puls nicht, wartet das Training auf den naechsten Lauf.
+            val (mittel, max) = TrainingsDaten.pulsKennzahlen(context, t.sitzung) ?: return@mapNotNull null
+            val training = Training(
                 kennung = t.id, sport = context.getString(t.sport.nameId),
                 beginn = t.sitzung.startTime.epochSecond, ende = t.sitzung.endTime.epochSecond,
-                aktivSekunden = t.sekunden, meter = t.meter, eigen = t.eigen,
+                aktivSekunden = t.sekunden, meter = t.meter, pulsMittel = mittel, pulsMax = max, eigen = t.eigen,
             )
-            val abdruck = Spiegelrechnung.abdruck(ohnePuls.toString())
-            if (gesendet[t.id]?.substringBefore('@') == abdruck) return@mapNotNull null
-            val puls = TrainingsDaten.pulsKennzahlen(context, t.sitzung)
-            NeuesTraining(ohnePuls.copy(pulsMittel = puls?.first, pulsMax = puls?.second), abdruck)
+            val g = Spiegelrechnung.GesendetesTraining(
+                Spiegelrechnung.abdruck(training.toString()), training.beginn, t.sitzung.metadata.dataOrigin.packageName == context.packageName,
+            )
+            if (gesendet[t.id]?.let { Spiegelrechnung.GesendetesTraining.aus(it).abdruck } == g.abdruck) null else NeuesTraining(training, g)
         }
+        // Ein Tag Abstand zum Rand des Fensters: dort haengt es an der Lesart der Akte, ob ein Training noch dazugehoert.
+        val entfernt = Spiegelrechnung.entfernteTrainings(gesendet, gelesen.trainings.mapTo(HashSet()) { it.id }, jetzt - (tage - 1) * 86_400L, gelesen.alleHerkuenfte)
+        return Trainingslauf(neu, entfernt)
+    }
 
     /**
      * Die Minuten seit dem letzten Senden, ein Tag je Lieferung. Der Stand rueckt nach jeder

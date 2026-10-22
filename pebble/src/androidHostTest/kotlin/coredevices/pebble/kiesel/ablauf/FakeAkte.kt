@@ -52,6 +52,13 @@ internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient 
     @Volatile
     var nurEigeneLesbar = false
 
+    /**
+     * Wie eine Akte, die im Hintergrund ohne das Recht dazu still filtert: eine Abfrage aller
+     * Herkuenfte gibt nur die eigenen Eintraege heraus, ohne Ausnahme.
+     */
+    @Volatile
+    var nurEigeneStill = false
+
     /** Die Satzarten, deren Lesen die Akte abweist - wie ohne das Leserecht dafuer. */
     @Volatile
     var nichtLesbar: Set<KClass<out Record>> = emptySet()
@@ -170,8 +177,9 @@ internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient 
     @Suppress("UNCHECKED_CAST")
     override suspend fun <T : Record> readRecords(request: ReadRecordsRequest<T>): ReadRecordsResponse<T> {
         lesungen += request
-        val quellen = request.dataOriginFilter.map { it.packageName }.toSet()
-        if (nurEigeneLesbar && quellen != setOf(eigenesPaket)) throw SecurityException("Im Hintergrund nur eigene Eintraege")
+        val gefragt = request.dataOriginFilter.map { it.packageName }.toSet()
+        val quellen = if (nurEigeneStill && gefragt.isEmpty()) setOf(eigenesPaket) else gefragt
+        if (nurEigeneLesbar && gefragt != setOf(eigenesPaket)) throw SecurityException("Im Hintergrund nur eigene Eintraege")
         if (request.recordType in nichtLesbar) throw SecurityException("Kein Leserecht fuer ${request.recordType.simpleName}")
         val passend = synchronized(this) {
             eintraege.filter { e ->

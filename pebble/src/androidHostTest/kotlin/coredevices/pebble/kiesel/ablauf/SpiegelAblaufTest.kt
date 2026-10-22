@@ -2,6 +2,7 @@ package coredevices.pebble.kiesel.ablauf
 
 import CoreAppVersion
 import android.content.Context
+import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.metadata.Device
@@ -101,7 +102,8 @@ class SpiegelAblaufTest {
         }
     }
 
-    private fun sende(alles: Boolean = false, uhr: Long = jetzt) = runBlocking { Spiegel.sende(context, api, FakeLibPebble(), CoreAppVersion("0.56.0"), alles, post) { uhr } }
+    private fun sende(alles: Boolean = false, uhr: Long = jetzt, vonHand: Boolean = false) =
+        runBlocking { Spiegel.sende(context, api, FakeLibPebble(), CoreAppVersion("0.56.0"), alles, post, gruendlich = vonHand) { uhr } }
 
     private fun minute(t: Long) = HealthDataEntity(
         timestamp = t, steps = 10, orientation = 55, intensity = 800, lightIntensity = 0,
@@ -193,15 +195,33 @@ class SpiegelAblaufTest {
         akte.loesche(fremd)
         sende()
         assertEquals(listOf(eigenes), lieferungen.last().trainingsEntfernt)
+        // Ebenso, wenn die Akte still filtert statt abzuweisen: ohne das Recht, im Hintergrund zu
+        // lesen, gilt kein fremdes als weg.
         akte.nurEigeneLesbar = false
+        akte.nurEigeneStill = true
         sende()
+        assertEquals(emptyList(), lieferungen.last().trainingsEntfernt)
+        // Von Hand, mit offener App, liest der Lauf alles.
+        akte.nurEigeneStill = false
+        sende(vonHand = true)
         assertEquals(listOf(fremd), lieferungen.last().trainingsEntfernt)
         sende()
         assertEquals(emptyList(), lieferungen.last().trainingsEntfernt)
     }
 
     @Test
+    fun mitDemRechtImHintergrundZaehlenAuchFremde() = mitAkte { akte ->
+        akte.erteilt = setOf(HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
+        val fremd = lauf(akte, jetzt - 86_400L, 40, "com.example.laufapp")
+        sende()
+        akte.loesche(fremd)
+        sende()
+        assertEquals(listOf(fremd), lieferungen.last().trainingsEntfernt)
+    }
+
+    @Test
     fun einDoppelErsetztDasGesendeteTraining() = mitAkte { akte ->
+        akte.erteilt = setOf(HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
         val beginn = jetzt - 86_400L
         val samsung = lauf(akte, beginn, 30, "com.sec.android.app.shealth")
         sende()

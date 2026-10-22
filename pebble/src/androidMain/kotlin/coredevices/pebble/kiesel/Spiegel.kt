@@ -292,7 +292,7 @@ internal object Spiegel {
 
         val alteTrainings = karte(context, G_TRAININGS)
         val trainingsTage = if (gruendlich) Fenster.SPORT_TAGE else Spiegelrechnung.TRAININGS_KURZ_TAGE
-        val trainings = if (an(context, Art.TRAININGS)) trainings(context, alteTrainings, jetzt, trainingsTage) else null
+        val trainings = if (an(context, Art.TRAININGS)) trainings(context, alteTrainings, jetzt, trainingsTage, vonHand) else null
 
         val ziele = Gesundheitsziele.ziele(context)
         val stand = Stand(
@@ -353,8 +353,8 @@ internal object Spiegel {
      * liest. DER PULS GEHOERT ZUM ABDRUCK: traegt Kieselsport eine Kurve nach, die beim ersten Senden
      * fehlte, oder las die Akte sie da nicht, geht das Training noch einmal.
      */
-    private suspend fun trainings(context: Context, gesendet: Map<String, String>, jetzt: Long, tage: Long): Trainingslauf? {
-        val gelesen = TrainingsDaten.fuerSpiegel(context, tage) ?: return null
+    private suspend fun trainings(context: Context, gesendet: Map<String, String>, jetzt: Long, tage: Long, vonHand: Boolean): Trainingslauf? {
+        val gelesen = TrainingsDaten.fuerSpiegel(context, tage, vonHand) ?: return null
         val neu = gelesen.trainings.mapNotNull { t ->
             // Liest die Akte den Puls nicht (Recht verweigert, Rate-Limit): ein neues Training geht ohne ihn
             // und kommt mit ihm wieder, sobald er lesbar ist. Ein schon gesendetes wartet - sonst loeschte

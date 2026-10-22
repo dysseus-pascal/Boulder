@@ -3,6 +3,7 @@ package coredevices.pebble.kiesel
 import android.content.Context
 import co.touchlab.kermit.Logger
 import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseRoute
@@ -521,7 +522,10 @@ internal object TrainingsDaten {
         eintrag(context, s, distanzen(klient, context, von, jetzt), laengen).also { laengen.sichere() }
     }
 
-    /** Boulder: was [fuerSpiegel] fand. [alleHerkuenfte]: auch fremde Trainings waren lesbar, nicht nur Boulders eigene. */
+    /**
+     * Boulder: was [fuerSpiegel] fand. [alleHerkuenfte]: sicher auch fremde Trainings, nicht nur
+     * Boulders eigene - erst dann zeigt ein fehlendes fremdes, dass es weg ist.
+     */
     class SpiegelTrainings(val trainings: List<TrainingEintrag>, val alleHerkuenfte: Boolean)
 
     /**
@@ -529,19 +533,29 @@ internal object TrainingsDaten {
      * vermessen wie in der Liste - neueste zuerst wie dort, so loest [gewaehlt] einen Gleichstand
      * gleich langer Doppel ebenso auf. IM HINTERGRUND ohne Sonderrecht nur die eigenen
      * ([Herkunft.ALLE_SONST_EIGENE]). Null, wenn die Akte nicht liest - das ist kein leeres Fenster.
+     * [vonHand]: gelesen, waehrend die App offen ist.
      */
-    suspend fun fuerSpiegel(context: Context, tage: Long): SpiegelTrainings? = withContext(Dispatchers.IO) {
+    suspend fun fuerSpiegel(context: Context, tage: Long, vonHand: Boolean): SpiegelTrainings? = withContext(Dispatchers.IO) {
         val klient = Akte(context).bereit() ?: return@withContext null
         val jetzt = Instant.now()
         val von = jetzt.minus(Duration.ofDays(tage))
-        var alle = true
+        var nurEigene = false
         val sitzungen = versuche(TAG, "Trainings fuer den Spiegel") {
-            klient.lies(context, ExerciseSessionRecord::class, TimeRangeFilter.between(von, jetzt), Herkunft.ALLE_SONST_EIGENE) { alle = false }
+            klient.lies(context, ExerciseSessionRecord::class, TimeRangeFilter.between(von, jetzt), Herkunft.ALLE_SONST_EIGENE) { nurEigene = true }
                 .filterNot { erkannt(context, it) }.sortedByDescending { it.startTime }
         } ?: return@withContext null
+        // Im Hintergrund ohne das Recht dazu gibt die Akte nur Boulders eigene heraus - je nach Fassung
+        // mit einer Ausnahme (dann nurEigene) oder still gefiltert. Sicher alle sind es darum nur von
+        // Hand oder mit dem Recht, im Hintergrund zu lesen.
+        val hintergrund = versuche(TAG, "Rechte fuer den Spiegel") {
+            HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND in klient.permissionController.getGrantedPermissions()
+        } == true
         val distanzen = distanzen(klient, context, von, jetzt)
         val laengen = Laengen(context)
-        SpiegelTrainings(gewaehlt(context, sitzungen).map { eintrag(context, it, distanzen, laengen) }.also { laengen.sichere() }, alle)
+        SpiegelTrainings(
+            gewaehlt(context, sitzungen).map { eintrag(context, it, distanzen, laengen) }.also { laengen.sichere() },
+            alleHerkuenfte = !nurEigene && (vonHand || hintergrund),
+        )
     }
 
     /**

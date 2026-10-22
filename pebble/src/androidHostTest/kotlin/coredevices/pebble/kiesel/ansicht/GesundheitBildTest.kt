@@ -17,6 +17,9 @@ import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ViewRootForTest
@@ -31,6 +34,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.android.controller.ActivityController
 import org.robolectric.annotation.GraphicsMode
 import org.robolectric.shadows.ShadowDialog
 import theme.greyScheme
@@ -60,7 +64,10 @@ import kotlin.test.assertTrue
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class GesundheitBildTest {
 
-    private class Gezeichnet(val bild: Bitmap, val wurzel: SemanticsNode, val primaer: Int, val dichte: Float, val ansicht: View) {
+    private class Gezeichnet(
+        val bild: Bitmap, val wurzel: SemanticsNode, val primaer: Int, val dichte: Float, val ansicht: View,
+        val steuerung: ActivityController<ComponentActivity>,
+    ) {
         val breite = bild.width
         val pixel = IntArray(bild.width * bild.height).also { bild.getPixels(it, 0, bild.width, 0, 0, bild.width, bild.height) }
         fun bei(x: Int, y: Int) = pixel[y * breite + x]
@@ -71,7 +78,8 @@ class GesundheitBildTest {
     }
 
     private fun zeichne(name: String, inhalt: @Composable () -> Unit): Gezeichnet {
-        val aktivitaet = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+        val steuerung = Robolectric.buildActivity(ComponentActivity::class.java).setup()
+        val aktivitaet = steuerung.get()
         var primaer = 0
         aktivitaet.setContent {
             MaterialTheme(colorScheme = greyScheme) {
@@ -89,7 +97,7 @@ class GesundheitBildTest {
         ansicht.draw(Canvas(bild))
         File("build/$name.png").outputStream().use { bild.compress(Bitmap.CompressFormat.PNG, 100, it) }
         val wurzel = (ansicht as ViewGroup).getChildAt(0) as ViewRootForTest
-        return Gezeichnet(bild, wurzel.semanticsOwner.unmergedRootSemanticsNode, primaer, aktivitaet.resources.displayMetrics.density, ansicht)
+        return Gezeichnet(bild, wurzel.semanticsOwner.unmergedRootSemanticsNode, primaer, aktivitaet.resources.displayMetrics.density, ansicht, steuerung)
     }
 
     /** Der Knoten des Bands: der mit der Beschreibung, die mit "TODAY SO FAR" beginnt. */
@@ -255,13 +263,52 @@ class GesundheitBildTest {
         assertEquals(r.left + (12 + stunden * 40) * g.dichte, x, 2.0 * g.dichte)
     }
 
+    /** Wo die gruene Jetzt-Linie im Band steht, als Anteil seiner sichtbaren Breite. */
+    private fun jetztAnteil(g: Gezeichnet): Double {
+        val r = band(g).boundsInRoot
+        return (jetztLinie(g, r.left.toInt(), r.right.toInt(), r.top.toInt(), r.bottom.toInt()) - r.left) / r.width
+    }
+
+    /**
+     * JEDES OEFFNEN DER APP stellt das Jetzt wieder auf drei Viertel, auch nach Stunden im
+     * Hintergrund. Dazwischen bleibt das Band stehen, auch wenn die Zeit weiterlaeuft, und der
+     * Aufbau der Seite zaehlt nicht als Oeffnen.
+     */
+    @Test
+    @Config(sdk = [35], qualifiers = "w412dp-h1500dp-xxhdpi")
+    fun jedes_oeffnen_der_app_stellt_das_jetzt_auf_drei_viertel() {
+        val b = Healthbeispiel
+        var jetzt by mutableStateOf(b.jetzt)
+        var oeffnung = -1
+        val g = zeichne("health-oeffnen") {
+            val o = rememberOeffnung()
+            oeffnung = o
+            GesundheitInhalt(b.stand, b.sport, 78, jetzt, imperial = false, b.wege, o) {}
+        }
+        assertEquals(0, oeffnung, "das ON_START beim Aufbau zaehlte als Oeffnen")
+        assertEquals(0.75, jetztAnteil(g), 0.01)
+
+        // Eine Stunde spaeter, die App blieb offen: das Band steht, das Jetzt rueckt 40 dp nach rechts.
+        jetzt = b.jetzt.plusSeconds(3600)
+        shadowOf(Looper.getMainLooper()).idle()
+        val spaeter = nochmal(g, "health-oeffnen-spaeter")
+        assertEquals(0.75 + 40 * g.dichte / band(spaeter).boundsInRoot.width, jetztAnteil(spaeter), 0.01)
+
+        // In den Hintergrund und wieder geoeffnet: das Jetzt steht wieder bei drei Vierteln.
+        g.steuerung.pause().stop()
+        g.steuerung.start().resume()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals(1, oeffnung)
+        assertEquals(0.75, jetztAnteil(nochmal(g, "health-oeffnen-wieder")), 0.01)
+    }
+
     /** Dasselbe noch einmal gezeichnet, nach einer Geste: neues Bild, neue Semantik. */
     private fun nochmal(g: Gezeichnet, name: String): Gezeichnet {
         val bild = Bitmap.createBitmap(g.ansicht.width, g.ansicht.height, Bitmap.Config.ARGB_8888)
         g.ansicht.draw(Canvas(bild))
         File("build/$name.png").outputStream().use { bild.compress(Bitmap.CompressFormat.PNG, 100, it) }
         val wurzel = (g.ansicht as ViewGroup).getChildAt(0) as ViewRootForTest
-        return Gezeichnet(bild, wurzel.semanticsOwner.unmergedRootSemanticsNode, g.primaer, g.dichte, g.ansicht)
+        return Gezeichnet(bild, wurzel.semanticsOwner.unmergedRootSemanticsNode, g.primaer, g.dichte, g.ansicht, g.steuerung)
     }
 
     /** Ein Finger wischt waagrecht von [vonX] nach [nachX] auf Hoehe [y] (Pixel im Bild). */

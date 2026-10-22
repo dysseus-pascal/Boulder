@@ -28,6 +28,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -170,6 +171,7 @@ internal fun Tagesband(
     jetzt: Instant,
     imperial: Boolean,
     wege: Gesundheitswege,
+    oeffnung: Int = 0,
     geaendert: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -263,7 +265,9 @@ internal fun Tagesband(
             val sichtbar = maxWidth - spalte
             // Das Jetzt bei drei Vierteln der sichtbaren Breite, der Rest davor; am Anfang nie davor.
             val start = with(dichte) { (x(jetzt).dp - sichtbar * JETZT_ANTEIL).coerceAtLeast(0.dp).roundToPx() }
-            val scroll = rememberScrollState(start)
+            // JEDES OEFFNEN DER APP stellt das Band neu: sonst stuende es nach Stunden im Hintergrund,
+            // wo es zuletzt war, und das Jetzt laege rechts draussen. Dazwischen bleibt es, wo man es hinwischt.
+            val scroll = key(oeffnung) { rememberScrollState(start) }
             if (spalte > 0.dp) Canvas(Modifier.align(Alignment.TopEnd).size(spalte, bandHoehe)) {
                 skala.linien.forEach { l ->
                     val m = messer.measure(Formate.zahl(l.bpm.toLong()), achse)

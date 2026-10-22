@@ -116,12 +116,14 @@ internal fun GesundheitAnsicht(wege: Gesundheitswege) {
     // Akte, nicht aus den Minutendaten; neu beim Aufbau und bei der Rueckkehr in die App.
     val sport = rememberStand(TrainingsDaten.zuletzt) { TrainingsDaten.uebersicht(context) }
     val imperial = einheitenImperial()
+    // Hier gelesen, nicht erst im Band: so zeichnet die Seite beim Oeffnen neu, mit der Uhrzeit von jetzt.
+    val oeffnung = rememberOeffnung()
 
     if (seite == null) {
         Ladekreis()
         return
     }
-    GesundheitInhalt(seite.stand, sport, akkuJetzt, Instant.now(), imperial, wege) { neu++ }
+    GesundheitInhalt(seite.stand, sport, akkuJetzt, Instant.now(), imperial, wege, oeffnung) { neu++ }
 }
 
 /**
@@ -137,6 +139,7 @@ internal fun GesundheitInhalt(
     jetzt: Instant,
     imperial: Boolean,
     wege: Gesundheitswege,
+    oeffnung: Int = 0,
     geaendert: () -> Unit,
 ) {
     val zone = ZoneId.systemDefault()
@@ -150,7 +153,7 @@ internal fun GesundheitInhalt(
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = SEITENRAND), verticalArrangement = Arrangement.spacedBy(KARTENABSTAND)) {
         item { Spacer(Modifier.height(2.dp)) }
         item { Tagessatz(satz, akkuJetzt, Akkurechnung.restzeit(akku.tageUebrig), wege.akku) }
-        item { Tagesband(s, trainings, jetzt, imperial, wege, geaendert) }
+        item { Tagesband(s, trainings, jetzt, imperial, wege, oeffnung, geaendert) }
         item { Sportfeld(sport, heute, imperial, wege.sport) }
         item { Koerperliste(s, jetzt, wege) }
         if (!satz.ohneDaten) item { Schrittwoche(s) { wege.trend("bewegung") } }

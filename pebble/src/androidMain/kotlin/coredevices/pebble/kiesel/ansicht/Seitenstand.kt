@@ -1,13 +1,18 @@
 package coredevices.pebble.kiesel.ansicht
 
+import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LifecycleEventEffect
 import io.rebble.libpebblecommon.connection.LibPebble
 import org.koin.compose.koinInject
@@ -41,6 +46,34 @@ internal fun <T> rememberStand(
     // Erst ab dem zweiten ON_RESUME ein neuer Schluessel, siehe oben.
     LaunchedEffect(*anlass, maxOf(rueckkehren, 1)) { stand = lade { stand = it } }
     return stand
+}
+
+/**
+ * Ein Zaehler, der steigt, wenn die App wieder in den Vordergrund kommt,
+ * waehrend die Seite steht: das ON_START der Activity nach ihrem ON_STOP,
+ * nicht das der Seite - der Wechsel zwischen Seiten der App zaehlt nicht.
+ * Gespeichert, damit Drehen des Telefons nicht als Oeffnen gilt.
+ */
+@Composable
+internal fun rememberOeffnung(): Int {
+    val aktivitaet = LocalActivity.current as? LifecycleOwner
+    var oeffnungen by rememberSaveable { mutableIntStateOf(0) }
+    DisposableEffect(aktivitaet) {
+        val lebenszyklus = aktivitaet?.lifecycle
+        // NUR NACH EINEM ON_STOP: einem neuen Beobachter reicht der Lebenszyklus ON_START nach,
+        // und das nicht immer gleich in addObserver - ein Merker darum herum griffe nicht.
+        var gestoppt = false
+        val beobachter = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_STOP) gestoppt = true
+            if (e == Lifecycle.Event.ON_START && gestoppt) {
+                gestoppt = false
+                oeffnungen++
+            }
+        }
+        lebenszyklus?.addObserver(beobachter)
+        onDispose { lebenszyklus?.removeObserver(beobachter) }
+    }
+    return oeffnungen
 }
 
 /**

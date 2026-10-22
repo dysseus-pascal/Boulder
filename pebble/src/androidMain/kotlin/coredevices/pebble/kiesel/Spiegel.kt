@@ -466,6 +466,8 @@ internal object Spiegel {
             val nochmal = aus is Ausgang.Fehler && aus.voruebergehend && runAttemptCount < VERSUCHE
             // Ein Schub, waehrend dieser Anstoss lief: KEEP liess ihn liegen, weil dieser noch lief.
             // APPEND reiht einen weiteren dahinter. Eine Wiederholung liest ohnehin neu.
+            // Offen bleiben Millisekunden: ein Schub nach dieser Pruefung, bevor doWork endet, trifft
+            // noch auf diesen Anstoss und wartet auf den Takt - spaeter gesendet, nicht verloren.
             if (!nochmal && aus != Ausgang.Aus && ANSTOSS in tags && nachgestossen(applicationContext)) {
                 arbeit(applicationContext)?.enqueueUniqueWork(ANSTOSS, ExistingWorkPolicy.APPEND_OR_REPLACE, anstoss(Duration.ofMinutes(1)))
             }

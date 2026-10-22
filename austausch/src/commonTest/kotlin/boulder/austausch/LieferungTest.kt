@@ -16,6 +16,20 @@ class LieferungTest {
         minuten = listOf(Minute(1_792_152_000L, 3, 812, 104, 55)),
         stand = Stand("v4.41.1-b31", mapOf("schritte" to 10_000), 190),
         trainingsEntfernt = listOf("s:0"),
+        akte = listOf(
+            Akteneintrag(
+                "hc-1", "HeartRate", 1_792_152_000L, 1_792_152_120L, 7200, "com.fitbit.FitbitMobile",
+                proben = listOf(Probe(1_792_152_000L, 61.0), Probe(1_792_152_060L, 63.0)),
+            ),
+            Akteneintrag(
+                "hc-2", "SleepSession", 1_792_100_000L, 1_792_125_000L, 7200, "com.fitbit.FitbitMobile",
+                texte = mapOf("title" to "Nacht"), abschnitte = listOf(Spanne(1_792_100_000L, 1_792_101_000L, "deep")),
+            ),
+            Akteneintrag("hc-3", "Weight", 1_792_150_000L, werte = mapOf("kg" to 72.4)),
+        ),
+        akteEntfernt = listOf("hc-0"),
+        vorgeschichte = listOf(Tag("2025-03-01", mapOf("schritte" to 9001.0, "rem" to 88.0))),
+        sauerstoff = listOf(Sauerstoff(1_792_152_000L, 96, 5)),
     )
 
     @Test
@@ -40,6 +54,10 @@ class LieferungTest {
         assertEquals(emptyList(), l.minuten)
         assertEquals(null, l.stand)
         assertEquals(emptyList(), l.trainingsEntfernt)
+        assertEquals(emptyList(), l.akte)
+        assertEquals(emptyList(), l.akteEntfernt)
+        assertEquals(emptyList(), l.vorgeschichte)
+        assertEquals(emptyList(), l.sauerstoff)
     }
 
     @Test
@@ -47,6 +65,24 @@ class LieferungTest {
         val q = austauschJson.decodeFromString(Quittung.serializer(), """{"tage":1,"naechte":2,"trainings":3,"minuten":4}""")
         assertEquals(Quittung(1, 2, 3, 4), q)
         assertEquals(null, q.trainingsEntfernt)
+    }
+
+    @Test
+    fun quittungEinesServers056() {
+        // 0.56.0 kennt trainingsEntfernt, aber keine Akte: die Zahlen dafuer fehlen, Boulder haelt die Saetze zurueck.
+        val q = austauschJson.decodeFromString(Quittung.serializer(), """{"tage":1,"naechte":0,"trainings":0,"minuten":0,"trainingsEntfernt":0}""")
+        assertEquals(0, q.trainingsEntfernt)
+        assertEquals(null, q.akte)
+        assertEquals(null, q.akteEntfernt)
+        assertEquals(null, q.vorgeschichte)
+        assertEquals(null, q.sauerstoff)
+    }
+
+    @Test
+    fun akteneintragMitNurDemNoetigsten() {
+        // Ein Satz ohne Ende, Versatz, Quelle und Listen: so schmal darf ihn eine spaetere App schicken.
+        val e = austauschJson.decodeFromString(Akteneintrag.serializer(), """{"id":"x","art":"Height","beginn":5}""")
+        assertEquals(Akteneintrag("x", "Height", 5L), e)
     }
 
     @Test

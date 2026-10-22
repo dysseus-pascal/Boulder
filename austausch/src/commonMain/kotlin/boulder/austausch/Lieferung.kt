@@ -28,6 +28,16 @@ data class Lieferung(
      * oder einem Doppel aus einer anderen App gewichen. Der Server loescht sie.
      */
     val trainingsEntfernt: List<String> = emptyList(),
+    /** Saetze aus Health Connect, neu oder geaendert, aus jeder App ([Akteneintrag]). */
+    val akte: List<Akteneintrag> = emptyList(),
+    /** Die Kennungen von Saetzen, die in Health Connect geloescht wurden. Der Server loescht sie. */
+    val akteEntfernt: List<String> = emptyList(),
+    /**
+     * Tage der Vorgeschichte: aus Sicherungen zurueckgeholt, vor allem aus Kiesel-Helper, und anders
+     * gemessen als Boulder. Der Server ersetzt einen solchen Tag ganz.
+     */
+    val vorgeschichte: List<Tag> = emptyList(),
+    val sauerstoff: List<Sauerstoff> = emptyList(),
 ) {
     companion object {
         const val FASSUNG = 1
@@ -93,6 +103,44 @@ data class Training(
 @Serializable
 data class Minute(val zeit: Long, val schritte: Int, val vmc: Int, val puls: Int, val lage: Int)
 
+/** Eine SpO2-Messung der Uhr; [qualitaet] 0-7, wie die Firmware sie meldet. */
+@Serializable
+data class Sauerstoff(val zeit: Long, val prozent: Int, val qualitaet: Int)
+
+/**
+ * Ein Satz aus Health Connect, gleich welcher Art und aus welcher App. Allgemein gehalten, damit
+ * Format und Server nicht je Satzart wachsen. Die Namen in [werte], [texte] und [abschnitte] sind
+ * englisch: der Server zeigt sie Claude so.
+ */
+@Serializable
+data class Akteneintrag(
+    /** Die Kennung in Health Connect (metadata.id); ein geaenderter Satz behaelt sie. */
+    val id: String,
+    /** Die Satzart ohne "Record", etwa "Weight", "HeartRate", "SleepSession". */
+    val art: String,
+    /** UTC-Sekunden; bei einer Messung zu einem Zeitpunkt dieser. */
+    val beginn: Long,
+    val ende: Long? = null,
+    /** Ortszeit minus UTC beim Beginn in Sekunden, wenn die schreibende App sie angab. */
+    val versatz: Int? = null,
+    /** Paketname der schreibenden App. */
+    val quelle: String = "",
+    val werte: Map<String, Double> = emptyMap(),
+    val texte: Map<String, String> = emptyMap(),
+    /** Messreihen in einem Satz: Puls, Geschwindigkeit, Leistung, Kadenz ... */
+    val proben: List<Probe> = emptyList(),
+    /** Schlafphasen, Abschnitte und Runden eines Trainings. */
+    val abschnitte: List<Spanne> = emptyList(),
+)
+
+/** Ein Wert einer Messreihe zur UTC-Sekunde [t]. */
+@Serializable
+data class Probe(val t: Long, val w: Double)
+
+/** Eine Zeitspanne in einem Satz, etwa eine Schlafphase ([art] "deep") oder eine Runde. */
+@Serializable
+data class Spanne(val von: Long, val bis: Long, val art: String, val wert: Double? = null)
+
 @Serializable
 data class Stand(
     val firmware: String? = null,
@@ -114,6 +162,14 @@ data class Quittung(
      * wieder mit, bis ein neuerer Server sie entfernt.
      */
     val trainingsEntfernt: Int? = null,
+    /**
+     * Die Zahlen zu den Listen, die erst 0.57.0 kennt. Null heisst: ein aelterer Server, der sie
+     * uebergeht; Boulder haelt sie dann zurueck und schickt sie einem neueren noch einmal.
+     */
+    val akte: Int? = null,
+    val akteEntfernt: Int? = null,
+    val vorgeschichte: Int? = null,
+    val sauerstoff: Int? = null,
 )
 
 val austauschJson = Json {

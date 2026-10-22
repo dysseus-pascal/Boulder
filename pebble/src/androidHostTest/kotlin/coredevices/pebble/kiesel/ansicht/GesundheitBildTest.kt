@@ -270,13 +270,13 @@ class GesundheitBildTest {
     }
 
     /**
-     * JEDES OEFFNEN DER APP stellt das Jetzt wieder auf drei Viertel, auch nach Stunden im
+     * JEDES OEFFNEN DER APP laesst das Band zum Jetzt bei drei Vierteln gleiten, auch nach Stunden im
      * Hintergrund. Dazwischen bleibt das Band stehen, auch wenn die Zeit weiterlaeuft, und der
      * Aufbau der Seite zaehlt nicht als Oeffnen.
      */
     @Test
     @Config(sdk = [35], qualifiers = "w412dp-h1500dp-xxhdpi")
-    fun jedes_oeffnen_der_app_stellt_das_jetzt_auf_drei_viertel() {
+    fun jedes_oeffnen_der_app_laesst_das_band_zum_jetzt_gleiten() {
         val b = Healthbeispiel
         var jetzt by mutableStateOf(b.jetzt)
         var oeffnung = -1
@@ -294,12 +294,19 @@ class GesundheitBildTest {
         val spaeter = nochmal(g, "health-oeffnen-spaeter")
         assertEquals(0.75 + 40 * g.dichte / band(spaeter).boundsInRoot.width, jetztAnteil(spaeter), 0.01)
 
-        // In den Hintergrund und wieder geoeffnet: das Jetzt steht wieder bei drei Vierteln.
+        // In den Hintergrund und wieder geoeffnet: das Band gleitet von seiner Stellung zum Jetzt.
         // restart wie Android (onRestart, dann onStart): erst das hebt den Stopp des Fensters auf.
+        val vorher = jetztAnteil(spaeter)
         g.steuerung.pause().stop()
         g.steuerung.restart().resume()
-        shadowOf(Looper.getMainLooper()).idle()
+        // Bild fuer Bild bis 250 ms: idleFor liesse eine laufende Animation in einem Zug zu Ende laufen.
+        val schatten = shadowOf(Looper.getMainLooper())
+        val bis = SystemClock.uptimeMillis() + 250
+        while (schatten.nextScheduledTaskTime.toMillis() in 1..bis) schatten.runOneTask()
         assertEquals(1, oeffnung)
+        val unterwegs = jetztAnteil(nochmal(g, "health-oeffnen-unterwegs"))
+        assertTrue(unterwegs < vorher - 0.01 && unterwegs > 0.76, "nach 250 ms bei $unterwegs, vorher $vorher")
+        schatten.idleFor(java.time.Duration.ofSeconds(2))
         assertEquals(0.75, jetztAnteil(nochmal(g, "health-oeffnen-wieder")), 0.01)
         // NICHTS LIEGEN LASSEN: Das Zeichnen legt das Band neu aus und schreibt dabei Zustand. Bliebe
         // dessen Meldung im Loop, verwuerfe Robolectric sie, und Compose zeichnete in den Tests danach

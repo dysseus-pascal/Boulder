@@ -1,5 +1,7 @@
 package coredevices.pebble.kiesel.ansicht
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -27,10 +29,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -145,6 +149,9 @@ private val AUSBLENDEN = 18.dp
 
 /** Beim Oeffnen steht das Jetzt bei drei Vierteln der sichtbaren Breite: der Morgen davor bleibt im Blick. */
 private const val JETZT_ANTEIL = 0.75f
+
+/** So lange gleitet das Band beim Oeffnen der App zum Jetzt. */
+private const val GLEITEN_MS = 700
 
 /** Was ein Symbol des Bands traegt. */
 private sealed class Bandinhalt {
@@ -265,9 +272,16 @@ internal fun Tagesband(
             val sichtbar = maxWidth - spalte
             // Das Jetzt bei drei Vierteln der sichtbaren Breite, der Rest davor; am Anfang nie davor.
             val start = with(dichte) { (x(jetzt).dp - sichtbar * JETZT_ANTEIL).coerceAtLeast(0.dp).roundToPx() }
-            // JEDES OEFFNEN DER APP stellt das Band neu: sonst stuende es nach Stunden im Hintergrund,
-            // wo es zuletzt war, und das Jetzt laege rechts draussen. Dazwischen bleibt es, wo man es hinwischt.
-            val scroll = key(oeffnung) { rememberScrollState(start) }
+            val scroll = rememberScrollState(start)
+            // JEDES OEFFNEN DER APP laesst das Band von seiner Stellung zum Jetzt gleiten: sonst stuende es
+            // nach Stunden im Hintergrund, wo es zuletzt war, und das Jetzt laege rechts draussen. Dazwischen
+            // bleibt es, wo man es hinwischt. Gemerkt, welches Oeffnen schon galt: Drehen baut neu, oeffnet aber nicht.
+            var gegolten by rememberSaveable { mutableIntStateOf(oeffnung) }
+            LaunchedEffect(oeffnung) {
+                if (oeffnung == gegolten) return@LaunchedEffect
+                gegolten = oeffnung
+                scroll.animateScrollTo(start, tween(GLEITEN_MS, easing = FastOutSlowInEasing))
+            }
             if (spalte > 0.dp) Canvas(Modifier.align(Alignment.TopEnd).size(spalte, bandHoehe)) {
                 skala.linien.forEach { l ->
                     val m = messer.measure(Formate.zahl(l.bpm.toLong()), achse)

@@ -63,7 +63,7 @@ class AppTest {
             setBody(lieferung)
         }
         assertEquals(HttpStatusCode.OK, ok.status)
-        assertEquals(Quittung(1, 0, 0, 0), austauschJson.decodeFromString(Quittung.serializer(), ok.bodyAsText()))
+        assertEquals(Quittung(1, 0, 0, 0, trainingsEntfernt = 0), austauschJson.decodeFromString(Quittung.serializer(), ok.bodyAsText()))
         assertEquals(HttpStatusCode.BadRequest, client.post("/sync") { bearerAuth(sync); setBody("kein json") }.status)
     }
 

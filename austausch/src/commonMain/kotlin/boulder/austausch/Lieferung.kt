@@ -103,7 +103,18 @@ data class Stand(
 
 /** Die Antwort auf eine Lieferung: wie viele Eintraege der Server uebernommen hat. */
 @Serializable
-data class Quittung(val tage: Int, val naechte: Int, val trainings: Int, val minuten: Int)
+data class Quittung(
+    val tage: Int,
+    val naechte: Int,
+    val trainings: Int,
+    val minuten: Int,
+    /**
+     * Wie viele Trainings der Server entfernen sollte ([Lieferung.trainingsEntfernt]); null bei einem
+     * Server vor 0.56.0, der das Feld nicht kennt. Dann bleiben sie bei Boulder vorgemerkt und gehen
+     * wieder mit, bis ein neuerer Server sie entfernt.
+     */
+    val trainingsEntfernt: Int? = null,
+)
 
 val austauschJson = Json {
     ignoreUnknownKeys = true

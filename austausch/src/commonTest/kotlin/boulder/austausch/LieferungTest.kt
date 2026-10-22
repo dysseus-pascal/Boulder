@@ -43,6 +43,13 @@ class LieferungTest {
     }
 
     @Test
+    fun quittungEinesServers055() {
+        val q = austauschJson.decodeFromString(Quittung.serializer(), """{"tage":1,"naechte":2,"trainings":3,"minuten":4}""")
+        assertEquals(Quittung(1, 2, 3, 4), q)
+        assertEquals(null, q.trainingsEntfernt)
+    }
+
+    @Test
     fun tagUndNachtVonBoulder055() {
         // So schickte 0.55.0: ohne entfernt und ohne geladen.
         val text = """{"gesendet":1,"zone":"UTC","app":"0.55.0","tage":[{"datum":"2026-10-16","werte":{"wasser":1500.0}}],""" +

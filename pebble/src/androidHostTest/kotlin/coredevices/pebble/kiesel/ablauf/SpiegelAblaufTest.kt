@@ -57,6 +57,10 @@ class SpiegelAblaufTest {
     @Volatile
     private var antwort = HttpStatusCode.OK
 
+    /** Ein Server vor 0.56.0: seine Quittung kennt trainingsEntfernt nicht. */
+    @Volatile
+    private var alterServer = false
+
     /** Laeuft in jedem POST, bevor der Server antwortet: was waehrenddessen auf dem Telefon geschieht. */
     @Volatile
     private var waehrendDesSendens: () -> Unit = {}
@@ -66,7 +70,8 @@ class SpiegelAblaufTest {
             waehrendDesSendens()
             lieferungen += l
             if (antwort != HttpStatusCode.OK) respond("", antwort)
-            else respond(austauschJson.encodeToString(Quittung.serializer(), Quittung(l.tage.size, l.naechte.size, l.trainings.size, l.minuten.size)), HttpStatusCode.OK)
+            else if (alterServer) respond("""{"tage":${l.tage.size},"naechte":${l.naechte.size},"trainings":${l.trainings.size},"minuten":${l.minuten.size}}""", HttpStatusCode.OK)
+            else respond(austauschJson.encodeToString(Quittung.serializer(), Quittung(l.tage.size, l.naechte.size, l.trainings.size, l.minuten.size, l.trainingsEntfernt.size)), HttpStatusCode.OK)
         }) { expectSuccess = false },
     )
 
@@ -205,6 +210,25 @@ class SpiegelAblaufTest {
         akte.nurEigeneStill = false
         sende(vonHand = true)
         assertEquals(listOf(fremd), lieferungen.last().trainingsEntfernt)
+        sende()
+        assertEquals(emptyList(), lieferungen.last().trainingsEntfernt)
+    }
+
+    @Test
+    fun einAlterServerVerliertKeineEntfernung() = mitAkte { akte ->
+        val a = lauf(akte, jetzt - 86_400L, 30)
+        sende()
+        akte.loesche(a)
+        // Der Server ist noch 0.55.0: er quittiert, ohne zu entfernen. Die Entfernung bleibt vorgemerkt.
+        alterServer = true
+        sende()
+        assertEquals(listOf(a), lieferungen.last().trainingsEntfernt)
+        sende()
+        assertEquals(listOf(a), lieferungen.last().trainingsEntfernt)
+        // Nach seinem Update entfernt er sie; danach ist sie erledigt.
+        alterServer = false
+        sende()
+        assertEquals(listOf(a), lieferungen.last().trainingsEntfernt)
         sende()
         assertEquals(emptyList(), lieferungen.last().trainingsEntfernt)
     }

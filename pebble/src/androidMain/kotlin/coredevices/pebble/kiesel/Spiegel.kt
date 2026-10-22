@@ -319,8 +319,11 @@ internal object Spiegel {
             // Was aus dem Fenster der Akte faellt, kommt nicht wieder; der Rest bleibt, auch was ein
             // Lauf im Hintergrund nicht sah (fremde Trainings ohne Leserecht).
             val grenze = jetzt - (Fenster.SPORT_TAGE + 1) * 86_400L
+            // Ein Server vor 0.56.0 kennt das Entfernen nicht (keine Zahl in der Quittung): dann bleiben die
+            // entfernten vorgemerkt und gehen wieder mit, bis ein neuerer Server sie entfernt.
+            val entfernt = if (antwort.quittung.trainingsEntfernt != null) trainings.entfernt.toSet() else emptySet()
             val bleiben = alteTrainings.filter { (kennung, text) ->
-                kennung !in trainings.entfernt && Spiegelrechnung.GesendetesTraining.aus(text).beginn >= grenze
+                kennung !in entfernt && Spiegelrechnung.GesendetesTraining.aus(text).beginn >= grenze
             }
             e.putString(G_TRAININGS, json(bleiben + trainings.neu.associate { it.training.kennung to it.gesendet.toString() }))
         }

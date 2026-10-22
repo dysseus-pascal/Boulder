@@ -64,7 +64,7 @@ class Speicher private constructor(private val db: SQLiteConnection) : AutoClose
             l.stand?.let { setze("stand", austauschJson.encodeToString(Stand.serializer(), it)) }
             aendere("DELETE FROM minute WHERE zeit < ?") { bindLong(1, jetzt - minutenTage * 86_400L) }
         }
-        return Quittung(l.tage.size, l.naechte.size, l.trainings.size, l.minuten.size)
+        return Quittung(l.tage.size, l.naechte.size, l.trainings.size, l.minuten.size, l.trainingsEntfernt.size)
     }
 
     /**

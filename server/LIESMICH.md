@@ -25,7 +25,11 @@ nicht: Erreichbar ist er nur über den Tunnel.
 
 - **Gespeichert** wird alles auf dem eigenen Server, im Volume `boulder-daten` (SQLite).
   Minutendaten bleiben 90 Tage, alles andere bleibt. Ein Training, das Boulder nicht mehr führt
-  (gelöscht oder einem Doppel aus einer anderen App gewichen), verschwindet auch hier.
+  (gelöscht oder einem Doppel aus einer anderen App gewichen), verschwindet auch hier, ebenso ein
+  Satz, der in Health Connect gelöscht wurde.
+- **Aus Health Connect** kommt alles, was dort steht, aus jeder App: Gewicht, Blutdruck, Essen,
+  Puls einer anderen Uhr, Schlaf, Zyklus und mehr. Welche Arten, entscheidet die Freigabe in
+  Health Connect (Schritt 5).
 - **Cloudflare** beendet TLS an seinem Rand. Lieferungen und Abfragen sind dort also lesbar.
 - **Claude (Anthropic)** bekommt nur, was ein Werkzeug auf eine Frage liefert.
 - An Core Devices oder Google geht nichts.
@@ -35,10 +39,11 @@ nicht: Erreichbar ist er nur über den Tunnel.
 - Linux mit systemd und **Podman 5.0 oder neuer** (`podman --version`). Ältere Fassungen kennen
   die Pods in Quadlet nicht.
 - Ein Cloudflare-Konto mit einer eigenen Domain.
-- Boulder 0.55.0 oder neuer.
+- Boulder 0.57.0 oder neuer (ältere Fassungen schicken nur Tage, Nächte und Trainings).
 
-Der Server braucht rund 150 bis 250 MB Arbeitsspeicher; das Image ist etwa 370 MB gross. Alle
-Befehle laufen als gewöhnlicher Nutzer, ohne root.
+Der Server braucht rund 150 bis 250 MB Arbeitsspeicher; das Image ist etwa 370 MB gross. Die
+Datenbank wächst mit Health Connect: Puls im Minutentakt sind rund 30 MB im Jahr, der sekündliche
+Puls einer Sportuhr mehr. Alle Befehle laufen als gewöhnlicher Nutzer, ohne root.
 
 ## 1. Image bauen
 
@@ -102,10 +107,23 @@ Protokolle zeigt `journalctl --user -u boulder-server -u boulder-tunnel`.
 
 In Boulder unter **Settings > Boulder server** die Adresse (`https://boulder.example.ch`) und das
 Sync-Token eintragen und **Save** tippen; Boulder sendet gleich. Darunter lässt sich wählen, was
-gesendet wird: Tage, Nächte und Trainings sind an, die Minutendaten aus (gut 130 KB je Tag).
-Danach sendet Boulder eine Minute nach jedem Abgleich mit der Uhr, sonst alle 30 Minuten, und nur,
-was sich geändert hat. Der Stand und ein Fehler stehen auf derselben Seite, Fehler auch im
-Protokoll.
+gesendet wird: Tage (mit der Vorgeschichte aus älteren Sicherungen), Nächte, Trainings,
+**Blood oxygen** (SpO2 der Uhr) und **Health Connect** sind an, die Minutendaten aus (gut 130 KB
+je Tag). Danach sendet Boulder eine Minute nach jedem Abgleich mit der Uhr, sonst alle 30
+Minuten, und nur, was sich geändert hat. Der Stand und ein Fehler stehen auf derselben Seite,
+Fehler auch im Protokoll.
+
+**Health Connect:** Boulder fragt beim nächsten Start, ob es alle Arten lesen darf. Die Zeile
+**Health Connect access** zeigt, wie viele freigegeben sind; **Allow** öffnet die Freigabe noch
+einmal. Zwei Freigaben am Ende der Liste gehören dazu:
+
+- das Lesen vergangener Daten: ohne sie gibt Health Connect nur die letzten 30 Tage heraus. Kommt
+  sie später, liest Boulder noch einmal von vorn.
+- das Lesen im Hintergrund: ohne sie liest Boulder Health Connect nur, wenn man **Send now**
+  tippt.
+
+Die erste Übertragung braucht bei Jahren an Daten mehrere Läufe; Boulder macht jeweils dort
+weiter, wo es aufgehört hat.
 
 ## 6. Claude verbinden
 
@@ -170,7 +188,9 @@ Das neue Bündel liegt beim Release von Boulder (`boulder-server-<fassung>.tar.g
 wie in Schritt 1 bauen, danach `systemctl --user restart boulder-pod`. Die Daten bleiben im Volume.
 
 Server und App gehören zusammen: **erst den Server erneuern, dann Boulder**. Ein älterer Server
-ersetzte Tage, die eine neuere App ohne Wasser und Koffein schickt, und vergässe diese damit.
+ersetzte Tage, die eine neuere App ohne Wasser und Koffein schickt, und vergässe diese damit. Einer
+vor 0.57.0 nimmt Health Connect, Vorgeschichte und SpO2 nicht an: Boulder meldet dann
+„The server does not take Health Connect data yet“ und schickt sie nach dem Update.
 
 ## Sichern
 
@@ -179,9 +199,11 @@ es noch hat (**Send everything again** auf der Seite Boulder server). Das sind
 
 - alle Nächte,
 - die Tageswerte (Schritte, Schlaf, Ruhepuls, HRV, Präparate) aller Tage, die Boulder selbst gemessen hat,
+- die Vorgeschichte, soweit sie in Boulder steht,
+- alles aus Health Connect, soweit Health Connect es noch hat,
 - Wasser und Koffein nur der letzten 180 Tage,
 - Trainings nur der letzten 90 Tage,
-- Minutendaten nur der letzten 90 Tage.
+- Minutendaten und SpO2 der Uhr nur der letzten 90 Tage.
 
 Was älter ist, gibt es danach nur noch in einer Sicherung des Volumes. Sie geht so:
 

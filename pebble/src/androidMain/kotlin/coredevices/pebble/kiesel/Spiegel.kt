@@ -280,7 +280,7 @@ internal object Spiegel {
         } else emptyList()
 
         val alteNaechte = karte(context, G_NAECHTE)
-        val naechte = if (an(context, Art.NAECHTE)) neueNaechte(api, alteNaechte, jetzt) else emptyList()
+        val naechte = if (an(context, Art.NAECHTE)) neueNaechte(api, alteNaechte, jetzt, gruendlich) else emptyList()
 
         val alteTrainings = karte(context, G_TRAININGS)
         val trainingsTage = if (gruendlich) Fenster.SPORT_TAGE else Spiegelrechnung.TRAININGS_KURZ_TAGE
@@ -325,8 +325,8 @@ internal object Spiegel {
     }
 
     /** Die neuen oder geaenderten Naechte - siehe [Spiegelrechnung.zuPruefen]. */
-    private suspend fun neueNaechte(api: HealthDataApi, gesendet: Map<String, String>, jetzt: Long): List<Nacht> {
-        val pruefen = Spiegelrechnung.zuPruefen(api.getNaechte(0, jetzt + 86_400L), gesendet, jetzt)
+    private suspend fun neueNaechte(api: HealthDataApi, gesendet: Map<String, String>, jetzt: Long, alle: Boolean): List<Nacht> {
+        val pruefen = Spiegelrechnung.zuPruefen(api.getNaechte(0, jetzt + 86_400L), gesendet, jetzt, alle)
         if (pruefen.isEmpty()) return emptyList()
         val abschnitte = api.getNachtAbschnitte(pruefen.minOf { it.beginnUtc }, pruefen.maxOf { it.beginnUtc } + 1).groupBy { it.beginnUtc }
         return pruefen.map { n -> Spiegelrechnung.nacht(n, abschnitte[n.beginnUtc].orEmpty(), api.getNachtHrv(n.beginnUtc)) }

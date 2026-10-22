@@ -110,6 +110,7 @@ internal object Spiegelrechnung {
         akkuEnde = e.akkuEnde,
         abschnitte = abschnitte.sortedBy { it.von }.map { Abschnitt(it.von, it.bis, it.phase) },
         hrvFenster = hrv.sortedBy { it.minute }.map { HrvFenster(it.minute, it.rmssd, it.puls) },
+        geladen = e.geladen,
     )
 
     /** Eine Nacht samt Abschnitten und HRV-Fenstern - so, wie sie gesendet wuerde. */
@@ -118,10 +119,11 @@ internal object Spiegelrechnung {
     /**
      * Welche Naechte gelesen werden muessen, bevor man weiss, ob sie neu sind: die nie gesendeten
      * und die der letzten [NACHT_RUHE_TAGE] Tage - an denen kann die Uhr noch HRV-Fenster
-     * nachreichen. Aeltere gesendete aendern sich nicht mehr.
+     * nachreichen. Aeltere gesendete aendern sich kaum noch; sie vergleicht nur ein gruendlicher
+     * Lauf ([alle], einmal am Tag), etwa nachdem die Uhr eine Nacht noch einmal schickte.
      */
-    fun zuPruefen(naechte: List<NachtEntity>, gesendet: Map<String, String>, jetzt: Long): List<NachtEntity> =
-        naechte.filter { it.beginnUtc.toString() !in gesendet || it.beginnUtc >= jetzt - NACHT_RUHE_TAGE * 86_400L }
+    fun zuPruefen(naechte: List<NachtEntity>, gesendet: Map<String, String>, jetzt: Long, alle: Boolean = false): List<NachtEntity> =
+        if (alle) naechte else naechte.filter { it.beginnUtc.toString() !in gesendet || it.beginnUtc >= jetzt - NACHT_RUHE_TAGE * 86_400L }
 
     fun minute(d: HealthDataEntity): Minute = Minute(d.timestamp, d.steps, d.intensity, d.heartRate, d.orientation)
 

@@ -65,11 +65,13 @@ class SpiegelrechnungTest {
         val nieGesendet = nacht(jetzt - 30 * 86_400L)
         val gesendet = mapOf(alt.beginnUtc.toString() to "a", frisch.beginnUtc.toString() to "b")
         assertEquals(listOf(frisch, nieGesendet), Spiegelrechnung.zuPruefen(listOf(alt, frisch, nieGesendet), gesendet, jetzt))
+        // Der gruendliche Lauf liest alle.
+        assertEquals(listOf(alt, frisch, nieGesendet), Spiegelrechnung.zuPruefen(listOf(alt, frisch, nieGesendet), gesendet, jetzt, alle = true))
     }
 
     @Test
     fun eineNachtImAustauschformatGeordnet() {
-        val e = NachtEntity(jetzt, 7200, 95, 560, 431, 52, 48, akkuBeginn = 80, akkuEnde = 74, messstufe = 3)
+        val e = NachtEntity(jetzt, 7200, 95, 560, 431, 52, 48, akkuBeginn = 80, akkuEnde = 74, geladen = true, messstufe = 3)
         val n = Spiegelrechnung.nacht(
             e,
             listOf(NachtAbschnittEntity(jetzt, 200, 260, 2), NachtAbschnittEntity(jetzt, 95, 200, 1)),
@@ -78,6 +80,7 @@ class SpiegelrechnungTest {
         assertEquals(listOf(95, 200), n.abschnitte.map { it.von })
         assertEquals(listOf(HrvFenster(120, 57, 0), HrvFenster(150, 49, 54)), n.hrvFenster)
         assertEquals(listOf(7200, 95, 560, 431, 52, 48, 3, 80, 74), listOf(n.utcZuLokal, n.einschlafen, n.aufwachen, n.schlafMinuten, n.ruhepuls, n.hrv, n.messstufe, n.akkuBeginn, n.akkuEnde))
+        assertTrue(n.geladen)
         // Ein nachgereichtes HRV-Fenster aendert die Nacht.
         assertNotEquals(Spiegelrechnung.abdruck(n), Spiegelrechnung.abdruck(n.copy(hrvFenster = n.hrvFenster + HrvFenster(180, 44, 53))))
         assertEquals(Spiegelrechnung.abdruck(n), Spiegelrechnung.abdruck(n.copy()))

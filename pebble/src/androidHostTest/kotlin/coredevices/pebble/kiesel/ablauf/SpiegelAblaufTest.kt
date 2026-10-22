@@ -257,6 +257,9 @@ class SpiegelAblaufTest {
         sende()
         assertEquals(listOf(frisch), lieferungen.last().naechte.map { it.beginn })
         assertEquals(2, lieferungen.last().naechte.single().hrvFenster.size)
+        // Die alte vergleicht erst der gruendliche Lauf einen Tag spaeter.
+        sende(uhr = jetzt + Spiegelrechnung.GRUENDLICH_S + 1)
+        assertEquals(listOf(alt), lieferungen.last().naechte.map { it.beginn })
     }
 
     @Test

@@ -21,6 +21,12 @@
     <string name="ks_sv_trainings_text">Sport, duration, distance and heart rate</string>
     <string name="ks_sv_minuten">Minute data</string>
     <string name="ks_sv_minuten_text">Steps, movement and heart rate of each minute, about 130 KB per day</string>
+    <string name="ks_sv_akte">Health Connect</string>
+    <string name="ks_sv_akte_text">Every record of every app: weight, blood pressure, nutrition, heart rate, sleep and more</string>
+    <string name="ks_sv_akte_zugang">Health Connect access</string>
+    <string name="ks_sv_akte_zugang_text">%1$d of %2$d data types allowed</string>
+    <string name="ks_sv_akte_ohne_hintergrund">%1$d of %2$d data types allowed. Without background access Boulder reads them only when you tap Send now.</string>
+    <string name="ks_sv_akte_freigeben">Allow</string>
     <string name="ks_sv_senden">Upload</string>
     <string name="ks_sv_jetzt_text">Upload changes now</string>
     <string name="ks_sv_jetzt">Send now</string>
@@ -33,6 +39,7 @@
     <string name="ks_sv_nie">Nothing sent yet</string>
     <string name="ks_sv_zuletzt">Last upload %1$s</string>
     <string name="ks_sv_gesendet">Sent: days %1$d · nights %2$d · workouts %3$d · minutes %4$d</string>
+    <string name="ks_sv_gesendet_akte">Sent: days %1$d · nights %2$d · workouts %3$d · minutes %4$d · Health Connect %5$d</string>
     <string name="ks_sv_wieder">uploading again</string>
     <string name="ks_sv_fehler_token">The server rejected the sync token.</string>
     <string name="ks_sv_fehler_adresse">There is no Boulder server at this address.</string>
@@ -40,5 +47,6 @@
     <string name="ks_sv_fehler_status">The server answered with error %1$d.</string>
     <string name="ks_sv_fehler_netz">Server not reachable: %1$s</string>
     <string name="ks_sv_fehler_lesen">Could not read the data to send: %1$s</string>
+    <string name="ks_sv_fehler_server_alt">The server does not take Health Connect data yet. Update the server.</string>
     <string name="ks_sv_hinweis">Boulder sends only to your own server. Claude reads there what a question needs.</string>
 </resources>

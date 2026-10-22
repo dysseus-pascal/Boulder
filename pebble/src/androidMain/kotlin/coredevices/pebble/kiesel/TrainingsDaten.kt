@@ -644,7 +644,7 @@ internal object TrainingsDaten {
     suspend fun fehlendeRechte(context: Context): Set<String> {
         val klient = Akte(context).bereit() ?: return emptySet()
         return try {
-            ohneKoerper(fehlendeAkteRechte(klient))
+            ohneFreiwillige(fehlendeAkteRechte(klient))
         } catch (e: kotlin.coroutines.cancellation.CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -654,5 +654,6 @@ internal object TrainingsDaten {
         }
     }
 
-    fun ohneKoerper(fehlend: Set<String>): Set<String> = fehlend - KOERPER_RECHTE
+    /** Ohne die Rechte, die nur fuer Waage und Spiegel da sind: ihr Fehlen ist eine Wahl, kein Mangel. */
+    fun ohneFreiwillige(fehlend: Set<String>): Set<String> = fehlend - KOERPER_RECHTE - SPIEGEL_RECHTE
 }

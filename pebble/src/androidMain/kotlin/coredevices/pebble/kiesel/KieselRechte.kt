@@ -56,6 +56,13 @@ internal val KIESEL_RECHTE: Set<String> = setOf(
 )
 
 /**
+ * Was nur der Spiegel der ganzen Akte liest ([Aktenspiegel]): jede Satzart, die Boulder sonst nicht
+ * braucht. Gefragt wird es mit allen anderen; fehlt eines, ist das kein Mangel - wer etwa seine
+ * Zyklusdaten nicht teilen mag, behaelt kein Ausrufezeichen ([TrainingsDaten.ohneFreiwillige]).
+ */
+internal val SPIEGEL_RECHTE: Set<String> = Aktenspiegel.LESERECHTE - KIESEL_RECHTE
+
+/**
  * Die Rechte, die es nur mit einer Funktion der Akte gibt. Eine Akte ohne die
  * Funktion kennt das Recht nicht und erteilt es nie - gefragt und gezaehlt
  * stuende es dort fuer immer als fehlend da.
@@ -63,7 +70,7 @@ internal val KIESEL_RECHTE: Set<String> = setOf(
 internal val FUNKTIONSRECHTE: Map<String, Int> = mapOf(
     HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND to HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND,
     HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY to HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_HISTORY,
-)
+) + Aktenspiegel.FUNKTIONEN
 
 /** Die Rechte ohne die, deren Funktion diese Akte nicht hat; alle anderen bleiben. */
 internal fun nurVerfuegbare(rechte: Set<String>, hatFunktion: (Int) -> Boolean): Set<String> =

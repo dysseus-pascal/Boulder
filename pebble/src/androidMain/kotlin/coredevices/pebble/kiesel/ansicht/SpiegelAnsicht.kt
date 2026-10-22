@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -25,6 +26,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import coredevices.pebble.R
+import coredevices.pebble.health.frageAlleAkteRechte
+import coredevices.pebble.kiesel.Aktenspiegel
 import coredevices.pebble.kiesel.Formate
 import coredevices.pebble.kiesel.Spiegel
 import io.rebble.libpebblecommon.connection.HealthDataApi
@@ -122,12 +125,30 @@ internal fun SpiegelAnsicht() {
                     Triple(Spiegel.Art.NAECHTE, R.string.ks_sv_naechte, R.string.ks_sv_naechte_text),
                     Triple(Spiegel.Art.TRAININGS, R.string.ks_sv_trainings, R.string.ks_sv_trainings_text),
                     Triple(Spiegel.Art.MINUTEN, R.string.ks_sv_minuten, R.string.ks_sv_minuten_text),
+                    Triple(Spiegel.Art.AKTE, R.string.ks_sv_akte, R.string.ks_sv_akte_text),
                 )) {
                     if (art != Spiegel.Art.TAGE) Trenner(INNEN)
                     Schaltzeile(stringResource(titel), stringResource(unter), an = remember(stand) { Spiegel.an(context, art) }) {
                         Spiegel.setze(context, art, it)
                         stand++
                     }
+                }
+                // Was die Akte freigibt, entscheidet ihr Dialog; hier sieht man, wie viel davon beim Server ankommt.
+                val zugang by produceState<Aktenspiegel.Zugang?>(null, stand) { value = Aktenspiegel.zugang(context) }
+                zugang?.takeIf { remember(stand) { Spiegel.an(context, Spiegel.Art.AKTE) } }?.let { z ->
+                    Trenner(INNEN)
+                    Knopfzeile(
+                        titel = stringResource(R.string.ks_sv_akte_zugang),
+                        unter = stringResource(if (z.hintergrund) R.string.ks_sv_akte_zugang_text else R.string.ks_sv_akte_ohne_hintergrund, z.frei, z.alle),
+                        knopf = stringResource(R.string.ks_sv_akte_freigeben),
+                        onClick = {
+                            scope.launch {
+                                frageAlleAkteRechte(context)
+                                stand++
+                            }
+                        },
+                        aktiv = z.frei < z.alle || !z.hintergrund,
+                    )
                 }
             }
             Kasten {

@@ -37,7 +37,7 @@ class RechteTest {
     @Test
     fun funktionsrechte_stehen_in_den_kiesel_rechten() {
         // Sonst filterte nurVerfuegbare etwas, das nie gefragt wird
-        assertTrue(KIESEL_RECHTE.containsAll(FUNKTIONSRECHTE.keys))
+        assertTrue((KIESEL_RECHTE + SPIEGEL_RECHTE).containsAll(FUNKTIONSRECHTE.keys))
     }
 
     @Test
@@ -102,8 +102,8 @@ class RechteTest {
         val gefragt = coredevices.pebble.health.alleRechteJederAkte()
         // Was der Dialog fragt, ohne Anmeldung aber nie erteilt wird, stuende fuer immer als fehlend da.
         assertEquals(emptySet(), gefragt - manifest, "Im Dialog, nicht im Manifest")
-        // Der Abgleich laeuft wirklich: ueber 30 Rechte, alle der Akte (heute 31).
-        assertTrue(gefragt.size > 30, "nur ${gefragt.size} Rechte")
+        // Der Abgleich laeuft wirklich: ueber 50 Rechte, alle der Akte (heute 54, davon 23 nur fuer den Spiegel).
+        assertTrue(gefragt.size > 50, "nur ${gefragt.size} Rechte")
         assertTrue(gefragt.all { it.startsWith("android.permission.health.") })
     }
 

@@ -17,6 +17,7 @@ import com.viktormykhailiv.kmp.health.HealthDataType
 import com.viktormykhailiv.kmp.health.HealthManager
 import coredevices.pebble.kiesel.Akte
 import coredevices.pebble.kiesel.KIESEL_RECHTE
+import coredevices.pebble.kiesel.SPIEGEL_RECHTE
 import coredevices.pebble.kiesel.nurVerfuegbare
 import coredevices.pebble.kiesel.versuche
 import kotlin.reflect.KClass
@@ -69,7 +70,7 @@ internal fun alleAkteRechte(klient: HealthConnectClient): Set<String> =
 /** Boulder: dieselben Rechte vor dem Abgleich mit der Akte - jedes muss im Manifest stehen (RechteTest). */
 internal fun alleRechteJederAkte(): Set<String> =
     standardRechte(PlatformHealthSync.RequestedReadTypes, PlatformHealthSync.RequestedWriteTypes) +
-        WRITE_OXYGEN_SATURATION + KIESEL_RECHTE
+        WRITE_OXYGEN_SATURATION + KIESEL_RECHTE + SPIEGEL_RECHTE
 
 /** Boulder: was davon noch nicht erteilt ist. */
 internal suspend fun fehlendeAkteRechte(klient: HealthConnectClient): Set<String> =

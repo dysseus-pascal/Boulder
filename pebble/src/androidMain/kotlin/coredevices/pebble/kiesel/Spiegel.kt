@@ -12,6 +12,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import boulder.austausch.Akteneintrag
 import boulder.austausch.Lieferung
 import boulder.austausch.Nacht
 import boulder.austausch.Quittung
@@ -47,7 +48,8 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * Boulder: der Spiegel auf dem eigenen Server (server/ im Repo, LIESMICH.md dort). Boulder schickt
- * Tage, Naechte, Trainings und auf Wunsch die Minuten; Claude liest sie dort ueber MCP.
+ * Tage, Naechte, Trainings, auf Wunsch die Minuten und alles aus Health Connect ([Aktenspiegel]);
+ * Claude liest sie dort ueber MCP.
  *
  * OHNE ADRESSE UND TOKEN GEHT NICHTS HINAUS. Beide liegen in einer eigenen Datei, die weder das
  * Cloud-Backup noch ein Geraeteumzug mitnimmt (backup_rules.xml): das Sync-Token darf auf dem
@@ -99,6 +101,9 @@ internal object Spiegel {
 
         /** Die Rohminuten nur auf Wunsch: gut 130 KB je Tag, und Claude braucht sie selten. */
         MINUTEN("minuten", false),
+
+        /** Jeder Satz aus Health Connect, aus allen Apps ([Aktenspiegel]). */
+        AKTE("akte", true),
     }
 
     enum class Eingabe { ADRESSE, TOKEN }
@@ -153,7 +158,7 @@ internal object Spiegel {
         val alt = ziel(context)
         val e = prefs(context).edit().putString("adresse", ziel.adresse).putString("token", ziel.token)
         // Ein anderer Server kennt nichts von dem, was der alte bekam.
-        if (alt?.adresse != ziel.adresse) vergissGesendet(e)
+        if (alt?.adresse != ziel.adresse) vergissGesendet(context, e)
         e.apply()
     }
 
@@ -177,8 +182,9 @@ internal object Spiegel {
         true
     }
 
-    private fun vergissGesendet(e: android.content.SharedPreferences.Editor) {
+    private fun vergissGesendet(context: Context, e: android.content.SharedPreferences.Editor) {
         e.remove(G_TAGE).remove(G_NAECHTE).remove(G_TRAININGS).remove(G_MINUTEN).remove(G_GRUENDLICH).remove(G_TAGE_ZEIT)
+        Aktenspiegel.vergiss(prefs(context), e)
     }
 
     /**
@@ -255,7 +261,7 @@ internal object Spiegel {
                 // Gesendete Trainings bleiben verzeichnet, nur ohne Abdruck: sie gehen alle neu, und eines,
                 // das es inzwischen nicht mehr gibt, kann der Server trotzdem entfernen.
                 val trainings = karte(context, G_TRAININGS).mapValues { (_, t) -> Spiegelrechnung.GesendetesTraining.aus(t).copy(abdruck = "-").toString() }
-                prefs(context).edit().also(::vergissGesendet).putString(G_TRAININGS, json(trainings)).apply()
+                prefs(context).edit().also { vergissGesendet(context, it) }.putString(G_TRAININGS, json(trainings)).apply()
             }
             prefs(context).edit().putLong("versuch", System.currentTimeMillis()).apply()
             val aus = try {
@@ -331,9 +337,28 @@ internal object Spiegel {
         if (tageFaellig) e.putLong(G_TAGE_ZEIT, jetzt)
         if (!merkeGesendet(context, ziel, e)) return Ausgang.Aus
 
-        if (!an(context, Art.MINUTEN)) return Ausgang.Fertig(antwort.quittung)
-        val minuten = sendeMinuten(context, api, ziel, post, jetzt, zone, fassung)
-        return if (minuten is Ausgang.Fertig) Ausgang.Fertig(antwort.quittung.copy(minuten = minuten.quittung.minuten)) else minuten
+        var quittung = antwort.quittung
+        if (an(context, Art.MINUTEN)) {
+            val minuten = sendeMinuten(context, api, ziel, post, jetzt, zone, fassung)
+            if (minuten !is Ausgang.Fertig) return minuten
+            quittung = quittung.copy(minuten = minuten.quittung.minuten)
+        }
+        if (an(context, Art.AKTE)) {
+            val klient = Akte(context).bereit() ?: return Ausgang.Fertig(quittung)
+            val bote = object : Aktenspiegel.Bote {
+                override suspend fun schicke(akte: List<Akteneintrag>, entfernt: List<String>) =
+                    post.schicke(ziel, Lieferung(gesendet = jetzt, zone = zone, app = fassung, akte = akte, akteEntfernt = entfernt))
+
+                override fun merke(e: android.content.SharedPreferences.Editor) = merkeGesendet(context, ziel, e)
+            }
+            when (val ende = Aktenspiegel.sende(klient, prefs(context), bote, vonHand)) {
+                is Aktenspiegel.Ende.Gesendet -> quittung = quittung.copy(akte = ende.saetze, akteEntfernt = ende.entfernt)
+                is Aktenspiegel.Ende.Abgelehnt -> return fehler(context, ende.antwort)
+                Aktenspiegel.Ende.ServerZuAlt -> return Ausgang.Fehler(context.getString(R.string.ks_sv_fehler_server_alt), voruebergehend = false)
+                Aktenspiegel.Ende.Ueberholt -> return Ausgang.Aus
+            }
+        }
+        return Ausgang.Fertig(quittung)
     }
 
     /** Die neuen oder geaenderten Naechte - siehe [Spiegelrechnung.zuPruefen]. */
@@ -448,8 +473,10 @@ internal object Spiegel {
         }
     }
 
-    fun gesendetText(context: Context, q: Quittung): String =
-        context.getString(R.string.ks_sv_gesendet, q.tage, q.naechte, q.trainings, q.minuten)
+    fun gesendetText(context: Context, q: Quittung): String {
+        val akte = q.akte ?: return context.getString(R.string.ks_sv_gesendet, q.tage, q.naechte, q.trainings, q.minuten)
+        return context.getString(R.string.ks_sv_gesendet_akte, q.tage, q.naechte, q.trainings, q.minuten, akte + (q.akteEntfernt ?: 0))
+    }
 
     private fun karte(context: Context, schluessel: String): Map<String, String> {
         val text = prefs(context).getString(schluessel, null) ?: return emptyMap()

@@ -6,6 +6,9 @@ import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.aggregate.AggregationResult
 import androidx.health.connect.client.aggregate.AggregationResultGroupedByDuration
 import androidx.health.connect.client.aggregate.AggregationResultGroupedByPeriod
+import androidx.health.connect.client.changes.Change
+import androidx.health.connect.client.changes.DeletionChange
+import androidx.health.connect.client.changes.UpsertionChange
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.records.metadata.Device
@@ -21,6 +24,7 @@ import androidx.health.connect.client.response.ReadRecordResponse
 import androidx.health.connect.client.response.ReadRecordsResponse
 import androidx.health.connect.client.time.TimeRangeFilter
 import java.time.Instant
+import java.util.Collections
 import kotlin.reflect.KClass
 
 /**
@@ -31,8 +35,10 @@ import kotlin.reflect.KClass
  * schreibt unter ihrem Paket (Herkunft), eine gleiche clientRecordId ersetzt
  * nur bei gleicher oder hoeherer Fassung, Intervalle zaehlen in einem
  * Zeitraum, wenn sie ihn ueberschneiden, Zeitpunkte im halboffenen Fenster.
- * Was Boulder nicht braucht (Aggregate, Aenderungen), wirft - ein Aufruf
- * dorthin waere ein neuer Weg, den der Test erst kennen muss.
+ * Aenderungen (getChanges) kommen je Satzart in der Reihenfolge, in der sie
+ * geschahen, in Seiten wie bei der Akte. Was Boulder nicht braucht
+ * (Aggregate), wirft - ein Aufruf dorthin waere ein neuer Weg, den der Test
+ * erst kennen muss.
  */
 internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient {
 
@@ -40,6 +46,21 @@ internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient 
 
     private val eintraege = mutableListOf<Eintrag>()
     private var naechsteId = 1
+
+    /** Jede Aenderung in der Reihenfolge, mit der Satzart - auch die einer Loeschung, deren Satz weg ist. */
+    private val protokoll = mutableListOf<Pair<KClass<out Record>, Change>>()
+
+    /** Wie viele Aenderungen getChanges je Antwort herausgibt. */
+    @Volatile
+    var aenderungenJeSeite = 1000
+
+    /** Fuer diese Satzarten meldet die naechste Abfrage von Aenderungen, die Marke sei verfallen (wie nach 30 Tagen ohne Abfrage). */
+    val verfalleneMarken: MutableSet<KClass<out Record>> = Collections.synchronizedSet(mutableSetOf())
+
+    /** Wie oft nach Aenderungen gefragt wurde. */
+    @Volatile
+    var aenderungsabfragen = 0
+        private set
 
     /** Was die Akte als erteilt meldet. */
     @Volatile
@@ -87,13 +108,22 @@ internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient 
     /** Ein Satz, den [paket] schrieb - eine andere App, oder Boulder auf einem anderen Weg (Minutenpuls). */
     @Synchronized
     fun legeAb(satz: Record, paket: String) {
-        eintraege += Eintrag(gestempelt(satz, "fremd-${naechsteId++}", paket), paket)
+        val e = Eintrag(gestempelt(satz, "fremd-${naechsteId++}", paket), paket)
+        eintraege += e
+        protokoll += e.satz::class to UpsertionChange(e.satz)
     }
 
     /** Einen Satz loeschen, wie es ein Nutzer in der Akte oder im Tagesstrahl tut. */
     @Synchronized
     fun loesche(id: String) {
-        eintraege.removeAll { it.satz.metadata.id == id }
+        weg { it.satz.metadata.id == id }
+    }
+
+    /** Entfernt und vermerkt jede Loeschung fuer getChanges. */
+    private fun weg(wenn: (Eintrag) -> Boolean) {
+        val treffer = eintraege.filter(wenn)
+        eintraege.removeAll(treffer)
+        treffer.forEach { protokoll += it.satz::class to DeletionChange(it.satz.metadata.id) }
     }
 
     /** Wie oft nach den erteilten Rechten gefragt wurde. */
@@ -135,7 +165,9 @@ internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient 
         if (alt != null && r.metadata.clientRecordVersion < alt.satz.metadata.clientRecordVersion) return alt.satz.metadata.id
         val id = alt?.satz?.metadata?.id ?: "id-${naechsteId++}"
         if (alt != null) eintraege.remove(alt)
-        eintraege += Eintrag(gestempelt(r, id, eigenesPaket), eigenesPaket)
+        val neu = Eintrag(gestempelt(r, id, eigenesPaket), eigenesPaket)
+        eintraege += neu
+        protokoll += neu.satz::class to UpsertionChange(neu.satz)
         return id
     }
 
@@ -145,13 +177,14 @@ internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient 
                 val i = eintraege.indexOfFirst { it.satz.metadata.id == r.metadata.id && it.herkunft == eigenesPaket }
                 require(i >= 0) { "Kein eigener Satz ${r.metadata.id}" }
                 eintraege[i] = Eintrag(gestempelt(r, r.metadata.id, eigenesPaket), eigenesPaket)
+                protokoll += eintraege[i].satz::class to UpsertionChange(eintraege[i].satz)
             }
         }
     }
 
     override suspend fun deleteRecords(recordType: KClass<out Record>, recordIdsList: List<String>, clientRecordIdsList: List<String>) {
         synchronized(this) {
-            eintraege.removeAll {
+            weg {
                 it.herkunft == eigenesPaket && it.satz::class == recordType &&
                     (it.satz.metadata.id in recordIdsList || it.satz.metadata.clientRecordId in clientRecordIdsList)
             }
@@ -160,7 +193,7 @@ internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient 
 
     override suspend fun deleteRecords(recordType: KClass<out Record>, timeRangeFilter: TimeRangeFilter) {
         synchronized(this) {
-            eintraege.removeAll { it.herkunft == eigenesPaket && it.satz::class == recordType && trifft(it.satz, timeRangeFilter) }
+            weg { it.herkunft == eigenesPaket && it.satz::class == recordType && trifft(it.satz, timeRangeFilter) }
         }
     }
 
@@ -198,8 +231,28 @@ internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient 
         throw UnsupportedOperationException("aggregateGroupByDuration")
     override suspend fun aggregateGroupByPeriod(request: AggregateGroupByPeriodRequest): List<AggregationResultGroupedByPeriod> =
         throw UnsupportedOperationException("aggregateGroupByPeriod")
-    override suspend fun getChangesToken(request: ChangesTokenRequest): String = throw UnsupportedOperationException("getChangesToken")
-    override suspend fun getChanges(changesToken: String): ChangesResponse = throw UnsupportedOperationException("getChanges")
+    /** Die Marke ist die Stelle im Protokoll und die Satzarten, fuer die sie gilt. */
+    override suspend fun getChangesToken(request: ChangesTokenRequest): String = synchronized(this) {
+        "${protokoll.size}|" + request.recordTypes.joinToString(",") { it.java.name }
+    }
+
+    override suspend fun getChanges(changesToken: String): ChangesResponse = synchronized(this) { aenderungen(changesToken) }
+
+    private fun aenderungen(changesToken: String): ChangesResponse {
+        aenderungsabfragen++
+        val (stelle, arten) = changesToken.split('|').let { it[0].toInt() to it[1].split(',').toSet() }
+        if (verfalleneMarken.removeIf { it.java.name in arten }) {
+            return ChangesResponse(emptyList(), changesToken, hasMore = false, changesTokenExpired = true)
+        }
+        val aenderungen = mutableListOf<Change>()
+        var i = stelle
+        while (i < protokoll.size && aenderungen.size < aenderungenJeSeite) {
+            val (art, c) = protokoll[i++]
+            if (art.java.name in arten) aenderungen += c
+        }
+        val mehr = (i until protokoll.size).any { protokoll[it].first.java.name in arten }
+        return ChangesResponse(aenderungen, "$i|" + arten.joinToString(","), hasMore = mehr, changesTokenExpired = false)
+    }
 
     companion object {
         /**

@@ -68,6 +68,9 @@ internal object Spiegel {
     /** Wann zuletzt ein gruendlicher Lauf ([Spiegelrechnung.GRUENDLICH_S]) quittiert wurde, in Sekunden. */
     private const val G_GRUENDLICH = "gruendlich"
 
+    /** Wann zuletzt Tage gerechnet und quittiert wurden ([Spiegelrechnung.TAGE_TAKT_S]), in Sekunden. */
+    private const val G_TAGE_ZEIT = "tage_zeit"
+
     /** Wann zuletzt neue Daten von der Uhr kamen (stosseAn), in Millisekunden wie "versuch". */
     private const val G_ANGESTOSSEN = "angestossen"
 
@@ -172,7 +175,7 @@ internal object Spiegel {
     }
 
     private fun vergissGesendet(e: android.content.SharedPreferences.Editor) {
-        e.remove(G_TAGE).remove(G_NAECHTE).remove(G_TRAININGS).remove(G_MINUTEN).remove(G_GRUENDLICH)
+        e.remove(G_TAGE).remove(G_NAECHTE).remove(G_TRAININGS).remove(G_MINUTEN).remove(G_GRUENDLICH).remove(G_TAGE_ZEIT)
     }
 
     /**
@@ -275,7 +278,8 @@ internal object Spiegel {
         val fassung = versuche("Spiegel", "Fassung lesen") { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.orEmpty()
 
         val alteTage = karte(context, G_TAGE)
-        val tage = if (an(context, Art.TAGE)) {
+        val tageFaellig = an(context, Art.TAGE) && (gruendlich || jetzt - p.getLong(G_TAGE_ZEIT, 0) >= Spiegelrechnung.TAGE_TAKT_S)
+        val tage = if (tageFaellig) {
             Spiegelrechnung.neueTage(Spiegelrechnung.tage(Trenddaten.lies(context, api, merken = false), LocalDate.now()), alteTage)
         } else emptyList()
 
@@ -317,6 +321,7 @@ internal object Spiegel {
             e.putString(G_TRAININGS, json(bleiben + trainings.neu.associate { it.training.kennung to it.gesendet.toString() }))
         }
         if (gruendlich) e.putLong(G_GRUENDLICH, jetzt)
+        if (tageFaellig) e.putLong(G_TAGE_ZEIT, jetzt)
         if (!merkeGesendet(context, ziel, e)) return Ausgang.Aus
 
         if (!an(context, Art.MINUTEN)) return Ausgang.Fertig(antwort.quittung)

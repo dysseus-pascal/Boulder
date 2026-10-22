@@ -283,6 +283,21 @@ class SpiegelAblaufTest {
     }
 
     @Test
+    fun tageHoechstensStuendlich() {
+        Spiegel.speichere(context, ziel)
+        sende()
+        assertTrue(lieferungen.last().tage.isNotEmpty())
+        // Eine neue Nacht aendert einen Tag: die Nacht geht sofort, der Tag mit dem naechsten Lauf nach einer Stunde.
+        val neu = jetzt - 3 * 86_400L
+        naechte += NachtEntity(neu, 7200, 95, 560, 431, 52, 48)
+        sende(uhr = jetzt + 600)
+        assertEquals(listOf(neu), lieferungen.last().naechte.map { it.beginn })
+        assertEquals(emptyList(), lieferungen.last().tage)
+        sende(uhr = jetzt + Spiegelrechnung.TAGE_TAKT_S + 1)
+        assertTrue(lieferungen.last().tage.any { "schlaf" in it.werte }, lieferungen.last().tage.toString())
+    }
+
+    @Test
     fun einAbgelehntesTokenWiederholtSichNicht() {
         Spiegel.speichere(context, ziel)
         antwort = HttpStatusCode.Unauthorized

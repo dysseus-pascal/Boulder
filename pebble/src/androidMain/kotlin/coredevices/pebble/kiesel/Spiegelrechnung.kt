@@ -43,6 +43,13 @@ internal object Spiegelrechnung {
     const val GRUENDLICH_S = 86_400L
 
     /**
+     * So oft rechnet ein gewoehnlicher Lauf die Tage hoechstens. Ihr Lesen (Uhr und Akte ueber
+     * 180 Tage, Tagesspeicher) ist der teuerste Teil eines Laufs, und ihre Werte aendern sich
+     * selten zwischen zwei Schueben; die Naechte selbst gehen sofort.
+     */
+    const val TAGE_TAKT_S = 3600L
+
+    /**
      * Die Adresse des Servers ohne Schraegstrich am Ende; null, wenn sie nicht taugt. NUR HTTPS:
      * das Sync-Token und die Gesundheitsdaten gingen sonst lesbar durchs Netz. Ohne Pfad, Nutzer,
      * Abfrage und Anker, wie im LIESMICH des Servers.

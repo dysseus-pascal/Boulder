@@ -1,8 +1,12 @@
 package boulder.server
 
+import boulder.austausch.Akteneintrag
 import boulder.austausch.Lieferung
 import boulder.austausch.Minute
 import boulder.austausch.Nacht
+import boulder.austausch.Probe
+import boulder.austausch.Sauerstoff
+import boulder.austausch.Spanne
 import boulder.austausch.Tag
 import boulder.austausch.Training
 import java.nio.file.Files
@@ -93,6 +97,48 @@ class SpeicherTest {
             s.uebernimm(lieferung(5000.0, listOf(alt, frisch)), jetzt, 90)
             assertEquals(listOf(frisch), s.minuten(0, Long.MAX_VALUE))
             assertEquals(1L, s.umfang().minuten)
+        }
+    }
+
+    @Test
+    fun einSatzDerAkteErsetztSichSamtReiheUndVerschwindet() {
+        Speicher.oeffne(":memory:").use { s ->
+            fun satz(vararg puls: Double) = Akteneintrag(
+                "hr-1", "HeartRate", jetzt, jetzt + 600, 7200, "com.fitbit.FitbitMobile",
+                texte = mapOf("device" to "Charge 6"), abschnitte = listOf(Spanne(jetzt, jetzt + 60, "x")),
+                proben = puls.mapIndexed { i, w -> Probe(jetzt + i * 60L, w) },
+            )
+            val leer = Lieferung(gesendet = jetzt, zone = "Europe/Zurich", app = "0.57.0")
+            val q = s.uebernimm(leer.copy(akte = listOf(satz(60.0, 62.0, 64.0))), jetzt, 90)
+            assertEquals(1, q.akte)
+            assertEquals(0, q.akteEntfernt)
+            // Health Connect meldet einen geaenderten Satz ganz: die alte Reihe darf nicht stehen bleiben.
+            s.uebernimm(leer.copy(akte = listOf(satz(70.0, 80.0))), jetzt, 90)
+            assertEquals(Speicher.Probenumfang(2, 70.0, 75.0, 80.0), s.probenUmfang("hr-1"))
+            assertEquals(satz(70.0, 80.0), s.akteEintrag("hr-1"))
+            assertEquals(1, s.akte("HeartRate", 0, Long.MAX_VALUE, 10).size)
+            val weg = s.uebernimm(leer.copy(akteEntfernt = listOf("hr-1", "unbekannt")), jetzt, 90)
+            assertEquals(2, weg.akteEntfernt)
+            assertEquals(null, s.akteEintrag("hr-1"))
+            assertEquals(null, s.probenUmfang("hr-1"))
+            assertEquals(emptyList(), s.probenEimer("HeartRate", 0, Long.MAX_VALUE, 300))
+        }
+    }
+
+    @Test
+    fun vorgeschichteErsetztEinenTagGanzUndSauerstoffBleibtEinmal() {
+        Speicher.oeffne(":memory:").use { s ->
+            val leer = Lieferung(gesendet = jetzt, zone = "Europe/Zurich", app = "0.57.0")
+            s.uebernimm(leer.copy(vorgeschichte = listOf(Tag("2025-03-01", mapOf("schritte" to 1.0, "rem" to 2.0))),
+                sauerstoff = listOf(Sauerstoff(jetzt, 95, 3))), jetzt, 90)
+            val q = s.uebernimm(leer.copy(vorgeschichte = listOf(Tag("2025-03-01", mapOf("schritte" to 5.0))),
+                sauerstoff = listOf(Sauerstoff(jetzt, 97, 6))), jetzt, 90)
+            assertEquals(1, q.vorgeschichte)
+            assertEquals(1, q.sauerstoff)
+            assertEquals(listOf(Tag("2025-03-01", mapOf("schritte" to 5.0))), s.vortage("2025-01-01", "2025-12-31"))
+            assertEquals(listOf(Sauerstoff(jetzt, 97, 6)), s.sauerstoff(0, Long.MAX_VALUE))
+            assertEquals(1L, s.umfang().vortage)
+            assertEquals(1L, s.umfang().sauerstoff)
         }
     }
 

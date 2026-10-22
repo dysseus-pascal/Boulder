@@ -1,5 +1,6 @@
 package boulder.server
 
+import boulder.austausch.Akteneintrag
 import boulder.austausch.Nacht
 import boulder.austausch.Stand
 import boulder.austausch.austauschJson
@@ -30,8 +31,8 @@ import java.time.temporal.ChronoUnit
  * Ortszeit: die Feldnamen stehen einmal im Kopf, und Claudes Kontext fasst so mehr Tage.
  *
  * NUR LESEN: kein Werkzeug aendert den Spiegel; geschrieben wird allein ueber /sync von Boulder.
- * DIE GRENZEN (366 Tage, 24 h Puls, 6 h Minuten) halten eine Antwort klein genug fuer Claudes
- * Kontext; mehr fragt Claude in Teilen.
+ * DIE GRENZEN (366 Tage, 24 h Puls, 6 h Minuten, 500 Saetze der Akte, 7 Tage Messreihe) halten eine
+ * Antwort klein genug fuer Claudes Kontext; mehr fragt Claude in Teilen.
  */
 class Werkzeuge(private val speicher: Speicher) {
 
@@ -43,6 +44,7 @@ class Werkzeuge(private val speicher: Speicher) {
     }
 
     private val uhr = DateTimeFormatter.ofPattern("HH:mm")
+    private val sekundenUhr = DateTimeFormatter.ofPattern("HH:mm:ss")
     private val zeitpunkt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
 
     fun stand(): String {
@@ -59,19 +61,50 @@ class Werkzeuge(private val speicher: Speicher) {
             appendLine("days: ${u.ersterTag ?: "-"} .. ${u.letzterTag ?: "-"}")
             appendLine("nights: ${u.naechte}, workouts: ${u.trainings}, minute records: ${u.minuten}" +
                 (u.ersteMinute?.let { " (since ${zeitpunkt.format(Instant.ofEpochSecond(it).atZone(zone))})" } ?: ""))
+            if (u.vortage > 0) {
+                appendLine("history days: ${u.ersterVortag} .. ${u.letzterVortag} (from Kiesel-Helper and older backups, measured " +
+                    "differently; 'tage' shows them before Boulder's own values and marks them in its source column)")
+            }
+            appendLine("watch SpO2 readings: ${u.sauerstoff}" +
+                (u.ersterSauerstoff?.let { " (since ${zeitpunkt.format(Instant.ofEpochSecond(it).atZone(zone))})" } ?: ""))
+            val arten = speicher.akteArten()
+            if (arten.isEmpty()) {
+                appendLine("Health Connect records: none uploaded")
+            } else {
+                appendLine("Health Connect records of all apps on the phone (tools akte, akte_tage, akte_verlauf, akte_eintrag); type: count (first .. last) sources:")
+                for (a in arten) {
+                    appendLine("  ${a.art}: ${a.anzahl} (${tag(a.erster)} .. ${tag(a.letzter)}) " + a.quellen.entries.joinToString(", ") { "${it.key} ${it.value}" })
+                }
+            }
         }
     }
 
+    /**
+     * Boulders Tage, davor die Vorgeschichte wie in den Trends der App: je Spalte nur vor dem ersten
+     * eigenen Wert, die Aktivminuten nie (Kiesel-Helper mass dort die Trainingsdauer).
+     */
     fun tage(von: LocalDate, bis: LocalDate): String {
         pruefeTage(von, bis)
-        val tage = speicher.tage(von.toString(), bis.toString())
+        val eigen = speicher.tage(von.toString(), bis.toString()).associate { it.datum to it.werte }
+        val vor = speicher.vortage(von.toString(), bis.toString()).associate { it.datum to it.werte }
+        val eigenAb = if (vor.isEmpty()) emptyMap() else speicher.ersteEigeneTage()
+        val tage = (eigen.keys + vor.keys).sorted().map { datum ->
+            val e = eigen[datum].orEmpty()
+            val v = vor[datum].orEmpty().filter { (k, _) -> k !in e && k !in OHNE_VORGESCHICHTE && eigenAb[k]?.let { datum < it } != false }
+            Triple(datum, e + v, if (v.isEmpty()) "boulder" else if (e.isEmpty()) "history" else "boulder+history")
+        }.filter { it.second.isNotEmpty() }
         if (tage.isEmpty()) return "no days between $von and $bis"
-        val spalten = SPALTEN.keys.filter { k -> tage.any { k in it.werte } } +
-            tage.flatMap { it.werte.keys }.distinct().filter { it !in SPALTEN }.sorted()
+        val bekannt = SPALTEN.keys + VORSPALTEN.keys
+        val spalten = bekannt.filter { k -> tage.any { k in it.second } } +
+            tage.flatMap { it.second.keys }.distinct().filter { it !in bekannt }.sorted()
+        val mitQuelle = tage.any { it.third != "boulder" }
         return buildString {
-            for (k in spalten) appendLine("# $k: ${SPALTEN[k] ?: "value as stored by Boulder"}")
-            appendLine((listOf("date") + spalten).joinToString(","))
-            for (t in tage) appendLine((listOf(t.datum) + spalten.map { k -> t.werte[k]?.let(::zahl) ?: "" }).joinToString(","))
+            for (k in spalten) appendLine("# $k: ${SPALTEN[k] ?: VORSPALTEN[k] ?: "value as stored by Boulder"}")
+            if (mitQuelle) appendLine("# source: boulder = measured by Boulder, history = from Kiesel-Helper or older backups (measured differently)")
+            appendLine((listOf("date") + spalten + if (mitQuelle) listOf("source") else emptyList()).joinToString(","))
+            for ((datum, werte, quelle) in tage) {
+                appendLine((listOf(datum) + spalten.map { k -> werte[k]?.let(::zahl) ?: "" } + if (mitQuelle) listOf(quelle) else emptyList()).joinToString(","))
+            }
         }
     }
 
@@ -150,6 +183,173 @@ class Werkzeuge(private val speicher: Speicher) {
         }
     }
 
+    /** Die Saetze einer Art aus Health Connect, die zwischen [von] und [bis] beginnen, ohne Messreihe. */
+    fun akte(art: String, von: LocalDate, bis: LocalDate): String {
+        pruefeTage(von, bis)
+        val l = speicher.akte(art, anfang(von), ende(bis), HOECHSTENS_SAETZE)
+        if (l.isEmpty()) return "no $art records between $von and $bis" + andereArten(art)
+        pruefe(l.size <= HOECHSTENS_SAETZE, "more than $HOECHSTENS_SAETZE $art records between $von and $bis; ask for a shorter range or use akte_tage")
+        val werte = l.flatMap { it.werte.keys }.distinct().sorted()
+        val texte = l.flatMap { it.texte.keys }.distinct().sorted()
+        val umfang = l.associate { it.id to speicher.probenUmfang(it.id) }
+        val einheit = PROBENEINHEIT[art] ?: "sample"
+        val mitProben = umfang.values.any { it != null }
+        val mitAbschnitten = l.any { it.abschnitte.isNotEmpty() }
+        return buildString {
+            if (mitProben) appendLine("# ${einheit}_n/_min/_mean/_max: the samples inside one record; akte_verlauf and akte_eintrag show them")
+            if (mitAbschnitten) appendLine("# parts: sleep stages, exercise segments or laps, with their total minutes; akte_eintrag lists each")
+            val kopf = listOf("start", "end", "source") + werte + texte +
+                (if (mitProben) listOf("${einheit}_n", "${einheit}_min", "${einheit}_mean", "${einheit}_max") else emptyList()) +
+                (if (mitAbschnitten) listOf("parts") else emptyList()) + "id"
+            appendLine(kopf.joinToString(","))
+            for (e in l) {
+                val u = umfang[e.id]
+                val zeile = listOf(zeitpunkt(e.beginn), e.ende?.let { bisZeit(e.beginn, it) }.orEmpty(), csv(e.quelle)) +
+                    werte.map { k -> e.werte[k]?.let(::wert).orEmpty() } +
+                    texte.map { k -> csv(e.texte[k].orEmpty()) } +
+                    (if (mitProben) listOf(u?.anzahl?.toString().orEmpty(), u?.kleinster?.let(::wert).orEmpty(), u?.mittel?.let(::wert).orEmpty(), u?.groesster?.let(::wert).orEmpty()) else emptyList()) +
+                    (if (mitAbschnitten) listOf(csv(teile(e))) else emptyList()) + csv(e.id)
+                appendLine(zeile.joinToString(","))
+            }
+        }
+    }
+
+    /** Ein Satz der Akte ganz: Werte, Texte, jede Spanne und die Messreihe (lang in 5-Minuten-Bloecken). */
+    fun akteEintrag(id: String): String {
+        val e = speicher.akteEintrag(id) ?: return "no Health Connect record with id $id"
+        return buildString {
+            appendLine("${e.art} from ${e.quelle}")
+            appendLine("start: ${zeitpunkt(e.beginn)}" + (e.ende?.let { ", end: ${zeitpunkt(it)}" } ?: ""))
+            for ((k, v) in e.werte.toSortedMap()) appendLine("$k: ${wert(v)}")
+            for ((k, v) in e.texte.toSortedMap()) appendLine("$k: $v")
+            if (e.abschnitte.isNotEmpty()) {
+                appendLine("parts:")
+                for (a in e.abschnitte.sortedBy { it.von }) {
+                    appendLine("${uhrzeit(a.von)}-${uhrzeit(a.bis)} ${a.art}" + (a.wert?.let { " ${wert(it)}" } ?: ""))
+                }
+            }
+            if (e.proben.isNotEmpty()) {
+                val einheit = PROBENEINHEIT[e.art] ?: "value"
+                if (e.proben.size <= HOECHSTENS_PROBEN) {
+                    appendLine("samples (time,$einheit):")
+                    for (w in e.proben) appendLine("${sekundenzeit(w.t)},${wert(w.w)}")
+                } else {
+                    appendLine("samples in 5-minute blocks (time,n,${einheit}_min,${einheit}_mean,${einheit}_max):")
+                    val a = e.proben.first().t
+                    for ((block, l) in e.proben.groupBy { (it.t - a) / 300 }.toSortedMap()) {
+                        val w = l.map { it.w }
+                        appendLine("${uhrzeit(a + block * 300)},${w.size},${wert(w.min())},${wert(w.average())},${wert(w.max())}")
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Je Tag und Quelle zusammengefasst: Mengen (Schritte, Strecke, Kalorien, Trinken, Essen) als
+     * Summe, Messungen als Kleinster, Mittel, Groesster, Sitzungen mit ihren Minuten, Messreihen nach
+     * der Zeit jedes Werts. Ein Satz zaehlt zum Tag, an dem er beginnt.
+     */
+    fun akteTage(art: String, von: LocalDate, bis: LocalDate): String {
+        pruefeTage(von, bis)
+        val a = anfang(von)
+        val b = ende(bis)
+        val eimer = speicher.akteEimer(art, a, b, EIMER_S) + speicher.probenEimer(art, a, b, EIMER_S)
+        if (eimer.none { it.name == Speicher.SAETZE }) return "no $art records between $von and $bis" + andereArten(art)
+        val summe = art in SUMMEN
+        // Viertelstunden statt Tage aus SQLite: die Grenze eines Tages verschiebt sich mit der Sommerzeit.
+        val tage = eimer.groupBy { Triple(Instant.ofEpochSecond(a + it.nummer * EIMER_S).atZone(zone).toLocalDate(), it.quelle, it.name) }
+            .mapValues { (_, l) -> Tagessumme(l.sumOf { it.n }, l.sumOf { it.summe }, l.minOf { it.kleinster }, l.maxOf { it.groesster }) }
+        val namen = tage.keys.map { it.third }.toSet()
+        val mitMinuten = art in SITZUNGEN
+        val mitProben = Speicher.PROBEN in namen
+        val werte = (namen - setOf(Speicher.SAETZE, Speicher.MINUTEN, Speicher.PROBEN)).sorted()
+        val einheit = PROBENEINHEIT[art] ?: "sample"
+        val spalten = buildList {
+            add("records")
+            if (mitMinuten) add("minutes")
+            for (k in werte) if (summe) add(k) else addAll(listOf("${k}_min", "${k}_mean", "${k}_max"))
+            if (mitProben) addAll(listOf("${einheit}_n", "${einheit}_min", "${einheit}_mean", "${einheit}_max"))
+        }
+        return buildString {
+            appendLine("# records: records starting that day" + if (summe) "; values are daily sums" else "")
+            if (mitProben) appendLine("# ${einheit}_n/_min/_mean/_max: samples taken that day")
+            appendLine((listOf("date", "source") + spalten).joinToString(","))
+            for ((tag, quelle) in tage.keys.map { it.first to it.second }.distinct().sortedWith(compareBy({ it.first }, { it.second }))) {
+                fun z(name: String) = tage[Triple(tag, quelle, name)]
+                val zellen = buildList {
+                    add(z(Speicher.SAETZE)?.n?.toString().orEmpty())
+                    if (mitMinuten) add(z(Speicher.MINUTEN)?.summe?.let(::wert).orEmpty())
+                    for (k in werte) {
+                        val x = z(k)
+                        if (summe) add(x?.summe?.let(::wert).orEmpty())
+                        else addAll(listOf(x?.kleinster?.let(::wert).orEmpty(), x?.let { wert(it.summe / it.n) }.orEmpty(), x?.groesster?.let(::wert).orEmpty()))
+                    }
+                    if (mitProben) {
+                        val x = z(Speicher.PROBEN)
+                        addAll(listOf(x?.n?.toString().orEmpty(), x?.kleinster?.let(::wert).orEmpty(), x?.let { wert(it.summe / it.n) }.orEmpty(), x?.groesster?.let(::wert).orEmpty()))
+                    }
+                }
+                appendLine((listOf(tag.toString(), csv(quelle)) + zellen).joinToString(","))
+            }
+        }
+    }
+
+    /** Die Messreihen einer Art je Quelle: bis 24 h in 5-Minuten-Bloecken, bis 7 Tage stuendlich. */
+    fun akteVerlauf(art: String, von: LocalDateTime, bis: LocalDateTime): String {
+        val (a, b) = zeitraum(von, bis, 7 * 24 * 60, "7 days")
+        val breite = if (b - a <= 86_400) 300L else 3_600L
+        val eimer = speicher.probenEimer(art, a, b, breite)
+        if (eimer.isEmpty()) return "no $art samples between $von and $bis" + andereArten(art)
+        val einheit = PROBENEINHEIT[art] ?: "value"
+        return buildString {
+            appendLine("# blocks of ${breite / 60} min; n = samples in the block")
+            appendLine("time,source,n,${einheit}_min,${einheit}_mean,${einheit}_max")
+            for (e in eimer.sortedWith(compareBy({ it.nummer }, { it.quelle }))) {
+                appendLine("${zeitpunkt(a + e.nummer * breite)},${csv(e.quelle)},${e.n},${wert(e.kleinster)},${wert(e.summe / e.n)},${wert(e.groesster)}")
+            }
+        }
+    }
+
+    fun spo2(von: LocalDate, bis: LocalDate): String {
+        pruefe(!bis.isBefore(von), "bis is before von")
+        pruefe(ChronoUnit.DAYS.between(von, bis) <= HOECHSTENS_SPO2_TAGE, "bis may be at most $HOECHSTENS_SPO2_TAGE days after von")
+        val l = speicher.sauerstoff(anfang(von), ende(bis))
+        if (l.isEmpty()) return "no SpO2 readings of the watch between $von and $bis"
+        return buildString {
+            appendLine("# quality: sensor quality 0-7 as reported by the watch")
+            appendLine("time,spo2_percent,quality")
+            for (o in l) appendLine("${zeitpunkt(o.zeit)},${o.prozent},${o.qualitaet}")
+        }
+    }
+
+    /** Fuer eine Art ohne Saetze: welche es gibt - Claude kennt die Namen nur aus "stand". */
+    private fun andereArten(art: String): String {
+        val arten = speicher.akteArten().map { it.art }
+        return if (art in arten || arten.isEmpty()) "" else "; known types: " + arten.joinToString(", ")
+    }
+
+    private fun teile(e: Akteneintrag): String =
+        e.abschnitte.groupBy { it.art }.entries.joinToString("; ") { (art, l) -> "$art ${l.sumOf { it.bis - it.von } / 60} min" }
+
+    private fun anfang(tag: LocalDate): Long = tag.atStartOfDay(zone).toEpochSecond()
+
+    private fun ende(tag: LocalDate): Long = tag.plusDays(1).atStartOfDay(zone).toEpochSecond()
+
+    private fun zeitpunkt(t: Long): String = zeitpunkt.format(Instant.ofEpochSecond(t).atZone(zone))
+
+    private fun uhrzeit(t: Long): String = uhr.format(Instant.ofEpochSecond(t).atZone(zone))
+
+    private fun sekundenzeit(t: Long): String = sekundenUhr.format(Instant.ofEpochSecond(t).atZone(zone))
+
+    private fun tag(t: Long): String = Instant.ofEpochSecond(t).atZone(zone).toLocalDate().toString()
+
+    /** Das Ende eines Satzes: am selben Tag nur die Uhrzeit, sonst mit Datum. */
+    private fun bisZeit(beginn: Long, ende: Long): String =
+        if (tag(beginn) == tag(ende)) uhrzeit(ende) else zeitpunkt(ende)
+
+    private data class Tagessumme(val n: Long, val summe: Double, val kleinster: Double, val groesster: Double)
+
     private fun aufwachTag(n: Nacht): LocalDate =
         Instant.ofEpochSecond(n.beginn + n.aufwachen * 60L).atOffset(ZoneOffset.ofTotalSeconds(n.utcZuLokal)).toLocalDate()
 
@@ -181,6 +381,46 @@ class Werkzeuge(private val speicher: Speicher) {
 
     companion object {
         const val HOECHSTENS_TAGE = 366L
+        const val HOECHSTENS_SAETZE = 500
+        const val HOECHSTENS_PROBEN = 300
+        const val HOECHSTENS_SPO2_TAGE = 31L
+
+        /** Eimer fuer akte_tage: eine Viertelstunde, damit auch Zonen mit halben Stunden ganze Tage ergeben. */
+        private const val EIMER_S = 900L
+
+        /** Satzarten, deren Werte sich ueber den Tag zusammenzaehlen (Namen wie in Boulders Akteneintrag). */
+        val SUMMEN = setOf(
+            "Steps", "Distance", "ActiveCaloriesBurned", "TotalCaloriesBurned", "FloorsClimbed",
+            "ElevationGained", "Hydration", "Nutrition", "WheelchairPushes",
+        )
+
+        /** Satzarten mit einer Dauer, die zaehlt: dort zeigt akte_tage die Minuten. */
+        val SITZUNGEN = setOf("SleepSession", "ExerciseSession", "MindfulnessSession", "PlannedExerciseSession", "MenstruationPeriod")
+
+        /** Die Einheit der Messreihe je Satzart. */
+        val PROBENEINHEIT = mapOf(
+            "HeartRate" to "bpm", "Speed" to "m_per_s", "Power" to "watts", "StepsCadence" to "steps_per_min",
+            "CyclingPedalingCadence" to "rpm", "SkinTemperature" to "delta_celsius",
+        )
+
+        /** Wie in der App (Trenddaten.OHNE_VORGESCHICHTE): in Kiesel-Helper war es die Trainingsdauer. */
+        val OHNE_VORGESCHICHTE = setOf("aktiv")
+
+        /** Spalten, die nur die Vorgeschichte kennt (Kiesel-Helper). */
+        val VORSPALTEN = linkedMapOf(
+            "rem" to "REM sleep of that night [min] (history only)",
+            "leicht" to "light sleep of that night [min] (history only)",
+            "wach" to "awake time in that night [min] (history only)",
+            "schlaf_von" to "went to sleep [min after 18:00 of the previous day] (history only)",
+            "schlaf_bis" to "woke up [min after 18:00 of the previous day] (history only)",
+            "puls_min" to "estimated resting heart rate [bpm] (history only)",
+            "puls_hoch" to "heart rate value as recorded by Kiesel-Helper (history only)",
+            "puls_tief" to "heart rate value as recorded by Kiesel-Helper (history only)",
+            "puls_nacht_sd" to "spread of the night heart rate as recorded by Kiesel-Helper (history only)",
+            "distanz" to "distance as recorded by Kiesel-Helper (history only)",
+            "kalorien" to "calories as recorded by Kiesel-Helper (history only)",
+            "koffein_letzt" to "last caffeine as recorded by Kiesel-Helper (history only)",
+        )
 
         /** Was Boulders Tagesspalten bedeuten (Spalte.kt in der App), in der Reihenfolge der Tabelle. */
         val SPALTEN = linkedMapOf(
@@ -200,16 +440,27 @@ class Werkzeuge(private val speicher: Speicher) {
         val PHASEN = linkedMapOf(0 to "awake", 1 to "light", 2 to "deep", 3 to "REM", 4 to "asleep (no stage)")
 
         private fun zahl(x: Double): String = if (x == Math.floor(x) && kotlin.math.abs(x) < 1e15) x.toLong().toString() else "%.1f".format(java.util.Locale.ROOT, x)
+
+        /** Werte der Akte mit bis zu zwei Stellen: Geschwindigkeit, Temperaturdifferenz und Glukose brauchen sie. */
+        internal fun wert(x: Double): String =
+            if (x == Math.floor(x) && kotlin.math.abs(x) < 1e15) x.toLong().toString()
+            else "%.2f".format(java.util.Locale.ROOT, x).trimEnd('0').trimEnd('.')
+
+        /** Ein Feld fuer CSV: Titel und Notizen anderer Apps koennen Komma, Anfuehrungszeichen und Zeilenumbrueche tragen. */
+        internal fun csv(s: String): String =
+            if (s.any { it == ',' || it == '"' || it == '\n' || it == '\r' }) "\"" + s.replace("\"", "\"\"") + "\"" else s
     }
 }
 
 private val NUR_LESEN = ToolAnnotations(readOnlyHint = true, destructiveHint = false, idempotentHint = true, openWorldHint = false)
 
 private const val ANLEITUNG =
-    "Read-only health data of one person from a Pebble watch, mirrored by the Boulder app. " +
-        "Call 'stand' first: it tells the timezone and which days are available. Dates are local (YYYY-MM-DD), " +
-        "times local (YYYY-MM-DDTHH:MM). A night belongs to the day of waking up. Steps and active minutes " +
-        "of a day appear once the day is over; for today use 'puls' or 'minuten' (if minute records are uploaded)."
+    "Read-only health data of one person from a Pebble watch, mirrored by the Boulder app, plus everything in " +
+        "Health Connect on the phone (all apps). Call 'stand' first: it tells the timezone, which days are available " +
+        "and which Health Connect record types exist. Dates are local (YYYY-MM-DD), times local (YYYY-MM-DDTHH:MM). " +
+        "A night belongs to the day of waking up. Steps and active minutes of a day appear once the day is over; for " +
+        "today use 'puls' or 'minuten' (if minute records are uploaded). Several apps can record the same thing " +
+        "(steps from the watch and the phone): Health Connect tools keep sources apart, do not add them up."
 
 private fun schema(vararg felder: Pair<String, String>): ToolSchema = ToolSchema(
     properties = buildJsonObject {
@@ -264,6 +515,33 @@ internal fun mcpServer(speicher: Speicher): Server {
     s.addTool(name = "minuten", description = "Raw minute records of the watch (steps, movement, heart rate, wrist orientation), at most 6 hours.",
         inputSchema = schema(vonZeit, "bis" to "end, YYYY-MM-DDTHH:MM (local), at most 6 h after von"), toolAnnotations = NUR_LESEN) { r ->
         antwort { w.minuten(r.arguments.zeit("von"), r.arguments.zeit("bis")) }
+    }
+    s.addTool(name = "spo2", description = "Blood oxygen (SpO2) readings of the watch with their sensor quality.",
+        inputSchema = schema(von, "bis" to "last day, YYYY-MM-DD (local), at most ${Werkzeuge.HOECHSTENS_SPO2_TAGE} days after von"),
+        toolAnnotations = NUR_LESEN) { r -> antwort { w.spo2(r.arguments.datum("von"), r.arguments.datum("bis")) } }
+    val art = "art" to "Health Connect record type as listed by 'stand', e.g. HeartRate, Steps, Weight, SleepSession, BloodPressure"
+    s.addTool(name = "akte",
+        description = "Health Connect records of one type from all apps on the phone, starting in a date range: time, source app, " +
+            "values, texts, a summary of samples and parts, and the record id (at most ${Werkzeuge.HOECHSTENS_SAETZE} records).",
+        inputSchema = schema(art, von, bis), toolAnnotations = NUR_LESEN) { r ->
+        antwort { w.akte(r.arguments.text("art"), r.arguments.datum("von"), r.arguments.datum("bis")) }
+    }
+    s.addTool(name = "akte_eintrag",
+        description = "One Health Connect record in full: all values and texts, every part (sleep stage, segment, lap) and its samples.",
+        inputSchema = schema("id" to "record id from the akte tool"), toolAnnotations = NUR_LESEN) { r -> antwort { w.akteEintrag(r.arguments.text("id")) } }
+    s.addTool(name = "akte_tage",
+        description = "Health Connect data of one type summarised per day and source app: sums for amounts (steps, distance, calories, " +
+            "water, nutrition), minimum/mean/maximum for measurements (weight, blood pressure, SpO2 ...) and samples (heart rate ...), " +
+            "count and minutes for sessions (sleep, exercise, mindfulness). A record counts on the day it starts, " +
+            "so a night counts on the evening before.",
+        inputSchema = schema(art, von, bis), toolAnnotations = NUR_LESEN) { r ->
+        antwort { w.akteTage(r.arguments.text("art"), r.arguments.datum("von"), r.arguments.datum("bis")) }
+    }
+    s.addTool(name = "akte_verlauf",
+        description = "Samples of one Health Connect type (heart rate, speed, power, cadence, skin temperature) per source app, " +
+            "in 5-minute blocks up to 24 h or hourly blocks up to 7 days.",
+        inputSchema = schema(art, vonZeit, "bis" to "end, YYYY-MM-DDTHH:MM (local), at most 7 days after von"), toolAnnotations = NUR_LESEN) { r ->
+        antwort { w.akteVerlauf(r.arguments.text("art"), r.arguments.zeit("von"), r.arguments.zeit("bis")) }
     }
     return s
 }

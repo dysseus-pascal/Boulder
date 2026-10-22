@@ -210,7 +210,7 @@ class AnmeldungTest {
         }
         val c = Client(Implementation("test", "1"))
         c.connect(StreamableHttpClientTransport(http, "/mcp"))
-        assertEquals(6, c.listTools().tools.size)
+        assertEquals(11, c.listTools().tools.size)
         c.close()
 
         // Claudes Zugang liest nur: schreiben darf allein Boulder mit dem Sync-Token.

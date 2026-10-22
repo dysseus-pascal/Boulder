@@ -63,7 +63,7 @@ class AppTest {
             setBody(lieferung)
         }
         assertEquals(HttpStatusCode.OK, ok.status)
-        assertEquals(Quittung(1, 0, 0, 0, trainingsEntfernt = 0), austauschJson.decodeFromString(Quittung.serializer(), ok.bodyAsText()))
+        assertEquals(Quittung(1, 0, 0, 0, 0, 0, 0, 0, 0), austauschJson.decodeFromString(Quittung.serializer(), ok.bodyAsText()))
         assertEquals(HttpStatusCode.BadRequest, client.post("/sync") { bearerAuth(sync); setBody("kein json") }.status)
     }
 
@@ -107,7 +107,7 @@ class AppTest {
         }
         val c = Client(Implementation("test", "1"))
         c.connect(StreamableHttpClientTransport(http, "/mcp"))
-        assertEquals(setOf("stand", "tage", "nacht", "trainings", "puls", "minuten"), c.listTools().tools.map { it.name }.toSet())
+        assertEquals(setOf("stand", "tage", "nacht", "trainings", "puls", "minuten", "spo2", "akte", "akte_eintrag", "akte_tage", "akte_verlauf"), c.listTools().tools.map { it.name }.toSet())
         val tage = c.callTool("tage", mapOf("von" to "2026-10-16", "bis" to "2026-10-16"))
         val text = (tage.content.single() as TextContent).text
         assertTrue("2026-10-16,8123" in text, text)

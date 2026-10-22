@@ -1,15 +1,22 @@
 # Boulder-Server
 
-Ein kleiner Server für den eigenen Rechner. Boulder spiegelt seine Gesundheitsdaten dorthin, und
-Claude liest sie über MCP (Connector in der Claude-App, im Web oder in Claude Code). Die Werkzeuge
-lesen nur:
+Ein kleiner Server für den eigenen Rechner. Boulder spiegelt seine Gesundheitsdaten dorthin, dazu
+alles, was in Health Connect steht, aus jeder App. Claude liest sie über MCP (Connector in der
+Claude-App, im Web oder in Claude Code). Die Werkzeuge lesen nur:
 
-- `stand`: Zeitzone, letzte Lieferung, Firmware, Ziele, vorhandene Tage
-- `tage`: Tageswerte (höchstens 366 Tage je Abfrage)
+- `stand`: Zeitzone, letzte Lieferung, Firmware, Ziele, vorhandene Tage, die Satzarten aus Health
+  Connect mit ihren Apps
+- `tage`: Tageswerte (höchstens 366 Tage je Abfrage), davor die Vorgeschichte aus Kiesel-Helper und
+  älteren Sicherungen, als solche gekennzeichnet
 - `nacht`: eine Nacht mit Phasen und HRV
 - `trainings`: Trainings
 - `puls`: Puls in 5-Minuten-Blöcken (höchstens 24 h)
 - `minuten`: Rohminuten (höchstens 6 h, nur wenn Boulder sie schickt)
+- `spo2`: SpO2-Messungen der Uhr (höchstens 31 Tage)
+- `akte`: die Sätze einer Art aus Health Connect, etwa Gewicht oder Blutdruck (höchstens 500)
+- `akte_eintrag`: ein Satz ganz, mit Schlafphasen, Abschnitten und Messreihe
+- `akte_tage`: eine Art je Tag und App zusammengefasst
+- `akte_verlauf`: Messreihen wie Puls oder Leistung in Blöcken (höchstens 7 Tage)
 
 Der Server läuft als Podman-Pod zusammen mit einem Cloudflare Tunnel. Einen Port öffnet er
 nicht: Erreichbar ist er nur über den Tunnel.

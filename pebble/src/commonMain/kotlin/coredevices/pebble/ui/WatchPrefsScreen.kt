@@ -71,6 +71,10 @@ internal fun List<WatchPreference<*>>.hidePresetManagedBacklightPrefs(): List<Wa
     else filterNot { it.pref in PRESET_MANAGED_BACKLIGHT_PREFS }
 }
 
+/** Boulder: SpO2 im Schlaf steht bei Pebbles SpO2-Schaltern (WatchSettingsScreen), nicht in dieser Liste. */
+internal fun List<WatchPreference<*>>.ohneEigenenPlatz(): List<WatchPreference<*>> =
+    filterNot { it.pref == BoolWatchPref.BoulderSpo2Schlaf }
+
 private val SCHEDULE_HOURS = mapOf<WatchPref<*>, WatchPref<*>>(
     BoolWatchPref.QuietTimeWeekdayScheduleEnabled to ScheduleWatchPref.QuietTimeWeekdaySchedule,
     BoolWatchPref.QuietTimeWeekendScheduleEnabled to ScheduleWatchPref.QuietTimeWeekendSchedule,
@@ -91,7 +95,7 @@ fun watchPrefs(): List<SettingsItem> {
     val settings by libPebble.watchPrefs.collectAsState(emptyList())
     val quickLaunchOptions = quickLaunchOptions(libPebble)
     val mapped = remember(settings, quickLaunchOptions) {
-        settings.hidePresetManagedBacklightPrefs().groupQuietTimeScheduleHours().map { item ->
+        settings.ohneEigenenPlatz().hidePresetManagedBacklightPrefs().groupQuietTimeScheduleHours().map { item ->
             when (val pref = item.pref) {
                 is BoolWatchPref -> booleanPref(pref.castParent(item), libPebble)
                 is EnumWatchPref -> enumPref(pref.castParent(item), libPebble)
@@ -187,13 +191,29 @@ fun WatchPref<*>.section(): Section = when (this) {
     BoolWatchPref.MusicShowVolumeControls -> Section.Music
     BoolWatchPref.MusicShowProgressBar -> Section.Music
     BoolWatchPref.MusicShowAlbumArt -> Section.Music
+    BoolWatchPref.BoulderSpo2Schlaf -> Section.Health
 }
 
 fun WatchPref<*>.topLevelType(): TopLevelType = when (this) {
     // Weather is configured on the phone, even though the unit it sets is a watch pref.
     EnumWatchPref.WindSpeed -> TopLevelType.Phone
+    // Boulder: neben Pebbles SpO2-Schaltern, die auf der Seite des Telefons stehen.
+    BoolWatchPref.BoulderSpo2Schlaf -> TopLevelType.Phone
     else -> TopLevelType.Watch
 }
+
+/** Boulder: der Schalter fuer SpO2 im Schlaf, fuer den Platz bei Pebbles SpO2-Schaltern. */
+internal fun spo2SchlafPref(item: WatchPreference<Boolean>, libPebble: LibPebble, show: () -> Boolean): SettingsItem =
+    basicSettingsToggleItem(
+        id = item.pref.id,
+        title = item.pref.displayName,
+        description = item.pref.description,
+        topLevelType = item.pref.topLevelType(),
+        section = item.pref.section(),
+        checked = item.valueOrDefault(),
+        show = show,
+        onCheckChanged = { enabled -> libPebble.setWatchPref(item.copy(value = enabled)) },
+    )
 
 private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {
     val pref = item.pref as NumberWatchPref

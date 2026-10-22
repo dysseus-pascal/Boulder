@@ -49,6 +49,14 @@ class WatchPrefEmpfangTest {
     }
 
     @Test
+    fun spo2ImSchlafKommtAlsSchalter() {
+        assertEquals("1", meldung("boulderSpo2Schlaf", ubyteArrayOf(1u))?.value)
+        assertEquals("0", meldung("boulderSpo2Schlaf", ubyteArrayOf(0u))?.value)
+        assertEquals(true, BoolWatchPref.BoulderSpo2Schlaf.decodeValue("1"))
+        assertEquals("1", BoolWatchPref.BoulderSpo2Schlaf.encodeValue(true))
+    }
+
+    @Test
     fun timeStyleVonFrueherWirdUebergangen() {
         assertNull(meldung("tsBedrock", UByteArray(32) { it.toUByte() }))
     }

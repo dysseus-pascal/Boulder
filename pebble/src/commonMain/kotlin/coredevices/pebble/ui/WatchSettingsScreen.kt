@@ -163,8 +163,10 @@ import io.rebble.libpebblecommon.permissions.PermissionPolicy
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
+import io.rebble.libpebblecommon.database.entity.BoolWatchPref
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
+import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchType
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
@@ -506,6 +508,10 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
         }
     }
     val watchPrefs = watchPrefs()
+    // Boulder: SpO2 im Schlaf steht unten bei Pebbles SpO2-Schaltern, nicht unter den Uhr-Einstellungen.
+    val spo2Schlaf by remember(libPebble) {
+        libPebble.watchPrefs.map { prefs -> prefs.firstOrNull { it.pref == BoolWatchPref.BoulderSpo2Schlaf } }
+    }.collectAsState(null)
     val coreAnalytics: CoreAnalytics = koinInject()
     val platformHealthSync: PlatformHealthSync = koinInject()
     val healthSyncTracker: HealthSyncTracker = koinInject()
@@ -524,6 +530,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             experimentalDevices,
             loggedIn,
             watchPrefs,
+            spo2Schlaf,
             rebbleVoiceAvailable,
             platformSttAvailable,
         ) {
@@ -1170,6 +1177,12 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled && healthSettings.bloodOxygenEnabled },
                 ),
+                spo2Schlaf?.let { item ->
+                    @Suppress("UNCHECKED_CAST")
+                    spo2SchlafPref(item as WatchPreference<Boolean>, libPebble) {
+                        healthSettings.trackingEnabled && healthSettings.hrmEnabled
+                    }
+                },
                 basicSettingsToggleItem(
                     id = SettingsIds.BloodOxygenActivityEnabled,
                     title = "Blood Oxygen During Activities",

@@ -17,7 +17,8 @@ nicht: Erreichbar ist er nur über den Tunnel.
 ## Was wohin geht
 
 - **Gespeichert** wird alles auf dem eigenen Server, im Volume `boulder-daten` (SQLite).
-  Minutendaten bleiben 90 Tage, alles andere bleibt ganz.
+  Minutendaten bleiben 90 Tage, alles andere bleibt. Ein Training, das Boulder nicht mehr führt
+  (gelöscht oder einem Doppel aus einer anderen App gewichen), verschwindet auch hier.
 - **Cloudflare** beendet TLS an seinem Rand. Lieferungen und Abfragen sind dort also lesbar.
 - **Claude (Anthropic)** bekommt nur, was ein Werkzeug auf eine Frage liefert.
 - An Core Devices oder Google geht nichts.
@@ -124,18 +125,27 @@ claude mcp add --transport http boulder https://boulder.example.ch/mcp --header 
 
 ## Abmelden, Tokens wechseln
 
-Ein neues MCP-Token meldet jede Claude-Verbindung ab. Danach den Connector in Claude neu
-verbinden.
+Ein neues MCP-Token meldet jede Claude-Verbindung ab:
 
 ```sh
-printf %s "$(openssl rand -hex 32)" | podman secret create --replace boulder-mcp -
+MCP=$(openssl rand -hex 32)
+printf %s "$MCP" | podman secret create --replace boulder-mcp -
 systemctl --user restart boulder-pod
+printf 'Neues MCP-Token: %s\n' "$MCP"
 ```
 
-Für das Sync-Token gilt dasselbe mit `boulder-sync`; das neue Token kommt danach in Boulder.
+Das neue Token in den Passwortmanager übernehmen und den Connector in Claude neu verbinden: auf
+der Seite von Boulder das neue MCP-Token eingeben, beim festen Header den neuen Wert eintragen.
 
-Wer zehnmal in 15 Minuten ein falsches MCP-Token eingibt, sperrt die Anmeldeseite für 15 Minuten.
-Bestehende Verbindungen laufen weiter.
+Für das Sync-Token gilt dasselbe mit `boulder-sync` (etwa `SYNC=$(openssl rand -hex 32)`); das
+neue Token kommt danach in Boulder unter **Settings > Boulder server**.
+
+Ein gespeichertes Token zeigt `podman secret inspect --showsecret --format '{{.SecretData}}' boulder-mcp`
+(ebenso `boulder-sync`).
+
+Wer zehnmal in 15 Minuten ein falsches MCP-Token eingibt, sperrt die Anmeldeseite für 15 Minuten,
+aber nur für seinen eigenen Anschluss (dieselbe IPv4-Adresse oder dasselbe IPv6-Netz /64). Wer
+von woanders kommt, meldet sich weiter an, und bestehende Verbindungen laufen weiter.
 
 ## Nur Claudes Server zulassen
 
@@ -146,14 +156,24 @@ von zu Hause aus wird abgewiesen.
 
 ## Aktualisieren
 
-Das neue Bündel entpacken und wie in Schritt 1 bauen. Danach `systemctl --user restart
-boulder-pod`. Die Daten bleiben im Volume.
+Das neue Bündel liegt beim Release von Boulder (`boulder-server-<fassung>.tar.gz`). Entpacken und
+wie in Schritt 1 bauen, danach `systemctl --user restart boulder-pod`. Die Daten bleiben im Volume.
+
+Server und App gehören zusammen: **erst den Server erneuern, dann Boulder**. Ein älterer Server
+ersetzte Tage, die eine neuere App ohne Wasser und Koffein schickt, und vergässe diese damit.
 
 ## Sichern
 
-Der Server ist ein Spiegel: Geht er verloren, schickt Boulder alles neu (**Send everything again**
-auf der Seite Boulder server). Minutendaten gibt es dann nur so weit, wie Boulder sie noch hat
-(90 Tage). Eine Sicherung des Volumes geht so:
+Der Server ist ein Spiegel, aber kein vollständiger: Geht er verloren, schickt Boulder neu, was
+es noch hat (**Send everything again** auf der Seite Boulder server). Das sind
+
+- alle Nächte,
+- die Tageswerte (Schritte, Schlaf, Ruhepuls, HRV, Präparate) aller Tage, die Boulder selbst gemessen hat,
+- Wasser und Koffein nur der letzten 180 Tage,
+- Trainings nur der letzten 90 Tage,
+- Minutendaten nur der letzten 90 Tage.
+
+Was älter ist, gibt es danach nur noch in einer Sicherung des Volumes. Sie geht so:
 
 ```sh
 systemctl --user stop boulder-pod

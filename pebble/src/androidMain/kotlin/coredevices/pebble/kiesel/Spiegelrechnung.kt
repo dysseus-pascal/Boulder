@@ -9,8 +9,8 @@ import io.rebble.libpebblecommon.database.entity.HealthDataEntity
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
 import io.rebble.libpebblecommon.database.entity.NachtHrvEntity
+import coredevices.util.sha256
 import java.net.URI
-import java.security.MessageDigest
 import java.time.LocalDate
 
 /**
@@ -66,8 +66,7 @@ internal object Spiegelrechnung {
     fun token(text: String): String? = text.trim().takeIf { it.length >= 32 && it.none(Char::isWhitespace) }
 
     /** Gleich, solange sich [text] nicht aendert: die ersten 8 Bytes von SHA-256, als Hex. */
-    fun abdruck(text: String): String =
-        MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).take(8).joinToString("") { Integer.toHexString(it.toInt() and 0xff).padStart(2, '0') }
+    fun abdruck(text: String): String = sha256(text.toByteArray()).toHexString(0, 8)
 
     /**
      * Ein Tag, wie er gesendet wuerde; die Reihenfolge der Werte zaehlt nicht. Ohne [Tag.entfernt]
@@ -88,7 +87,7 @@ internal object Spiegelrechnung {
      * Fenster als entfernt, wenn sie ihm fehlen - so verschwindet auch ein geloeschtes Glas.
      */
     fun tage(stand: Trendstand, heute: LocalDate): List<Tag> {
-        val werte = jeTag(stand.eigen)
+        val werte = Tagesspeicher.jeTag(stand.eigen)
         val ab = heute.minusDays(Trenddaten.TAGE)
         val fenster = if (stand.akteGanz.isEmpty()) emptyList() else generateSequence(ab) { it.plusDays(1) }.takeWhile { it <= heute }.toList()
         return (werte.keys + fenster).toSortedSet().map { tag ->
@@ -97,11 +96,6 @@ internal object Spiegelrechnung {
             Tag(tag.toString(), w, if (imFenster) stand.akteGanz.filter { it !in w }.sorted() else emptyList())
         }.filter { it.werte.isNotEmpty() || it.entfernt.isNotEmpty() }
     }
-
-    /** Die Reihen der Trends je Tag, wie die Sicherung sie schreibt. */
-    fun jeTag(reihen: Reihen): Map<LocalDate, Map<String, Double>> =
-        reihen.flatMap { (spalte, l) -> l.map { (tag, w) -> Triple(tag, spalte, w) } }
-            .groupBy { it.first }.mapValues { (_, l) -> l.associate { it.second to it.third } }
 
     /** Eine Nacht der Firmware im Austauschformat. */
     fun nacht(e: NachtEntity, abschnitte: List<NachtAbschnittEntity>, hrv: List<NachtHrvEntity>): Nacht = Nacht(

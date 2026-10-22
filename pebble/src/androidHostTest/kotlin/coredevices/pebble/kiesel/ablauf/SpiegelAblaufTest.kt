@@ -1,5 +1,6 @@
 package coredevices.pebble.kiesel.ablauf
 
+import CoreAppVersion
 import android.content.Context
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
@@ -100,7 +101,7 @@ class SpiegelAblaufTest {
         }
     }
 
-    private fun sende(alles: Boolean = false, uhr: Long = jetzt) = runBlocking { Spiegel.sende(context, api, FakeLibPebble(), alles, post) { uhr } }
+    private fun sende(alles: Boolean = false, uhr: Long = jetzt) = runBlocking { Spiegel.sende(context, api, FakeLibPebble(), CoreAppVersion("0.56.0"), alles, post) { uhr } }
 
     private fun minute(t: Long) = HealthDataEntity(
         timestamp = t, steps = 10, orientation = 55, intensity = 800, lightIntensity = 0,
@@ -274,7 +275,7 @@ class SpiegelAblaufTest {
         val f = sende()
         assertIs<Spiegel.Ausgang.Fehler>(f)
         assertTrue(f.voruebergehend)
-        assertTrue(Spiegel.status(context).fehler)
+        assertTrue(Spiegel.status(context).fehler != null)
         sende()
         // Derselbe Fehler steht einmal im Protokoll, nicht bei jedem Versuch.
         assertEquals(1, KieselVerlauf.alle(context).count { it.second.contains(f.text) })
@@ -284,7 +285,7 @@ class SpiegelAblaufTest {
         assertEquals(2, lieferungen.last().naechte.size)
         val wieder = context.getString(R.string.ks_sv_titel) + ": " + context.getString(R.string.ks_sv_wieder)
         assertEquals(wieder, KieselVerlauf.alle(context).first().second)
-        assertTrue(!Spiegel.status(context).fehler)
+        assertEquals(null, Spiegel.status(context).fehler)
     }
 
     @Test

@@ -251,12 +251,10 @@ internal object Sichern {
     suspend fun jetzt(context: Context, api: HealthDataApi): String = withContext(Dispatchers.IO) {
         val o = ordner(context)?.takeIf { it.erreichbar } ?: return@withContext context.getString(R.string.ks_b_kein_ordner)
         val stand = Trenddaten.lies(context, api, merken = false)
-        fun jeTag(r: Reihen) = r.flatMap { (spalte, l) -> l.map { (tag, w) -> Triple(tag, spalte, w) } }
-            .groupBy { it.first }.map { (tag, l) -> tag to l.associate { it.second to it.third } }
-        val tage = jeTag(stand.eigen)
+        val tage = Tagesspeicher.jeTag(stand.eigen).toList()
         val spuren = Spur.alle(context)
         // Die Vorgeschichte getrennt: beim Zurueckholen soll sie wieder nur die Zeit davor fuellen.
-        if (!legeSicher(o, Sicherungsformat.BOULDER, Sicherungsformat.alsJson(tage, spuren, Instant.now().toString(), jeTag(stand.vorgeschichte)), "application/json")) {
+        if (!legeSicher(o, Sicherungsformat.BOULDER, Sicherungsformat.alsJson(tage, spuren, Instant.now().toString(), Tagesspeicher.jeTag(stand.vorgeschichte).toList()), "application/json")) {
             return@withContext context.getString(R.string.ks_b_fehlgeschlagen)
         }
         // JE ORDNER: nach einem Ordnerwechsel gehoeren die alten Spuren auch in den neuen.

@@ -32,6 +32,7 @@ import coredevices.pebble.kiesel.Sichern
 import coredevices.pebble.kiesel.Spiegel
 import coredevices.pebble.kiesel.SpurDienst
 import coredevices.pebble.kiesel.TrainingsDaten
+import coredevices.pebble.kiesel.ansicht.spiegelStatus
 import coredevices.pebble.kiesel.versuche
 import coredevices.util.CoreConfigHolder
 import coredevices.util.Permission
@@ -196,12 +197,7 @@ actual fun boulderSettingsItems(navBarNav: NavBarNav?): List<SettingsItem> {
         ),
         basicSettingsActionItem(
             title = stringResource(R.string.ks_sv_titel),
-            description = when {
-                spiegel == null -> stringResource(R.string.ks_sv_kein)
-                spiegelStand.fehler -> spiegelStand.meldung.orEmpty()
-                spiegelStand.erfolg == 0L -> stringResource(R.string.ks_sv_nie)
-                else -> stringResource(R.string.ks_sv_zuletzt, Formate.relativ(context, spiegelStand.erfolg))
-            },
+            description = if (spiegel == null) stringResource(R.string.ks_sv_kein) else spiegelStatus(spiegelStand),
             topLevelType = TopLevelType.Phone,
             section = Section.Boulder,
             keywords = "server claude mcp ai mirror upload sync",

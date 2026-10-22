@@ -94,10 +94,9 @@ class SpiegelrechnungTest {
     }
 
     @Test
-    fun reihenJeTag() {
-        val tag = LocalDate.of(2026, 10, 15)
-        val reihen = mapOf("schritte" to listOf(tag to 9000.0), "schlaf" to listOf(tag to 431.0, tag.plusDays(1) to 400.0))
-        assertEquals(mapOf(tag to mapOf("schritte" to 9000.0, "schlaf" to 431.0), tag.plusDays(1) to mapOf("schlaf" to 400.0)), Spiegelrechnung.jeTag(reihen))
+    fun derAbdruckBleibtDerVon055() {
+        // Abdruecke aus 0.55.0 stehen auf jedem Telefon: dieselbe Rechnung, sonst ginge alles noch einmal.
+        assertEquals("2cf24dba5fb0a30e", Spiegelrechnung.abdruck("hello"))
     }
 
     @Test

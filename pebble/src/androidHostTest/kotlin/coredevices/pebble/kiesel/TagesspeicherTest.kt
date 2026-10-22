@@ -60,4 +60,13 @@ class TagesspeicherTest {
         assertEquals(listOf(t1 to 1.0, t3 to 3.0), r["schritte"])
         assertEquals(listOf(t1 to 40.0), r["hrv"])
     }
+
+    @Test
+    fun reihenJeTagUndZurueck() {
+        val tag = LocalDate.of(2026, 10, 15)
+        val reihen = mapOf("schritte" to listOf(tag to 9000.0), "schlaf" to listOf(tag to 431.0, tag.plusDays(1) to 400.0))
+        val tage = Tagesspeicher.jeTag(reihen)
+        assertEquals(mapOf(tag to mapOf("schritte" to 9000.0, "schlaf" to 431.0), tag.plusDays(1) to mapOf("schlaf" to 400.0)), tage)
+        assertEquals(reihen, Tagesspeicher.alsReihen(tage))
+    }
 }

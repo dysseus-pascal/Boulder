@@ -1,5 +1,6 @@
 package coredevices.pebble.kiesel.ansicht
 
+import CoreAppVersion
 import android.os.Looper
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
@@ -73,7 +74,7 @@ class SpiegelAnsichtTest {
     @Test
     fun getipptesBleibtBisEsGespeichertIst() {
         val lib = FakeLibPebble()
-        startKoin { modules(module { single<HealthDataApi> { lib }; single<LibPebble> { lib } }) }
+        startKoin { modules(module { single<HealthDataApi> { lib }; single<LibPebble> { lib }; single { CoreAppVersion("0.56.0") } }) }
         aktivitaet = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
         Spiegel.entferne(aktivitaet)
         aktivitaet.setContent { MaterialTheme(colorScheme = greyScheme) { SpiegelAnsicht() } }

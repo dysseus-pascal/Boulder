@@ -92,6 +92,11 @@ internal object Tagesspeicher {
         return aus
     }
 
+    /** Reihen je Tag, die Umkehrung von [alsReihen]: so schreibt sie die Sicherung, so sendet sie der Spiegel. */
+    internal fun jeTag(reihen: Reihen): Map<LocalDate, Map<String, Double>> =
+        reihen.flatMap { (spalte, l) -> l.map { (tag, w) -> Triple(tag, spalte, w) } }
+            .groupBy { it.first }.mapValues { (_, l) -> l.associate { it.second to it.third } }
+
     /** Ein Fach als Reihen: je Spalte die Tage mit Wert, aufsteigend. */
     internal fun alsReihen(tage: Map<LocalDate, Map<String, Double>>): Reihen {
         val aus = mutableMapOf<String, MutableList<Pair<LocalDate, Double>>>()

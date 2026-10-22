@@ -1,5 +1,6 @@
 package coredevices.pebble.kiesel
 
+import CoreAppVersion
 import android.content.Context
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
@@ -102,7 +103,8 @@ internal object Spiegel {
 
     enum class Eingabe { ADRESSE, TOKEN }
 
-    data class Status(val versuch: Long, val erfolg: Long, val meldung: String?, val fehler: Boolean)
+    /** [erfolg]: wann zuletzt quittiert; [fehler]: der Text, wenn das letzte Senden scheiterte. */
+    data class Status(val erfolg: Long, val fehler: String?)
 
     sealed interface Ausgang {
         /** Nicht eingerichtet, oder waehrend des Sendens auf einen anderen Server umgestellt: nichts zu melden. */
@@ -129,8 +131,9 @@ internal object Spiegel {
 
     internal fun merke(context: Context, art: Art, an: Boolean) = prefs(context).edit().putBoolean(art.schluessel, an).apply()
 
+    // "fehler" bleibt ein Boolean wie in 0.55.0: getString auf einem gespeicherten Boolean wuerfe.
     fun status(context: Context): Status = prefs(context).let {
-        Status(it.getLong("versuch", 0), it.getLong("erfolg", 0), it.getString("meldung", null), it.getBoolean("fehler", false))
+        Status(it.getLong("erfolg", 0), if (it.getBoolean("fehler", false)) it.getString("meldung", null).orEmpty() else null)
     }
 
     /**
@@ -240,6 +243,7 @@ internal object Spiegel {
         context: Context,
         api: HealthDataApi,
         libPebble: LibPebble,
+        fassung: CoreAppVersion,
         alles: Boolean = false,
         post: Spiegelpost = Spiegelpost.standard,
         gruendlich: Boolean = false,
@@ -255,7 +259,7 @@ internal object Spiegel {
             }
             prefs(context).edit().putLong("versuch", System.currentTimeMillis()).apply()
             val aus = try {
-                sendeAn(context, api, libPebble, ziel, post, uhr(), gruendlich)
+                sendeAn(context, api, libPebble, fassung.version, ziel, post, uhr(), gruendlich)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -270,13 +274,12 @@ internal object Spiegel {
     }
 
     private suspend fun sendeAn(
-        context: Context, api: HealthDataApi, libPebble: LibPebble, ziel: Ziel, post: Spiegelpost, jetzt: Long, vonHand: Boolean,
+        context: Context, api: HealthDataApi, libPebble: LibPebble, fassung: String, ziel: Ziel, post: Spiegelpost, jetzt: Long, vonHand: Boolean,
     ): Ausgang {
         val p = prefs(context)
         // Nach "alles" und einem neuen Server fehlt G_GRUENDLICH: dann ist der Lauf ebenfalls gruendlich.
         val gruendlich = vonHand || jetzt - p.getLong(G_GRUENDLICH, 0) >= Spiegelrechnung.GRUENDLICH_S
         val zone = ZoneId.systemDefault().id
-        val fassung = versuche("Spiegel", "Fassung lesen") { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.orEmpty()
 
         val alteTage = karte(context, G_TAGE)
         val tageFaellig = an(context, Art.TAGE) && (gruendlich || jetzt - p.getLong(G_TAGE_ZEIT, 0) >= Spiegelrechnung.TAGE_TAKT_S)
@@ -427,8 +430,7 @@ internal object Spiegel {
         when (aus) {
             Ausgang.Aus -> return
             is Ausgang.Fertig -> {
-                p.edit().putLong("erfolg", System.currentTimeMillis()).putBoolean("fehler", false)
-                    .putString("meldung", gesendetText(context, aus.quittung)).apply()
+                p.edit().putLong("erfolg", System.currentTimeMillis()).putBoolean("fehler", false).remove("meldung").apply()
                 if (warFehler) KieselVerlauf.merke(context, "$titel: " + context.getString(R.string.ks_sv_wieder))
             }
             is Ausgang.Fehler -> {
@@ -453,7 +455,7 @@ internal object Spiegel {
     class Arbeit(context: Context, gaben: WorkerParameters) : CoroutineWorker(context, gaben) {
         override suspend fun doWork(): Result {
             val koin = KoinPlatform.getKoin()
-            val aus = sende(applicationContext, koin.get(), koin.get())
+            val aus = sende(applicationContext, koin.get(), koin.get(), koin.get())
             val nochmal = aus is Ausgang.Fehler && aus.voruebergehend && runAttemptCount < VERSUCHE
             // Ein Schub, waehrend dieser Anstoss lief: KEEP liess ihn liegen, weil dieser noch lief.
             // APPEND reiht einen weiteren dahinter. Eine Wiederholung liest ohnehin neu.
@@ -501,9 +503,10 @@ internal class Spiegelpost(private val client: HttpClient) {
         private val logger = Logger.withTag("Spiegel")
 
         val standard: Spiegelpost by lazy {
-            Spiegelpost(HttpClient {
+            // Der Client der App, mit eigenen Fristen: ein Tag Minuten ueber ein langsames Mobilnetz
+            // braucht seine Zeit; haengen soll nichts. Seine ContentNegotiation laesst den Text durch.
+            Spiegelpost(KoinPlatform.getKoin().get<HttpClient>().config {
                 expectSuccess = false
-                // Ein Tag Minuten ueber ein langsames Mobilnetz braucht seine Zeit; haengen soll nichts.
                 install(HttpTimeout) {
                     connectTimeoutMillis = 20_000
                     requestTimeoutMillis = 120_000

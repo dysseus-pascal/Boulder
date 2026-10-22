@@ -1,5 +1,6 @@
 package coredevices.pebble.kiesel.ansicht
 
+import CoreAppVersion
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,6 +44,7 @@ internal fun SpiegelAnsicht() {
     val context = LocalContext.current
     val api = koinInject<HealthDataApi>()
     val libPebble = koinInject<LibPebble>()
+    val fassung = koinInject<CoreAppVersion>()
     val scope = rememberCoroutineScope()
     var stand by remember { mutableIntStateOf(0) }
     var laeuft by remember { mutableStateOf(false) }
@@ -62,7 +64,7 @@ internal fun SpiegelAnsicht() {
     fun sende(alles: Boolean) {
         laeuft = true
         scope.launch {
-            meldung = when (val aus = Spiegel.sende(context, api, libPebble, alles, gruendlich = true)) {
+            meldung = when (val aus = Spiegel.sende(context, api, libPebble, fassung, alles, gruendlich = true)) {
                 is Spiegel.Ausgang.Fertig -> Spiegel.gesendetText(context, aus.quittung) to false
                 is Spiegel.Ausgang.Fehler -> aus.text to true
                 Spiegel.Ausgang.Aus -> null
@@ -132,12 +134,8 @@ internal fun SpiegelAnsicht() {
                 Kopf(stringResource(R.string.ks_sv_senden))
                 Knopfzeile(
                     titel = stringResource(R.string.ks_sv_jetzt_text),
-                    unter = when {
-                        status.fehler -> status.meldung
-                        status.erfolg == 0L -> stringResource(R.string.ks_sv_nie)
-                        else -> stringResource(R.string.ks_sv_zuletzt, Formate.relativ(context, status.erfolg))
-                    },
-                    unterFarbe = if (status.fehler) Farben.schlecht.ton() else null,
+                    unter = spiegelStatus(status),
+                    unterFarbe = if (status.fehler != null) Farben.schlecht.ton() else null,
                     knopf = stringResource(R.string.ks_sv_jetzt),
                     onClick = { sende(alles = false) },
                     aktiv = !laeuft,
@@ -170,6 +168,14 @@ internal fun SpiegelAnsicht() {
         meldung?.let { (text, fehler) -> Meldung(text, if (fehler) Farben.schlecht.ton() else null, Modifier.padding(horizontal = INNEN)) }
         Fliesstext(stringResource(R.string.ks_sv_hinweis), Modifier.padding(horizontal = INNEN))
     }
+}
+
+/** Wie es um das Senden steht - hier und in der Liste der Einstellungen. */
+@Composable
+internal fun spiegelStatus(status: Spiegel.Status): String = when {
+    status.fehler != null -> status.fehler
+    status.erfolg == 0L -> stringResource(R.string.ks_sv_nie)
+    else -> stringResource(R.string.ks_sv_zuletzt, Formate.relativ(LocalContext.current, status.erfolg))
 }
 
 /** Die Texte, die ausserhalb der Komposition gebraucht werden (im onClick). */

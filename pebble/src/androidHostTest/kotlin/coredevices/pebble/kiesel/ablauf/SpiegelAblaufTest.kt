@@ -66,6 +66,7 @@ class SpiegelAblaufTest {
         override suspend fun getNachtAbschnitte(von: Long, bis: Long) = abschnitte.filter { it.beginnUtc >= von && it.beginnUtc < bis }
         override suspend fun getNachtHrv(beginnUtc: Long) = hrv.filter { it.beginnUtc == beginnUtc }
         override suspend fun getLatestTimestamp(): Long? = minuten.maxOfOrNull { it.timestamp }
+        override suspend fun getLetzteMinuteBis(bis: Long): Long? = minuten.filter { it.timestamp <= bis }.maxOfOrNull { it.timestamp }
         override suspend fun getHealthDataForRange(start: Long, end: Long) = minuten.filter { it.timestamp >= start && it.timestamp < end }
     }
 
@@ -209,5 +210,23 @@ class SpiegelAblaufTest {
         minuten += neu
         sende(uhr = jetzt + 900)
         assertTrue(neu.timestamp in lieferungen.last().minuten.map { it.zeit })
+    }
+
+    @Test
+    fun spaetGelieferteMinutenGehenNichtVerloren() {
+        Spiegel.speichere(context, ziel)
+        Spiegel.merke(context, Spiegel.Art.MINUTEN, true)
+        // Die Minuten auf dem Telefon enden vor 40 Minuten; die Uhr hat den Rest noch nicht geschickt.
+        val ende = (jetzt - 40 * 60) / 60 * 60
+        minuten += (0 until 30).map { minute(ende - it * 60L) }
+        // Dazu eine Minute mit falscher Uhrzeit aus der Zukunft.
+        minuten += minute(jetzt + 400 * 86_400L)
+        sende()
+        // Zehn Minuten spaeter kommt der Rest: 39 Minuten, alle aelter als der Rueckblick ab jetzt.
+        val spaet = (1 until 40).map { minute(ende + it * 60L) }
+        minuten += spaet
+        sende(uhr = jetzt + 600)
+        val gesendet = lieferungen.flatMap { it.minuten }.map { it.zeit }.toSet()
+        assertEquals(emptyList(), spaet.map { it.timestamp }.filter { it !in gesendet })
     }
 }

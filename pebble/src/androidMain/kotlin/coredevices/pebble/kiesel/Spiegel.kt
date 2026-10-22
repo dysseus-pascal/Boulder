@@ -297,9 +297,11 @@ internal object Spiegel {
         context: Context, api: HealthDataApi, ziel: Ziel, post: Spiegelpost, jetzt: Long, zone: String, fassung: String,
     ): Ausgang {
         val p = prefs(context)
-        // NIE UEBER JETZT HINAUS: eine Minute mit falscher Uhrzeit aus der Zukunft setzte den Stand
-        // dorthin, und jede echte Minute danach laege davor - nie mehr gesendet.
-        val neueste = minOf(api.getLatestTimestamp() ?: return Ausgang.Fertig(Quittung(0, 0, 0, 0)), jetzt)
+        // DER STAND BLEIBT BEI DER JUENGSTEN MINUTE, DIE SCHON DA IST: die Uhr schickt ihre Minuten
+        // 15 bis 50 Minuten spaet, nach einer Zeit ausser Reichweite Stunden spaet, und der naechste
+        // Lauf beginnt nur MINUTEN_RUECKBLICK_S vor dem Stand. Und nie nach jetzt: eine Minute mit
+        // falscher Uhrzeit aus der Zukunft setzte ihn dorthin, und jede echte laege davor.
+        val neueste = api.getLetzteMinuteBis(jetzt) ?: return Ausgang.Fertig(Quittung(0, 0, 0, 0))
         val bis = p.getLong(G_MINUTEN, -1L).takeIf { it >= 0 }
         if (bis != null && neueste <= bis) return Ausgang.Fertig(Quittung(0, 0, 0, 0))
         // Mehr als 90 Tage haelt die Datenbank nicht (Housekeeping), der Server auch nicht.

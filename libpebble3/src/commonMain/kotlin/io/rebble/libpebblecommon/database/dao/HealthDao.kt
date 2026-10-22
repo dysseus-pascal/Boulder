@@ -53,6 +53,9 @@ interface HealthDao {
 
     @Query("SELECT MAX(timestamp) FROM health_data") suspend fun getLatestTimestamp(): Long?
 
+    // Boulder: siehe HealthDataApi.getLetzteMinuteBis.
+    @Query("SELECT MAX(timestamp) FROM health_data WHERE timestamp <= :bis") suspend fun getLetzteMinuteBis(bis: Long): Long?
+
     @Query("SELECT * FROM health_data WHERE timestamp = :timestamp")
     suspend fun getDataAtTimestamp(timestamp: Long): HealthDataEntity?
 

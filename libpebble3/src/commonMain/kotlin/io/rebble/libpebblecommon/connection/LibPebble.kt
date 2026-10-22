@@ -188,6 +188,14 @@ class Pulsreihe(val zeiten: LongArray, val werte: IntArray) {
 
 interface HealthDataApi {
     suspend fun getLatestTimestamp(): Long?
+
+    /**
+     * Boulder: die juengste Minute, die nicht nach [bis] liegt. Eine Minute mit falscher Uhrzeit aus
+     * der Zukunft bleibt so liegen, statt immer die juengste zu sein. Der Rumpf hier gilt fuer
+     * Ersatz-Implementierungen ohne eigene Abfrage; [io.rebble.libpebblecommon.health.Health] fragt
+     * die Datenbank.
+     */
+    suspend fun getLetzteMinuteBis(bis: Long): Long? = getHealthDataForRange(0, bis + 1).maxOfOrNull { it.timestamp }
     suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity>
     suspend fun getOverlayEntriesAfter(afterTimestamp: Long, types: List<Int>): List<OverlayDataEntity>
 

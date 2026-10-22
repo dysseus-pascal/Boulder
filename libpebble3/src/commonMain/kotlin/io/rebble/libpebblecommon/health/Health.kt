@@ -227,6 +227,8 @@ class Health(
 
     override suspend fun getLatestTimestamp(): Long? = healthDao.getLatestTimestamp()
 
+    override suspend fun getLetzteMinuteBis(bis: Long): Long? = healthDao.getLetzteMinuteBis(bis)
+
     override suspend fun getHealthDataAfter(afterTimestamp: Long): List<HealthDataEntity> =
         healthDao.getHealthDataAfter(afterTimestamp)
 

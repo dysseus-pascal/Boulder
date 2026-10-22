@@ -48,8 +48,10 @@ internal fun SpiegelAnsicht() {
     var laeuft by remember { mutableStateOf(false) }
     var meldung by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     val ziel = remember(stand) { Spiegel.ziel(context) }
-    var adresse by remember(stand) { mutableStateOf(ziel?.adresse.orEmpty()) }
-    var token by remember(stand) { mutableStateOf("") }
+    // NICHT AN [stand]: der zaehlt bei jedem Speichern, Senden und Schalter hoch, und was getippt,
+    // aber nicht gespeichert ist, ginge mit - auch nach einer abgelehnten Adresse das Token.
+    var adresse by remember { mutableStateOf(Spiegel.ziel(context)?.adresse.orEmpty()) }
+    var token by remember { mutableStateOf("") }
     val status = remember(stand) { Spiegel.status(context) }
     val texte = Spiegeltexte(
         adresseFalsch = stringResource(R.string.ks_sv_adresse_falsch),
@@ -94,7 +96,12 @@ internal fun SpiegelAnsicht() {
                         meldung = when (Spiegel.richteEin(context, adresse, token)) {
                             Spiegel.Eingabe.ADRESSE -> texte.adresseFalsch to true
                             Spiegel.Eingabe.TOKEN -> texte.tokenFalsch to true
-                            null -> texte.gespeichert to false
+                            null -> {
+                                // Gespeichert: die Adresse so, wie sie gilt, und das Token nie wieder sichtbar.
+                                adresse = Spiegel.ziel(context)?.adresse.orEmpty()
+                                token = ""
+                                texte.gespeichert to false
+                            }
                         }
                         stand++
                     },
@@ -151,6 +158,8 @@ internal fun SpiegelAnsicht() {
                     knopf = stringResource(R.string.ks_sv_entfernen_knopf),
                     onClick = {
                         Spiegel.entferne(context)
+                        adresse = ""
+                        token = ""
                         meldung = null
                         stand++
                     },

@@ -390,8 +390,11 @@ class AnmeldungTest {
             val b = browser()
             assertEquals(HttpStatusCode.Unauthorized, b.mcpMit(alt.second).status)
             assertEquals("invalid_grant", fehler(b.erneuere(alt.first, alt.third)))
-            // Auch die Kennung des Clients gilt nicht mehr: Claude registriert sich neu.
-            assertEquals(HttpStatusCode.BadRequest, b.gibFrei(alt.first, token = "n".repeat(40)).status)
+            // Auch die Kennung des Clients gilt nicht mehr: der Connector muss neu angelegt werden
+            // (LIESMICH, Tokens wechseln), und die Seite sagt das.
+            val seite = b.gibFrei(alt.first, token = "n".repeat(40))
+            assertEquals(HttpStatusCode.BadRequest, seite.status)
+            assertTrue("Remove the connector in Claude and add it again" in seite.bodyAsText())
         }
     }
 

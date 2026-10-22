@@ -134,8 +134,11 @@ systemctl --user restart boulder-pod
 printf 'Neues MCP-Token: %s\n' "$MCP"
 ```
 
-Das neue Token in den Passwortmanager übernehmen und den Connector in Claude neu verbinden: auf
-der Seite von Boulder das neue MCP-Token eingeben, beim festen Header den neuen Wert eintragen.
+Das neue Token in den Passwortmanager übernehmen. Danach in Claude den Connector **entfernen und
+neu hinzufügen** (wie in Schritt 6) und auf der Seite von Boulder das neue MCP-Token eingeben. Ein
+blosses **Connect** genügt nicht: Die Anmeldung von Claude ist mit dem alten Token unterschrieben,
+Boulder antwortet darauf mit „Unknown client“. Beim festen Header genügt der neue Wert, in Claude
+Code `claude mcp remove boulder` und neu hinzufügen.
 
 Für das Sync-Token gilt dasselbe mit `boulder-sync` (etwa `SYNC=$(openssl rand -hex 32)`); das
 neue Token kommt danach in Boulder unter **Settings > Boulder server**.

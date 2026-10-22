@@ -52,9 +52,41 @@ class WerkzeugeTest {
         val w = werkzeuge(lieferung())
         assertFailsWith<Werkzeuge.Fehler> { w.tage(LocalDate.parse("2026-10-16"), LocalDate.parse("2026-10-15")) }
         assertFailsWith<Werkzeuge.Fehler> { w.tage(LocalDate.parse("2025-01-01"), LocalDate.parse("2026-10-16")) }
-        val von = LocalDateTime.parse("2026-10-16T08:00")
-        assertFailsWith<Werkzeuge.Fehler> { w.minuten(von, von.plusHours(6).plusMinutes(1)) }
-        assertFailsWith<Werkzeuge.Fehler> { w.puls(von, von.plusHours(25)) }
+        // Das Schema sagt "hoechstens 366 Tage nach von": genau 366 geht.
+        val von = LocalDate.parse("2025-10-15")
+        w.tage(von, von.plusDays(366))
+        w.trainings(von, von.plusDays(366))
+        assertEquals("bis may be at most 366 days after von", assertFailsWith<Werkzeuge.Fehler> { w.tage(von, von.plusDays(367)) }.message)
+        val ab = LocalDateTime.parse("2026-10-16T08:00")
+        assertFailsWith<Werkzeuge.Fehler> { w.minuten(ab, ab.plusHours(6).plusMinutes(1)) }
+        assertFailsWith<Werkzeuge.Fehler> { w.puls(ab, ab.plusHours(25)) }
+        assertEquals("bis must be after von", assertFailsWith<Werkzeuge.Fehler> { w.minuten(ab, ab) }.message)
+    }
+
+    @Test
+    fun dieLueckeDerSommerzeit() {
+        // 28.3.2027 in Zuerich: um 02:00 springt die Uhr auf 03:00 (01:00 UTC).
+        val sprung = 1_806_195_600L
+        val w = werkzeuge(lieferung(minuten = (-60..59).map { Minute(sprung + it * 60L, 0, 100, 60, 55) }))
+        // 02:30 gibt es nicht; es zaehlt als der Sprung. Die halbe Stunde bis 03:30 sind 30 Minuten.
+        val nachDemSprung = w.minuten(LocalDateTime.parse("2027-03-28T02:30"), LocalDateTime.parse("2027-03-28T03:30")).trimEnd().lines()
+        assertEquals(30, nachDemSprung.count { it.startsWith("03:") }, nachDemSprung.joinToString("\n"))
+        assertEquals("03:00,0,100,60,55", nachDemSprung[2])
+        // Und bis 02:30: die letzte halbe Stunde vor dem Sprung, keine Minute danach.
+        val davor = w.minuten(LocalDateTime.parse("2027-03-28T01:30"), LocalDateTime.parse("2027-03-28T02:30")).trimEnd().lines()
+        assertEquals("01:59,0,100,60,55", davor.last())
+        assertEquals(30, davor.size - 2)
+    }
+
+    @Test
+    fun zweiNaechteAmSelbenMorgenDieLaengsteZaehlt() {
+        // Hauptnacht wie unten (Aufwachen 05:40 am 16.10.) und ein Morgenschlaf 06:40-07:40 als eigene Nacht.
+        val beginn = 1_792_087_200L
+        val haupt = Nacht(beginn, 7200, 100, 580, 450, 51, 54)
+        val morgen = Nacht(beginn + 640 * 60L, 7200, 0, 60, 55, 0, 0)
+        val text = werkzeuge(lieferung(naechte = listOf(haupt, morgen))).nacht(LocalDate.parse("2026-10-16"))
+        assertTrue("asleep: 450 min" in text, text)
+        assertTrue("HRV (RMSSD): 54 ms" in text, text)
     }
 
     @Test

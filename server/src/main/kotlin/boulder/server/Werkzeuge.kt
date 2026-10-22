@@ -27,8 +27,7 @@ import java.time.temporal.ChronoUnit
 
 /**
  * Was Claude ueber MCP lesen kann. Die Antworten sind Text in Tabellenform, mit Einheiten und in
- * Ortszeit: die Feldnamen stehen einmal im Kopf statt in jeder Zeile wie bei JSON, und Claudes
- * Kontext fasst so mehr Tage.
+ * Ortszeit: die Feldnamen stehen einmal im Kopf, und Claudes Kontext fasst so mehr Tage.
  *
  * NUR LESEN: kein Werkzeug aendert den Spiegel; geschrieben wird allein ueber /sync von Boulder.
  * DIE GRENZEN (366 Tage, 24 h Puls, 6 h Minuten) halten eine Antwort klein genug fuer Claudes
@@ -38,8 +37,10 @@ class Werkzeuge(private val speicher: Speicher) {
 
     class Fehler(text: String) : Exception(text)
 
-    private val zone: ZoneId
-        get() = speicher.stand("zone")?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneOffset.UTC
+    // Einmal je Anfrage: mcpServer baut die Werkzeuge fuer jede neu, und eine Antwort braucht die Zone in jeder Zeile.
+    private val zone: ZoneId by lazy {
+        speicher.stand("zone")?.let { runCatching { ZoneId.of(it) }.getOrNull() } ?: ZoneOffset.UTC
+    }
 
     private val uhr = DateTimeFormatter.ofPattern("HH:mm")
     private val zeitpunkt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
@@ -62,8 +63,7 @@ class Werkzeuge(private val speicher: Speicher) {
     }
 
     fun tage(von: LocalDate, bis: LocalDate): String {
-        pruefe(!bis.isBefore(von), "bis liegt vor von")
-        pruefe(ChronoUnit.DAYS.between(von, bis) < 366, "hoechstens 366 Tage je Abfrage")
+        pruefeTage(von, bis)
         val tage = speicher.tage(von.toString(), bis.toString())
         if (tage.isEmpty()) return "no days between $von and $bis"
         val spalten = SPALTEN.keys.filter { k -> tage.any { k in it.werte } } +
@@ -75,11 +75,14 @@ class Werkzeuge(private val speicher: Speicher) {
         }
     }
 
-    /** Die Nacht, aus der man an [datum] aufwachte (so bucht Boulder Nachtwerte). */
+    /**
+     * Die Nacht, aus der man an [datum] aufwachte, und bei mehreren die laengste - so bucht Boulder
+     * die Nachtwerte eines Tages (Gesundheitsrechnung.jeTag), und so passt sie zu [tage].
+     */
     fun nacht(datum: LocalDate): String {
         val start = datum.minusDays(2).atStartOfDay(zone).toEpochSecond()
         val ende = datum.plusDays(1).atStartOfDay(zone).toEpochSecond()
-        val n = speicher.naechte(start, ende).lastOrNull { aufwachTag(it) == datum }
+        val n = speicher.naechte(start, ende).filter { aufwachTag(it) == datum }.maxByOrNull { it.schlafMinuten }
             ?: return "no night ending on $datum"
         fun ort(minute: Int) = Instant.ofEpochSecond(n.beginn + minute * 60L).atOffset(ZoneOffset.ofTotalSeconds(n.utcZuLokal))
         return buildString {
@@ -104,8 +107,7 @@ class Werkzeuge(private val speicher: Speicher) {
     }
 
     fun trainings(von: LocalDate, bis: LocalDate): String {
-        pruefe(!bis.isBefore(von), "bis liegt vor von")
-        pruefe(ChronoUnit.DAYS.between(von, bis) < 366, "hoechstens 366 Tage je Abfrage")
+        pruefeTage(von, bis)
         val l = speicher.trainings(von.atStartOfDay(zone).toEpochSecond(), bis.plusDays(1).atStartOfDay(zone).toEpochSecond())
         if (l.isEmpty()) return "no workouts between $von and $bis"
         return buildString {
@@ -151,10 +153,26 @@ class Werkzeuge(private val speicher: Speicher) {
     private fun aufwachTag(n: Nacht): LocalDate =
         Instant.ofEpochSecond(n.beginn + n.aufwachen * 60L).atOffset(ZoneOffset.ofTotalSeconds(n.utcZuLokal)).toLocalDate()
 
+    /** Wie das Schema der Werkzeuge sagt: bis hoechstens 366 Tage nach von. */
+    private fun pruefeTage(von: LocalDate, bis: LocalDate) {
+        pruefe(!bis.isBefore(von), "bis is before von")
+        pruefe(ChronoUnit.DAYS.between(von, bis) <= HOECHSTENS_TAGE, "bis may be at most $HOECHSTENS_TAGE days after von")
+    }
+
     private fun zeitraum(von: LocalDateTime, bis: LocalDateTime, hoechstensMin: Long, text: String): Pair<Long, Long> {
-        pruefe(bis.isAfter(von), "bis liegt nicht nach von")
-        pruefe(ChronoUnit.MINUTES.between(von, bis) <= hoechstensMin, "hoechstens $text je Abfrage")
-        return von.atZone(zone).toEpochSecond() to bis.atZone(zone).toEpochSecond()
+        pruefe(bis.isAfter(von), "bis must be after von")
+        pruefe(ChronoUnit.MINUTES.between(von, bis) <= hoechstensMin, "at most $text per query")
+        return sekunde(von) to sekunde(bis)
+    }
+
+    /**
+     * Eine Ortszeit als UTC-Sekunde, in derselben Reihenfolge wie die Ortszeiten. Eine Ortszeit in
+     * der Luecke der Umstellung auf Sommerzeit gibt es nicht; sie zaehlt als der Augenblick, an dem
+     * die Uhr springt. atZone schiebt sie um die Luecke nach hinten, und 02:30 laege nach 03:00.
+     */
+    private fun sekunde(t: LocalDateTime): Long {
+        val regeln = zone.rules
+        return if (regeln.getValidOffsets(t).isEmpty()) regeln.getTransition(t).instant.epochSecond else t.atZone(zone).toEpochSecond()
     }
 
     private fun pruefe(bedingung: Boolean, text: String) {
@@ -162,6 +180,8 @@ class Werkzeuge(private val speicher: Speicher) {
     }
 
     companion object {
+        const val HOECHSTENS_TAGE = 366L
+
         /** Was Boulders Tagesspalten bedeuten (Spalte.kt in der App), in der Reihenfolge der Tabelle. */
         val SPALTEN = linkedMapOf(
             "schritte" to "steps",
@@ -201,14 +221,15 @@ private fun schema(vararg felder: Pair<String, String>): ToolSchema = ToolSchema
     required = felder.map { it.first },
 )
 
+// Die Fehlertexte liest Claude: englisch wie die Antworten.
 private fun JsonObject?.text(name: String): String =
-    this?.get(name)?.jsonPrimitive?.contentOrNull ?: throw Werkzeuge.Fehler("$name fehlt")
+    this?.get(name)?.jsonPrimitive?.contentOrNull ?: throw Werkzeuge.Fehler("$name is missing")
 
 private fun JsonObject?.datum(name: String): LocalDate =
-    runCatching { LocalDate.parse(text(name)) }.getOrElse { throw Werkzeuge.Fehler("$name: Datum als JJJJ-MM-TT") }
+    runCatching { LocalDate.parse(text(name)) }.getOrElse { throw Werkzeuge.Fehler("$name: expected a date YYYY-MM-DD") }
 
 private fun JsonObject?.zeit(name: String): LocalDateTime =
-    runCatching { LocalDateTime.parse(text(name)) }.getOrElse { throw Werkzeuge.Fehler("$name: Zeit als JJJJ-MM-TTTHH:MM") }
+    runCatching { LocalDateTime.parse(text(name)) }.getOrElse { throw Werkzeuge.Fehler("$name: expected a time YYYY-MM-DDTHH:MM") }
 
 /** Ein Werkzeug rechnet; ein Fehler in der Eingabe kommt als Fehlerantwort zurueck, nicht als Ausnahme. */
 private inline fun antwort(rechne: () -> String): CallToolResult = try {
@@ -226,7 +247,7 @@ internal fun mcpServer(speicher: Speicher): Server {
         instructions = ANLEITUNG,
     )
     val von = "von" to "first day, YYYY-MM-DD (local)"
-    val bis = "bis" to "last day, YYYY-MM-DD (local), at most 366 days after von"
+    val bis = "bis" to "last day, YYYY-MM-DD (local), at most ${Werkzeuge.HOECHSTENS_TAGE} days after von"
     s.addTool(name = "stand", description = "Timezone, last upload, watch firmware, goals and the available range of data.",
         inputSchema = ToolSchema(), toolAnnotations = NUR_LESEN) { antwort { w.stand() } }
     s.addTool(name = "tage", description = "Daily values per day (steps, sleep, resting heart rate, HRV, water, caffeine ...), one CSV row per day with a legend.",

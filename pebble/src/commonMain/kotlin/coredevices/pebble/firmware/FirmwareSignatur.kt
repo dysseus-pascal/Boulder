@@ -7,9 +7,9 @@ package coredevices.pebble.firmware
  * Tag, Dateiname, Groesse, sha256. So gehoert die Signatur zu genau diesem
  * Release: ein einmal signiertes Paket laesst sich nicht unter einem neuen
  * Tag wiederverwenden, und die Aussage steht schon fest, wenn das Paket
- * geladen ist (der sha256 laeuft beim Laden mit). tools/boulder/release.sh
- * im Firmware-Repo baut dieselbe Aussage und signiert sie; SIGNATUR.md dort
- * beschreibt Schluessel und Notfaelle.
+ * geladen ist (der sha256 laeuft beim Laden mit). Der Workflow signieren.yml
+ * in dysseus-pascal/boulder-firmware baut dieselbe Aussage und signiert sie;
+ * die README dort beschreibt Schluessel und Wechsel.
  *
  * MEHRERE SCHLUESSEL, damit ein Wechsel ohne Gleichschritt geht: erst den
  * neuen hier aufnehmen und die App ausrollen, dann mit ihm signieren, dann
@@ -18,9 +18,9 @@ package coredevices.pebble.firmware
 object FirmwareSignatur {
     const val KOPF = "boulder-firmware/v1"
 
-    /** Die erlaubten oeffentlichen Schluessel, 32 Byte roh als Hex (tools/boulder/signatur.pub). */
+    /** Die erlaubten oeffentlichen Schluessel, 32 Byte roh als Hex (signatur.pub in boulder-firmware). */
     val SCHLUESSEL: List<String> = listOf(
-        "53d4994d5c7862d344ca7a9710f55f852615fbea2fbfa361faa9b0f56ba32cf3",
+        "b4151694844af76321d9e870eeb3fd3512086017b767ed174780c489666b6e6f",
     )
 
     fun schluessel(): List<ByteArray> = SCHLUESSEL.map(::hexZuBytes)

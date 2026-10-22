@@ -105,14 +105,14 @@ class Ed25519Test {
 
     @Test
     fun derSchluesselDerAppPasstZumSignierschluessel() {
-        // Mit dem echten Schluessel signiert (openssl pkeyutl -sign -rawin); Tag "test"
-        // kann kein Release sein.
+        // Mit dem echten Schluessel signiert (Workflow "Schluessel zeigen" in boulder-firmware);
+        // Tag "test" kann kein Release sein.
         val aussage = FirmwareSignatur.aussage("test", "normal_obelix_pvt_test.pbz", 12, "6f4b6612125fb3a0daecd2799dfd6c9c299424fd920f9b308110a2c1fbd8f443")
         assertEquals(
             "boulder-firmware/v1\ntest\nnormal_obelix_pvt_test.pbz\n12\nsha256:6f4b6612125fb3a0daecd2799dfd6c9c299424fd920f9b308110a2c1fbd8f443\n",
             aussage.decodeToString(),
         )
-        val sig = hex("88ee066dba1c25a217c00a9cae2bb33ea748de3a4f4f807162479b6d618b22b722fd898c8b0a72431f81ee4fc1d9bbfcf46b907176556730e79a02e13923230b")
+        val sig = hex("b2af7c838887b3924847179020828c4ed81907c20d8ed8b73915c77de980971e825159fe66d3dfcc2562e97e192a5c76522eab59a9b8b304de0d065004a44601")
         assertEquals(FirmwareSignatur.Ergebnis.Gueltig, FirmwareSignatur.pruefe(aussage, sig))
         assertEquals(FirmwareSignatur.Ergebnis.Ungueltig, FirmwareSignatur.pruefe(gekippt(aussage, 25), sig))
         assertEquals(FirmwareSignatur.Ergebnis.Ungueltig, FirmwareSignatur.pruefe(aussage, sig.copyOf(63)))

@@ -36,8 +36,18 @@ jobs:
       - name: Version
         id: v
         run: echo "ver=$(cat BOULDER_VERSION)" >> "$GITHUB_OUTPUT"
+      # Der Schluessel jedes Boulder-APK steht nicht im Repo: oeffentlich koennte sonst jeder ein
+      # "Update" bauen, das Android ueber ein installiertes Boulder spielt. Der Fingerabdruck haelt
+      # einen falschen Schluessel auf, dessen APK sich nicht als Update installieren liesse.
       - name: Fester Debug-Schlüssel
-        run: mkdir -p ~/.android && cp ci/debug.keystore ~/.android/debug.keystore
+        env:
+          KEYSTORE: ${{ secrets.BOULDER_APK_KEYSTORE }}
+        run: |
+          test -n "$KEYSTORE" || { echo "::error::Secret BOULDER_APK_KEYSTORE fehlt"; exit 1; }
+          mkdir -p ~/.android
+          printf '%s' "$KEYSTORE" | base64 -d > ~/.android/debug.keystore
+          test "$(sha256sum < ~/.android/debug.keystore | cut -d' ' -f1)" = 8398e03d2140f1f3ad6082f933f1324a59e9684eee01db159acffbd29ff0d544 \
+            || { echo "::error::BOULDER_APK_KEYSTORE ist nicht Boulders Schluessel"; exit 1; }
       - name: Tests
         # :server:test - der eigene Server ist ein JVM-Modul ohne jvmTest-Aufgabe.
         run: ./gradlew testDebugUnitTest testAndroidHostTest jvmTest :server:test

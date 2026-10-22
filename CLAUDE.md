@@ -8,7 +8,7 @@ die Regeln von Gravel, mit diesen Abweichungen:
 - Direkt auf `main`; jede neue Fassung wird ein Release (`.github/release/<fassung>.md`,
   deutsch, erste Zeile Titel ohne Nummer). Gebaut wird lokal, als Release-Build
   (`:androidApp:assembleRelease` mit `LOCAL_RELEASE_BUILD=true` in `local.properties`,
-  signiert mit dem CI-Schluessel aus `ci/debug.keystore`, APK aus
+  signiert mit Boulders festem Schluessel in `~/.android/debug.keystore`, APK aus
   `androidApp/build/outputs/apk/release/`); das Release legt
   `gh release create v<fassung>` an, Titel `<fassung> - <erste Zeile>`. Der Tag
   traegt ein `v`: die CI (`.github/workflows/build.yml`) laeuft wieder und legt
@@ -16,6 +16,11 @@ die Regeln von Gravel, mit diesen Abweichungen:
   - ein Tag ohne `v` ergab deshalb doppelte Releases (0.26.0 bis 0.35.0).
   Das Server-Buendel (`boulder-server-<fassung>.tar.gz`, `server/LIESMICH.md`) haengt die CI an,
   auch an ein lokal angelegtes Release, sobald sie den Stand gebaut hat, auf den dessen Tag zeigt.
+  Der feste Schluessel kommt nie ins Repo (es ist oeffentlich, jeder koennte sonst Updates fuer
+  installierte Boulder bauen): die CI liest ihn aus dem Secret `BOULDER_APK_KEYSTORE` (base64),
+  eine Sitzung aus der gleichnamigen Umgebungsvariable:
+  `printf '%s' "$BOULDER_APK_KEYSTORE" | base64 -d > ~/.android/debug.keystore`. sha256 der Datei
+  `8398e03d...ff0d544`; ein anderer Schluessel ergibt APKs, die sich nicht als Update installieren.
   Der Debug-Build braucht auf dem Telefon rund die Haelfte mehr Speicher und ist
   nur zum Entwickeln da. Release-Builds sind nicht debuggable: `run-as` geht dort
   nicht, die Datenbank kommt nur ueber die Sicherung heraus.

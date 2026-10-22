@@ -48,9 +48,14 @@ class SpiegelAblaufTest {
 
     @Volatile
     private var antwort = HttpStatusCode.OK
+
+    /** Laeuft in jedem POST, bevor der Server antwortet: was waehrenddessen auf dem Telefon geschieht. */
+    @Volatile
+    private var waehrendDesSendens: () -> Unit = {}
     private val post = Spiegelpost(
         HttpClient(MockEngine { r ->
             val l = austauschJson.decodeFromString(Lieferung.serializer(), (r.body as TextContent).text)
+            waehrendDesSendens()
             lieferungen += l
             if (antwort != HttpStatusCode.OK) respond("", antwort)
             else respond(austauschJson.encodeToString(Quittung.serializer(), Quittung(l.tage.size, l.naechte.size, l.trainings.size, l.minuten.size)), HttpStatusCode.OK)
@@ -210,6 +215,23 @@ class SpiegelAblaufTest {
         minuten += neu
         sende(uhr = jetzt + 900)
         assertTrue(neu.timestamp in lieferungen.last().minuten.map { it.zeit })
+    }
+
+    @Test
+    fun einSchubWaehrendDesSendensBleibtNichtLiegen() {
+        Spiegel.speichere(context, ziel)
+        // Ein Schub vor dem Senden: das Senden liest ihn mit.
+        Spiegel.stosseAn(context)
+        Thread.sleep(2)
+        sende()
+        assertTrue(!Spiegel.nachgestossen(context))
+        // Ein Schub, waehrend das Senden schon gelesen hat und auf den Server wartet.
+        waehrendDesSendens = {
+            Thread.sleep(2)
+            Spiegel.stosseAn(context)
+        }
+        sende()
+        assertTrue(Spiegel.nachgestossen(context), "ein Anstoss muss folgen")
     }
 
     @Test

@@ -64,6 +64,9 @@ internal object Spiegel {
     private const val G_TRAININGS = "gesendet_trainings"
     private const val G_MINUTEN = "gesendet_minuten_bis"
 
+    /** Wann zuletzt neue Daten von der Uhr kamen (stosseAn), in Millisekunden wie "versuch". */
+    private const val G_ANGESTOSSEN = "angestossen"
+
     /** Wie oft ein voruebergehender Fehler (Netz, Server ab) sofort wiederholt wird; danach wartet es auf den Takt. */
     internal const val VERSUCHE = 3
 
@@ -142,7 +145,7 @@ internal object Spiegel {
     /** Vergisst Adresse, Token und Stand und sendet nicht mehr. */
     fun entferne(context: Context) {
         prefs(context).edit().clear().apply()
-        WorkManager.getInstance(context).run {
+        arbeit(context)?.run {
             cancelUniqueWork(TAKT)
             cancelUniqueWork(ANSTOSS)
         }
@@ -152,14 +155,13 @@ internal object Spiegel {
         e.remove(G_TAGE).remove(G_NAECHTE).remove(G_TRAININGS).remove(G_MINUTEN)
     }
 
-    /** Bei jedem Prozessstart: der Takt alle 30 Minuten, nur eingerichtet; KEEP laesst einen geplanten stehen. */
+    /**
+     * Bei jedem Prozessstart: der Takt alle 30 Minuten, nur eingerichtet; KEEP laesst einen geplanten
+     * stehen. Ohne Server beruehrt der Start WorkManager nicht - entferne hat den Takt beendet.
+     */
     fun plane(context: Context) {
-        val wm = WorkManager.getInstance(context)
-        if (ziel(context) == null) {
-            wm.cancelUniqueWork(TAKT)
-            return
-        }
-        wm.enqueueUniquePeriodicWork(
+        if (ziel(context) == null) return
+        arbeit(context)?.enqueueUniquePeriodicWork(
             TAKT, ExistingPeriodicWorkPolicy.KEEP,
             PeriodicWorkRequestBuilder<Arbeit>(Duration.ofMinutes(30)).setConstraints(MIT_NETZ).build(),
         )
@@ -167,18 +169,41 @@ internal object Spiegel {
 
     /**
      * Neue Daten von der Uhr: in einer Minute senden. KEEP: ein schon geplanter Anstoss nimmt sie
-     * mit. [sofort] fuer eine neue Einrichtung, die man gleich pruefen will.
+     * mit; kamen sie, waehrend einer lief, holt [Arbeit] sie nach. [sofort] fuer eine neue
+     * Einrichtung, die man gleich pruefen will.
      */
     fun stosseAn(context: Context, sofort: Boolean = false) {
         if (ziel(context) == null) return
-        WorkManager.getInstance(context).enqueueUniqueWork(
+        prefs(context).edit().putLong(G_ANGESTOSSEN, System.currentTimeMillis()).apply()
+        arbeit(context)?.enqueueUniqueWork(
             ANSTOSS, if (sofort) ExistingWorkPolicy.REPLACE else ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<Arbeit>()
-                .setInitialDelay(if (sofort) Duration.ZERO else Duration.ofMinutes(1))
-                .setConstraints(MIT_NETZ)
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, Duration.ofMinutes(1))
-                .build(),
+            anstoss(if (sofort) Duration.ZERO else Duration.ofMinutes(1)),
         )
+    }
+
+    private fun anstoss(warten: Duration) = OneTimeWorkRequestBuilder<Arbeit>()
+        .setInitialDelay(warten)
+        .setConstraints(MIT_NETZ)
+        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, Duration.ofMinutes(1))
+        .addTag(ANSTOSS)
+        .build()
+
+    /**
+     * Kamen neue Daten, nachdem das letzte Senden zu lesen begann? Dann fehlen sie in dem, was es
+     * schickte ("versuch" steht, sobald es an der Reihe ist, vor dem Lesen).
+     */
+    internal fun nachgestossen(context: Context): Boolean = prefs(context).let { it.getLong(G_ANGESTOSSEN, 0) > it.getLong("versuch", 0) }
+
+    /**
+     * WorkManager, oder null, wenn es nicht startet: auf kaputten Hersteller-Builds wirft schon
+     * getInstance (NoSuchMethodError, siehe MainApplication). [plane] laeuft in Application.onCreate;
+     * ein Wurf dort beendete jeden Start der App, mit eigenem Server oder ohne.
+     */
+    private fun arbeit(context: Context): WorkManager? = try {
+        WorkManager.getInstance(context)
+    } catch (t: Throwable) {
+        logger.e(t) { "WorkManager startet nicht; gesendet wird nur noch von Hand" }
+        null
     }
 
     private val MIT_NETZ = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
@@ -373,7 +398,13 @@ internal object Spiegel {
         override suspend fun doWork(): Result {
             val koin = KoinPlatform.getKoin()
             val aus = sende(applicationContext, koin.get(), koin.get())
-            return if (aus is Ausgang.Fehler && aus.voruebergehend && runAttemptCount < VERSUCHE) Result.retry() else Result.success()
+            val nochmal = aus is Ausgang.Fehler && aus.voruebergehend && runAttemptCount < VERSUCHE
+            // Ein Schub, waehrend dieser Anstoss lief: KEEP liess ihn liegen, weil dieser noch lief.
+            // APPEND reiht einen weiteren dahinter. Eine Wiederholung liest ohnehin neu.
+            if (!nochmal && aus != Ausgang.Aus && ANSTOSS in tags && nachgestossen(applicationContext)) {
+                arbeit(applicationContext)?.enqueueUniqueWork(ANSTOSS, ExistingWorkPolicy.APPEND_OR_REPLACE, anstoss(Duration.ofMinutes(1)))
+            }
+            return if (nochmal) Result.retry() else Result.success()
         }
     }
 }

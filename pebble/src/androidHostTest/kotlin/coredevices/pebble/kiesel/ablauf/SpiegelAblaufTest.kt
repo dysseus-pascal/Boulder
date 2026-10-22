@@ -218,6 +218,25 @@ class SpiegelAblaufTest {
     }
 
     @Test
+    fun einNeuerServerWaehrendDesSendensBekommtAlles() {
+        Spiegel.speichere(context, ziel)
+        Spiegel.merke(context, Spiegel.Art.MINUTEN, true)
+        minuten += (1..10).map { minute((jetzt - 3600) / 60 * 60 + it * 60L) }
+        val anderer = Spiegel.Ziel("https://anderer.example.ch", "n".repeat(40))
+        // Waehrend der alte Server die erste Lieferung annimmt, speichert der Nutzer einen neuen.
+        waehrendDesSendens = {
+            waehrendDesSendens = {}
+            Spiegel.speichere(context, anderer)
+        }
+        assertEquals(Spiegel.Ausgang.Aus, sende())
+        val bisher = lieferungen.size
+        assertIs<Spiegel.Ausgang.Fertig>(sende())
+        val neu = lieferungen.drop(bisher)
+        assertEquals(2, neu.first().naechte.size, "der neue Server bekommt jede Nacht")
+        assertEquals(10, neu.sumOf { it.minuten.size }, "und jede Minute")
+    }
+
+    @Test
     fun einSchubWaehrendDesSendensBleibtNichtLiegen() {
         Spiegel.speichere(context, ziel)
         // Ein Schub vor dem Senden: das Senden liest ihn mit.

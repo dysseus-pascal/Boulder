@@ -77,6 +77,11 @@ internal object Spiegel {
     // und schrieben ihren Stand durcheinander.
     private val einzeln = Mutex()
 
+    // Adresse und Sendestand aendern sich nur unter dieser Sperre: ein neuer Server vergisst den
+    // Stand (speichere, entferne), und ein Senden schreibt ihn nur, solange es noch dessen Adresse
+    // gilt (merkeGesendet). Das Senden selbst haelt sie nicht - Speichern wartete sonst auf 90 POSTs.
+    private val stand = Any()
+
     data class Ziel(val adresse: String, val token: String)
 
     enum class Art(val schluessel: String, val vorgabe: Boolean) {
@@ -93,7 +98,7 @@ internal object Spiegel {
     data class Status(val versuch: Long, val erfolg: Long, val meldung: String?, val fehler: Boolean)
 
     sealed interface Ausgang {
-        /** Nicht eingerichtet. */
+        /** Nicht eingerichtet, oder waehrend des Sendens auf einen anderen Server umgestellt: nichts zu melden. */
         data object Aus : Ausgang
 
         data class Fertig(val quittung: Quittung) : Ausgang
@@ -134,7 +139,7 @@ internal object Spiegel {
         return null
     }
 
-    internal fun speichere(context: Context, ziel: Ziel) {
+    internal fun speichere(context: Context, ziel: Ziel) = synchronized(stand) {
         val alt = ziel(context)
         val e = prefs(context).edit().putString("adresse", ziel.adresse).putString("token", ziel.token)
         // Ein anderer Server kennt nichts von dem, was der alte bekam.
@@ -144,11 +149,22 @@ internal object Spiegel {
 
     /** Vergisst Adresse, Token und Stand und sendet nicht mehr. */
     fun entferne(context: Context) {
-        prefs(context).edit().clear().apply()
+        synchronized(stand) { prefs(context).edit().clear().apply() }
         arbeit(context)?.run {
             cancelUniqueWork(TAKT)
             cancelUniqueWork(ANSTOSS)
         }
+    }
+
+    /**
+     * Schreibt den Stand eines Sendens an [ziel] - nur, wenn dessen Adresse noch gilt. Sonst hat
+     * inzwischen ein anderer Server den Stand vergessen, und der alte Stand gaebe ihm als gesendet
+     * aus, was er nie bekam. false: das Senden ist ueberholt.
+     */
+    private fun merkeGesendet(context: Context, ziel: Ziel, e: android.content.SharedPreferences.Editor): Boolean = synchronized(stand) {
+        if (ziel(context)?.adresse != ziel.adresse) return false
+        e.apply()
+        true
     }
 
     private fun vergissGesendet(e: android.content.SharedPreferences.Editor) {
@@ -279,7 +295,7 @@ internal object Spiegel {
             val bleiben = alteTrainings.filterValues { (it.substringAfter('@').toLongOrNull() ?: 0L) >= grenze }
             e.putString(G_TRAININGS, json(bleiben + trainings.associate { it.training.kennung to "${it.abdruck}@${it.training.beginn}" }))
         }
-        e.apply()
+        if (!merkeGesendet(context, ziel, e)) return Ausgang.Aus
 
         if (!an(context, Art.MINUTEN)) return Ausgang.Fertig(antwort.quittung)
         val minuten = sendeMinuten(context, api, ziel, post, jetzt, zone, fassung)
@@ -340,7 +356,7 @@ internal object Spiegel {
                 if (a !is Spiegelpost.Antwort.Angenommen) return fehler(context, a)
                 zahl += a.quittung.minuten
             }
-            p.edit().putLong(G_MINUTEN, ende - 1).apply()
+            if (!merkeGesendet(context, ziel, p.edit().putLong(G_MINUTEN, ende - 1))) return Ausgang.Aus
             ab = ende
         }
         return Ausgang.Fertig(Quittung(0, 0, 0, zahl))

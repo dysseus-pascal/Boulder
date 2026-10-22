@@ -14,6 +14,8 @@ die Regeln von Gravel, mit diesen Abweichungen:
   traegt ein `v`: die CI (`.github/workflows/build.yml`) laeuft wieder und legt
   selbst ein Release `v<fassung>` an, wenn dieser Tag nach ihren Tests noch fehlt
   - ein Tag ohne `v` ergab deshalb doppelte Releases (0.26.0 bis 0.35.0).
+  Das Server-Buendel (`boulder-server-<fassung>.tar.gz`, `server/LIESMICH.md`) haengt die CI an,
+  auch an ein lokal angelegtes Release, sobald sie den Stand gebaut hat, auf den dessen Tag zeigt.
   Der Debug-Build braucht auf dem Telefon rund die Haelfte mehr Speicher und ist
   nur zum Entwickeln da. Release-Builds sind nicht debuggable: `run-as` geht dort
   nicht, die Datenbank kommt nur ueber die Sicherung heraus.

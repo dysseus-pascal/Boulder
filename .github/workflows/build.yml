@@ -14,7 +14,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       ver: ${{ steps.v.outputs.ver }}
-      neu: ${{ steps.v.outputs.neu }}
     steps:
       # Gradle und die Hosttests laufen auf JDK 21: health-kmp 1.4.0 ist fuer Java 21 uebersetzt,
       # auf 17 scheitern Boulders Health-Tests mit UnsupportedClassVersionError. Die Module mit
@@ -36,10 +35,7 @@ jobs:
           restore-keys: gradle-
       - name: Version
         id: v
-        run: |
-          ver="$(cat BOULDER_VERSION)"
-          echo "ver=$ver" >> "$GITHUB_OUTPUT"
-          if git ls-remote --exit-code --tags origin "v$ver" >/dev/null; then echo "neu=nein" >> "$GITHUB_OUTPUT"; else echo "neu=ja" >> "$GITHUB_OUTPUT"; fi
+        run: echo "ver=$(cat BOULDER_VERSION)" >> "$GITHUB_OUTPUT"
       - name: Fester Debug-Schlüssel
         run: mkdir -p ~/.android && cp ci/debug.keystore ~/.android/debug.keystore
       - name: Tests
@@ -57,22 +53,20 @@ jobs:
       # Die Uebergabe an den Release-Job geht ueber den Cache des Repos, nicht als Artefakt:
       # Artefakte zaehlen zum Speicherkontingent des Kontos, und das blieb voll - die Laeufe 76
       # bis 79 scheiterten beim Hochladen, auch 15 h nachdem die alten APKs geloescht waren.
-      # Das Buendel des eigenen Servers (server/LIESMICH.md) kommt mit ins Release.
+      # Das Buendel des eigenen Servers (server/LIESMICH.md) kommt mit ins Release. Immer: ob es ein
+      # Release braucht, entscheidet der Release-Job erst nach den Tests (siehe dort).
       - name: APK und Server-Buendel fuer den Release-Job
-        if: steps.v.outputs.neu == 'ja'
         run: |
           mkdir -p apk && cp androidApp/build/outputs/apk/release/*.apk apk/
           ./gradlew :server:distTar
           cp "server/build/distributions/boulder-server-$(cat BOULDER_VERSION).tar.gz" apk/
-      - if: steps.v.outputs.neu == 'ja'
-        uses: actions/cache/save@v4
+      - uses: actions/cache/save@v4
         with:
           path: apk
           key: boulder-apk-${{ github.sha }}
 
   release:
     needs: android
-    if: needs.android.outputs.neu == 'ja'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -83,12 +77,26 @@ jobs:
           path: apk
           key: boulder-apk-${{ github.sha }}
           fail-on-cache-miss: true
+      # Ein Release entsteht hier, wenn sein Tag nach den Tests noch fehlt. Legte es jemand lokal an
+      # (CLAUDE.md: lokaler Bau und gh release create), fehlt dort das Server-Buendel: es kommt dazu,
+      # aber nur vom Stand, auf den der Tag zeigt - ein spaeterer Push derselben Fassung baut aus
+      # anderem Code.
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ver="${{ needs.android.outputs.ver }}"
-          notes=".github/release/$ver.md"
-          cp "$(ls apk/*.apk | head -n1)" boulder.apk
-          gh release create "v$ver" boulder.apk "apk/boulder-server-$ver.tar.gz" --target "$GITHUB_SHA" \
-            --title "$ver - $(head -n1 "$notes")" --notes "$(tail -n +2 "$notes")"
+          buendel="boulder-server-$ver.tar.gz"
+          # Der Stand, auf den der Tag zeigt; leer ohne Tag (die API antwortet dann mit einem Fehler).
+          tag="$(gh api "repos/$GITHUB_REPOSITORY/commits/v$ver" --jq .sha 2>/dev/null)" || tag=""
+          if gh release view "v$ver" >/dev/null 2>&1; then
+            namen="$(gh release view "v$ver" --json assets --jq '.assets[].name')"
+            if [ "$tag" = "$GITHUB_SHA" ] && ! grep -x "$buendel" <<< "$namen" >/dev/null; then
+              gh release upload "v$ver" "apk/$buendel"
+            fi
+          elif [ -z "$tag" ] || [ "$tag" = "$GITHUB_SHA" ]; then
+            notes=".github/release/$ver.md"
+            cp "$(ls apk/*.apk | head -n1)" boulder.apk
+            gh release create "v$ver" boulder.apk "apk/$buendel" --target "$GITHUB_SHA" \
+              --title "$ver - $(head -n1 "$notes")" --notes "$(tail -n +2 "$notes")"
+          fi

@@ -49,11 +49,13 @@ import java.util.Locale
 private val PIN_ARTEN = listOf(
     R.string.ks_n_kein_pin, R.string.ks_sport_laufen, R.string.ks_sport_bike, R.string.ks_sport_wandern,
     R.string.ks_sport_kraft, R.string.ks_sport_mtb, R.string.ks_sport_yoga, R.string.ks_sport_schwimmen,
+    R.string.ks_sport_atem,
 )
 
 /**
  * Die Einstellungen von Kieselsport, am Telefon geaendert - eine Seite in
- * Gravels Einstellungen (Sport).
+ * Gravels Einstellungen (Sport), und wie bei einem Watchface ueber "Settings"
+ * bei Kieselsport in der Liste der Apps (LockerAppScreen).
  *
  * DER ENTWURF STARTET BEIM STAND DER UHR, nicht bei einem eigenen: die Uhr
  * ist die eine Stelle, an der die Werte gelten (siehe KieselEinstellungen).
@@ -129,10 +131,32 @@ internal fun KieselsportAnsicht() {
         }
 
         Kasten {
+            Kopf(stringResource(R.string.ks_sport_atem))
+            val r = entwurf.atem
+            fun neu(a: KieselEinstellungen.Atemrhythmus) { entwurf = entwurf.copy(atem = a) }
+            val sekunden = { s: Int -> Formate.menge(s.toLong(), "s") }
+            Stufer(stringResource(R.string.ks_n_atem_ein), KieselEinstellungen.Atemrhythmus.EIN.toList(), r.ein, grob = 5, wert = sekunden) { neu(r.copy(ein = it)) }
+            Stufer(stringResource(R.string.ks_n_atem_halten), KieselEinstellungen.Atemrhythmus.HALTEN.toList(), r.halten, grob = 5, wert = sekunden) { neu(r.copy(halten = it)) }
+            Stufer(stringResource(R.string.ks_n_atem_aus), KieselEinstellungen.Atemrhythmus.EIN.toList(), r.aus, grob = 5, wert = sekunden) { neu(r.copy(aus = it)) }
+            Stufer(stringResource(R.string.ks_n_atem_leer), KieselEinstellungen.Atemrhythmus.HALTEN.toList(), r.leer, grob = 5, wert = sekunden) { neu(r.copy(leer = it)) }
+            Stufer(
+                stringResource(R.string.ks_n_atem_runden), KieselEinstellungen.Atemrhythmus.RUNDEN.toList(), r.runden, grob = 5,
+                wert = { Formate.Angabe(Formate.zahl(it.toLong()), null) },
+            ) { neu(r.copy(runden = it)) }
+            Box(Modifier.padding(horizontal = INNEN, vertical = 6.dp)) {
+                // Eine Uhr vor b36 nimmt den Rhythmus an, kennt die Uebung aber nicht.
+                Unterzeile(
+                    if (stand.gemeldetUm != 0L && !stand.uhrKenntAtem) stringResource(R.string.ks_n_atem_alt)
+                    else stringResource(R.string.ks_n_atem_dauer, Formate.minutenSekunden(r.rundeS.toLong()), Formate.minutenSekunden(r.rundeS.toLong() * r.runden)),
+                )
+            }
+        }
+
+        Kasten {
             Kopf(stringResource(R.string.ks_n_pin))
             val arten = PIN_ARTEN.map { stringResource(it) }
             Stufer(
-                stringResource(R.string.ks_n_pin_art), (0..7).toList(), entwurf.pinArt,
+                stringResource(R.string.ks_n_pin_art), PIN_ARTEN.indices.toList(), entwurf.pinArt,
                 wert = { Formate.Angabe(arten[it], null) },
             ) { entwurf = entwurf.copy(pinArt = it) }
             if (entwurf.pinArt > 0) {

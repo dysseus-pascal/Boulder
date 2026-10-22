@@ -26,6 +26,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DirectionsBike
 import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
+import androidx.compose.material.icons.outlined.Air
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Hiking
 import androidx.compose.material.icons.outlined.Pool
@@ -96,6 +97,7 @@ internal fun Sport.zeichen(): ImageVector = when (this) {
     Sport.Kraft -> Icons.Outlined.FitnessCenter
     Sport.Yoga -> Icons.Outlined.SelfImprovement
     Sport.Schwimmen -> Icons.Outlined.Pool
+    Sport.Atem -> Icons.Outlined.Air
     Sport.Anderes -> Icons.Outlined.Timer
 }
 

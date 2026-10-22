@@ -199,6 +199,7 @@ internal object Farben {
         Sport.Kraft to 0xFFD9453A,
         Sport.Yoga to 0xFFA85CB4,
         Sport.Schwimmen to 0xFF2CB0C6,
+        Sport.Atem to 0xFF5B7CE0,
         Sport.Anderes to 0xFF9C8B7C,
     ).mapValues { abgedunkelt(c(it.value)) }
 

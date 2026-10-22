@@ -9,6 +9,7 @@ import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
 import coredevices.pebble.kiesel.Akte
 import coredevices.pebble.kiesel.KieselNachricht
+import coredevices.pebble.kiesel.KieselEinstellungen
 import coredevices.pebble.kiesel.Kieselsport
 import coredevices.pebble.kiesel.Pulskurve
 import coredevices.pebble.kiesel.Spur
@@ -275,6 +276,44 @@ class KieselsportAblaufTest {
         val pausen = s.segments.filter { it.segmentType == ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE }.map(::spanne)
         assertEquals(600L to 900L, pausen.first())
         assertEquals(dauer, TrainingEintrag(s, Sport.Laufen, true, 0.0).sekunden)
+    }
+
+    @Test
+    fun eine_atemuebung_steht_als_gefuehrtes_atmen_mit_rhythmus_in_der_akte() {
+        // Zuletzt meldete die Uhr 4-7-8-0 in zwoelf Runden (19 s je Runde).
+        val rhythmus = mapOf(
+            Kieselsport.SP_ATEM_EIN to 4L, Kieselsport.SP_ATEM_HALTEN to 7L, Kieselsport.SP_ATEM_AUS to 8L,
+            Kieselsport.SP_ATEM_LEER to 0L, Kieselsport.SP_ATEM_RUNDEN to 12L,
+        )
+        KieselEinstellungen.vonDerUhr(context, mapOf(Kieselsport.SP_MAXPULS to 190L) + rhythmus, emptyMap())
+        bisZurZusammenfassung(art = Kieselsport.ART_ATEM)
+        val meldung = verarbeite(zusammenfassung(art = Kieselsport.ART_ATEM, mitAbschnitten = false), gespeichert + 5)
+        assertFalse(Kieselsport.gescheitert(context, meldung), "Meldung $meldung")
+        val s = sitzung()
+        assertEquals(ExerciseSessionRecord.EXERCISE_TYPE_GUIDED_BREATHING, s.exerciseType)
+        assertEquals(Sport.Atem, Sport.von(s))
+        // 1200 s aktiv waeren 63 Runden zu 19 s; die Uhr hoert nach der zwoelften auf, mehr zaehlt nicht.
+        assertEquals("12 rounds of 4-7-8-0 s (inhale, hold, exhale, hold)", s.notes)
+    }
+
+    @Test
+    fun der_rhythmus_kommt_von_der_uhr_und_bleibt_bei_aelterer_firmware() {
+        val rhythmus = mapOf(
+            Kieselsport.SP_ATEM_EIN to 5L, Kieselsport.SP_ATEM_HALTEN to 0L, Kieselsport.SP_ATEM_AUS to 7L,
+            Kieselsport.SP_ATEM_LEER to 0L, Kieselsport.SP_ATEM_RUNDEN to 20L,
+        )
+        KieselEinstellungen.vonDerUhr(context, mapOf(Kieselsport.SP_MAXPULS to 190L) + rhythmus, emptyMap())
+        val stand = KieselEinstellungen.stand(context)
+        assertEquals(KieselEinstellungen.Atemrhythmus(5, 0, 7, 0, 20), stand.atem)
+        assertTrue(stand.uhrKenntAtem)
+        // Eine Uhr vor b36 meldet keinen Rhythmus: der zuletzt gemeldete bleibt, die Uebung kennt sie aber nicht.
+        KieselEinstellungen.vonDerUhr(context, mapOf(Kieselsport.SP_MAXPULS to 190L), emptyMap())
+        val alt = KieselEinstellungen.stand(context)
+        assertEquals(stand.atem, alt.atem)
+        assertFalse(alt.uhrKenntAtem)
+        // Ob die Uhr die Uebung kennt, ist kein Unterschied in den Einstellungen.
+        assertTrue(stand.gleich(alt.copy(gemeldetUm = stand.gemeldetUm)))
+        assertFalse(stand.gleich(stand.copy(atem = stand.atem.copy(runden = 21))))
     }
 
     @Test

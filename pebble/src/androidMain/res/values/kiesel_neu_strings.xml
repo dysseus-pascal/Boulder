@@ -22,6 +22,13 @@
     <string name="ks_n_becken">Pool length</string>
     <string name="ks_n_pin">Pin in the timeline</string>
     <string name="ks_n_pin_art">Sport</string>
+    <string name="ks_n_atem_ein">Inhale</string>
+    <string name="ks_n_atem_halten">Hold after inhaling</string>
+    <string name="ks_n_atem_aus">Exhale</string>
+    <string name="ks_n_atem_leer">Hold after exhaling</string>
+    <string name="ks_n_atem_runden">Rounds</string>
+    <string name="ks_n_atem_dauer">One round %1$s min, all rounds %2$s min</string>
+    <string name="ks_n_atem_alt">The watch firmware has no breathing exercise yet. It comes with Boulder firmware b36.</string>
     <string name="ks_n_kein_pin">no pin</string>
     <string name="ks_n_pin_zeit">Time</string>
     <string name="ks_n_senden">Send to watch</string>

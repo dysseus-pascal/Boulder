@@ -110,6 +110,15 @@ internal object Kieselsport {
     const val SP_ENDE = 10039
     /** Ob der Maximalpuls eingestellt ist (1) oder die Uhr nach Alter rechnet (0). */
     const val SP_MAXPULS_GESETZT = 10040
+    /** Der Rhythmus der Atemuebung (ab b36): Sekunden je Phase und die Runden, siehe [KieselEinstellungen.Atemrhythmus]. */
+    const val SP_ATEM_EIN = 10041
+    const val SP_ATEM_HALTEN = 10042
+    const val SP_ATEM_AUS = 10043
+    const val SP_ATEM_LEER = 10044
+    const val SP_ATEM_RUNDEN = 10045
+
+    /** Die Sportart der Atemuebung, wie Kieselsport sie zaehlt. */
+    const val ART_ATEM = 7L
 
     private const val KURVE_TAKT_S = 10
 
@@ -127,6 +136,7 @@ internal object Kieselsport {
         4 -> ExerciseSessionRecord.EXERCISE_TYPE_BIKING to context.getString(R.string.ks_a_titel_mtb)
         5 -> ExerciseSessionRecord.EXERCISE_TYPE_YOGA to context.getString(R.string.ks_a_titel_yoga)
         6 -> ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_POOL to context.getString(R.string.ks_a_titel_schwimmen)
+        ART_ATEM.toInt() -> ExerciseSessionRecord.EXERCISE_TYPE_GUIDED_BREATHING to context.getString(R.string.ks_a_titel_atem)
         else -> ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT to context.getString(R.string.ks_training)
     }
 
@@ -273,6 +283,7 @@ internal object Kieselsport {
         val saetze = felder[SP_SAETZE] ?: 0
         val bahnen = felder[SP_BAHNEN] ?: 0
         return when {
+            felder[SP_ART] == ART_ATEM -> atemnotiz(context, felder[SP_DAUER] ?: 0, KieselEinstellungen.stand(context).atem)
             bahnen > 0 -> {
                 val meter = felder[SP_METER] ?: 0
                 val je = meter / bahnen
@@ -293,6 +304,14 @@ internal object Kieselsport {
             else -> null
         }
     }
+
+    /**
+     * Rhythmus und Runden der Atemuebung - sie stehen nirgends sonst. Die Uhr schickt sie nicht mit
+     * dem Training: es gilt der Rhythmus, den sie zuletzt meldete (nur das Telefon aendert ihn), und die
+     * Runden folgen aus der aktiven Zeit.
+     */
+    internal fun atemnotiz(context: Context, aktivS: Long, rhythmus: KieselEinstellungen.Atemrhythmus): String =
+        context.getString(R.string.ks_a_atem, rhythmus.runden(aktivS), rhythmus.toString())
 
     /**
      * Die Strecke fuer Protokoll und Meldung in Gravels Einheiten, wie die

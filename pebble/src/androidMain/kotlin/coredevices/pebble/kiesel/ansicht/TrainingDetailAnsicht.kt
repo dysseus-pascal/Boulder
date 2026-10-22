@@ -151,7 +151,8 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
 
         when (t.sport) {
             Sport.Kraft -> Kraft(d, ton, maxpuls)
-            Sport.Yoga -> Yoga(d, ton, maxpuls)
+            // Bei der Atemuebung dieselbe Frage wie beim Yoga: wurde man ruhiger?
+            Sport.Yoga, Sport.Atem -> Yoga(d, ton, maxpuls)
             Sport.Schwimmen -> Schwimmen(d, ton, maxpuls)
             else -> Strecke(d, ton, maxpuls, imperial, routeHolen)
         }
@@ -160,7 +161,8 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
         // NUR BEI FREMDEN: die eigene Notiz traegt Saetze und Bahnen, und die
         // stehen oben schon als Zahlen. Aeltere eigene Notizen hatten dazu
         // Puls und kcal der Uhr, roh - sie widersprachen den Zahlen darueber.
-        s.notes?.takeIf { it.isNotBlank() && !t.eigen }?.let { notiz ->
+        // Ausser bei der Atemuebung: Rhythmus und Runden stehen nur in der Notiz.
+        s.notes?.takeIf { it.isNotBlank() && (!t.eigen || t.sport == Sport.Atem) }?.let { notiz ->
             Abschnitt(stringResource(R.string.ks_n_notiz)) { Fliesstext(notiz) }
         }
     }
@@ -534,13 +536,13 @@ private fun Schwimmen(d: TrainingDetail, ton: Color, maxpuls: Int) {
 /**
  * Der Blutsauerstoff waehrend des Trainings.
  *
- * BEIM YOGA IMMER, sonst nur mit Werten. Yoga ist still genug, dass die Uhr
+ * BEIM YOGA UND ATMEN IMMER, sonst nur mit Werten. Yoga ist still genug, dass die Uhr
  * gueltig misst - fehlen dort die Werte, ist das eine Auskunft. Beim Laufen
  * verwirft die Uhr fast jede Messung; eine leere Karte dort waere nur Laerm.
  */
 @Composable
 private fun Sauerstoff(d: TrainingDetail, ton: Color) {
-    if (d.spo2.isEmpty() && d.eintrag.sport != Sport.Yoga) return
+    if (d.spo2.isEmpty() && d.eintrag.sport != Sport.Yoga && d.eintrag.sport != Sport.Atem) return
     Abschnitt(stringResource(R.string.ks_v_spo2_titel)) {
         if (d.spo2.isEmpty()) {
             Unterzeile(stringResource(R.string.ks_v_spo2_keine))

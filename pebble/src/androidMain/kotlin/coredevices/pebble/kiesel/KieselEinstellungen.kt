@@ -44,6 +44,9 @@ internal object KieselEinstellungen {
          * die das Telefon schickt.
          */
         val uhrRechnetNachAlter: Boolean = false,
+        val atem: Atemrhythmus = Atemrhythmus(),
+        /** Ob die Uhr die Atemuebung kennt (b36 und neuer) - sie meldet dann ihren Rhythmus mit. */
+        val uhrKenntAtem: Boolean = false,
     ) {
         /**
          * Dieselben Werte - wann gemeldet, zaehlt nicht. RECHNET DIE UHR SELBST
@@ -53,8 +56,28 @@ internal object KieselEinstellungen {
          */
         fun gleich(o: Stand): Boolean {
             val ohneZahl = (uhrRechnetNachAlter || o.uhrRechnetNachAlter) && !maxpulsGesetzt && !o.maxpulsGesetzt
-            fun kern(s: Stand) = s.copy(gemeldetUm = 0, uhrRechnetNachAlter = false, maxpuls = if (ohneZahl) 0 else s.maxpuls)
+            fun kern(s: Stand) = s.copy(gemeldetUm = 0, uhrRechnetNachAlter = false, maxpuls = if (ohneZahl) 0 else s.maxpuls, uhrKenntAtem = false)
             return kern(this) == kern(o)
+        }
+    }
+
+    /**
+     * Der Rhythmus der Atemuebung in Sekunden je Phase - einatmen, halten, ausatmen, leer halten -
+     * und die Runden. Die Grenzen sind die der Uhr; was ausserhalb liegt, nimmt sie nicht an.
+     */
+    data class Atemrhythmus(val ein: Int = 4, val halten: Int = 4, val aus: Int = 4, val leer: Int = 4, val runden: Int = 10) {
+        val rundeS: Int get() = ein + halten + aus + leer
+
+        /** Die ganzen Runden in [aktivS] Sekunden; die Uhr beendet nach der letzten, ein Abbruch frueher zaehlt nur die vollen. */
+        fun runden(aktivS: Long): Int = if (rundeS <= 0) 0 else (aktivS / rundeS).toInt().coerceAtMost(runden)
+
+        /** "4-7-8-0", wie der Rhythmus in der Notiz steht. */
+        override fun toString() = "$ein-$halten-$aus-$leer"
+
+        companion object {
+            val EIN = 1..60
+            val HALTEN = 0..60
+            val RUNDEN = 1..99
         }
     }
 
@@ -76,7 +99,14 @@ internal object KieselEinstellungen {
             .putInt("pin_art", (felder[Kieselsport.SP_PIN_ART] ?: 0).toInt())
             .putString("pin_zeit", texte[Kieselsport.SP_PIN_ZEIT] ?: "18:00")
             .putLong("um", System.currentTimeMillis())
-            .apply()
+        // Aeltere Firmware kennt die Atemuebung nicht und meldet keinen Rhythmus: dann bleibt der zuletzt gemeldete stehen.
+        val atem = listOf(Kieselsport.SP_ATEM_EIN, Kieselsport.SP_ATEM_HALTEN, Kieselsport.SP_ATEM_AUS, Kieselsport.SP_ATEM_LEER, Kieselsport.SP_ATEM_RUNDEN)
+            .map { felder[it]?.toInt() }
+        if (atem.all { it != null }) {
+            e.putInt("atem_ein", atem[0]!!).putInt("atem_halten", atem[1]!!).putInt("atem_aus", atem[2]!!)
+                .putInt("atem_leer", atem[3]!!).putInt("atem_runden", atem[4]!!).putBoolean("atem_bekannt", true)
+        } else e.putBoolean("atem_bekannt", false)
+        e.apply()
         return true
     }
 
@@ -101,6 +131,13 @@ internal object KieselEinstellungen {
             pinZeit = p.getString("pin_zeit", "18:00") ?: "18:00",
             gemeldetUm = p.getLong("um", 0),
             uhrRechnetNachAlter = vonDerUhr != null,
+            atem = Atemrhythmus().let { v ->
+                Atemrhythmus(
+                    p.getInt("atem_ein", v.ein), p.getInt("atem_halten", v.halten), p.getInt("atem_aus", v.aus),
+                    p.getInt("atem_leer", v.leer), p.getInt("atem_runden", v.runden),
+                )
+            },
+            uhrKenntAtem = p.getBoolean("atem_bekannt", false),
         )
     }
 
@@ -139,6 +176,11 @@ internal object KieselEinstellungen {
             Kieselsport.SP_BECKEN to neu.becken,
             Kieselsport.SP_PIN_ART to neu.pinArt,
             Kieselsport.SP_PIN_ZEIT to neu.pinZeit,
+            Kieselsport.SP_ATEM_EIN to neu.atem.ein,
+            Kieselsport.SP_ATEM_HALTEN to neu.atem.halten,
+            Kieselsport.SP_ATEM_AUS to neu.atem.aus,
+            Kieselsport.SP_ATEM_LEER to neu.atem.leer,
+            Kieselsport.SP_ATEM_RUNDEN to neu.atem.runden,
         )
         context.getSharedPreferences(DATEI, Context.MODE_PRIVATE).edit()
             .putBoolean("maxpuls_wartend", neu.maxpulsGesetzt)
@@ -187,7 +229,9 @@ internal object KieselEinstellungen {
         val bis = System.currentTimeMillis() + 3_000
         while (System.currentTimeMillis() < bis) {
             val s = stand(context).let { if (it.uhrRechnetNachAlter) it else it.copy(maxpulsGesetzt = neu.maxpulsGesetzt) }
-            if (s.gemeldetUm >= ab && s.gleich(neu)) return true
+            // Eine Uhr ohne Atemuebung meldet ihren Rhythmus nicht: der zaehlt dann nicht zur Bestaetigung.
+            val erwartet = if (s.uhrKenntAtem) neu else neu.copy(atem = s.atem)
+            if (s.gemeldetUm >= ab && s.gleich(erwartet)) return true
             delay(250)
         }
         return false

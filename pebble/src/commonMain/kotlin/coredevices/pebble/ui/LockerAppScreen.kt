@@ -89,6 +89,7 @@ import coredevices.ui.ConfirmDialog
 import coredevices.ui.PebbleElevatedButton
 import io.ktor.http.URLProtocol
 import io.ktor.http.parseUrl
+import io.rebble.libpebblecommon.SystemAppIDs
 import io.rebble.libpebblecommon.connection.ConnectedPebbleDevice
 import io.rebble.libpebblecommon.connection.LibPebble
 import io.rebble.libpebblecommon.connection.PebbleIdentifier
@@ -1000,7 +1001,8 @@ fun SnackbarHostState.showSnackbar(scope: CoroutineScope, message: String) {
 
 fun CommonApp.hasSettings(): Boolean = when (commonAppType) {
     is CommonAppType.Locker -> commonAppType.configurable
-    is CommonAppType.System -> false
+    // Boulder: Kieselsport stellt man am Telefon ein, wie ein Watchface mit Einstellungsseite.
+    is CommonAppType.System -> uuid == SystemAppIDs.KIESELSPORT_APP_UUID
     is CommonAppType.Store -> false
 }
 
@@ -1060,7 +1062,7 @@ suspend fun CommonApp.showSettings(
             }
         }
 
-        is CommonAppType.System -> Unit
+        is CommonAppType.System -> if (uuid == SystemAppIDs.KIESELSPORT_APP_UUID) navBarNav.navigateTo(PebbleNavBarRoutes.KieselsportRoute)
 
         is CommonAppType.Store -> Unit
     }

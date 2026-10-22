@@ -156,4 +156,16 @@ class KieselsportTest {
         val neu = listOf(Kieselsport.SP_ZEIT, Kieselsport.SP_PAUSEN, Kieselsport.SP_ENDE, Kieselsport.SP_MAXPULS_GESETZT)
         assertEquals(listOf(10037, 10038, 10039, 10040), neu)
     }
+
+    @Test
+    fun atemrundenUndSportart() {
+        val r = KieselEinstellungen.Atemrhythmus(4, 7, 8, 0, 12)
+        assertEquals(19, r.rundeS)
+        assertEquals(0, r.runden(18))
+        assertEquals(1, r.runden(19))
+        // Mehr als eingestellt zaehlt nicht: die Uhr beendet nach der letzten Runde.
+        assertEquals(12, r.runden(10_000))
+        assertEquals("4-7-8-0", r.toString())
+        assertEquals(Sport.Atem, Sport.von(androidx.health.connect.client.records.ExerciseSessionRecord.EXERCISE_TYPE_GUIDED_BREATHING, null))
+    }
 }

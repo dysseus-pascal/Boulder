@@ -7,6 +7,8 @@
     <string name="ks_a_titel_kraft">Strength</string>
     <string name="ks_a_titel_mtb">Bike MTB</string>
     <string name="ks_a_titel_yoga">Yoga</string>
+    <string name="ks_a_titel_atem">Breathing</string>
+    <string name="ks_a_atem">%1$d rounds of %2$s s (inhale, hold, exhale, hold)</string>
     <string name="ks_a_titel_schwimmen">Swimming</string>
     <string name="ks_training">Workout</string>
     <string name="ks_a_bahnen">%1$d lengths</string>

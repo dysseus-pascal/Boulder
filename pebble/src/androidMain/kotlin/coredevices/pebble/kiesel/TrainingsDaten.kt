@@ -35,6 +35,8 @@ internal enum class Sport {
     Kraft,
     Yoga,
     Schwimmen,
+    /** Die Atemuebung von Kieselsport und gefuehrtes Atmen anderer Apps. */
+    Atem,
     Anderes;
 
     /**
@@ -50,6 +52,7 @@ internal enum class Sport {
         Kraft -> R.string.ks_sport_kraft
         Yoga -> R.string.ks_sport_yoga
         Schwimmen -> R.string.ks_sport_schwimmen
+        Atem -> R.string.ks_sport_atem
         Anderes -> R.string.ks_training
     }
 
@@ -87,6 +90,7 @@ internal enum class Sport {
             ExerciseSessionRecord.EXERCISE_TYPE_PILATES -> Yoga
             ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_POOL,
             ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_OPEN_WATER -> Schwimmen
+            ExerciseSessionRecord.EXERCISE_TYPE_GUIDED_BREATHING -> Atem
             else -> Anderes
         }
     }

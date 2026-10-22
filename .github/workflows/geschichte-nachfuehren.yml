@@ -1,0 +1,78 @@
+name: Geschichte nachfuehren
+
+# Einmalig, von Hand gestartet, nachdem ci/debug.keystore aus der ganzen Geschichte entfernt ist:
+# Die Zweige sind umgeschrieben, die Tags zeigen noch auf die alten Commits mit dem Schluessel.
+# Der Workflow setzt jedes Tag auf seinen neuen Commit (.github/tags-neu.txt), ersetzt die alten
+# Kennungen in den Releases und loescht die CI-Laeufe und Caches, die alte Kennungen tragen. Die
+# Releases haengen am Namen des Tags und folgen ihm. Danach kommt er wieder aus dem Repo.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  nachfuehren:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Tags auf die neuen Commits
+        run: |
+          set -euo pipefail
+          gh api -H "Accept: application/vnd.github.raw" "repos/$REPO/contents/.github/tags-neu.txt?ref=$GITHUB_SHA" > tags.txt
+          n=0
+          while read -r tag sha; do
+            [ -n "$tag" ] || continue
+            # Nur auf einen Commit ohne den Schluessel.
+            if gh api "repos/$REPO/contents/ci/debug.keystore?ref=$sha" > /dev/null 2>&1; then
+              echo "::error::$tag: $sha traegt noch ci/debug.keystore"; exit 1
+            fi
+            gh api -X PATCH "repos/$REPO/git/refs/tags/$tag" -f sha="$sha" -F force=true > /dev/null
+            n=$((n + 1))
+          done < tags.txt
+          echo "Tags gesetzt: $n"
+
+      - name: Alte Kennungen in den Releases
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$REPO/releases?per_page=100" --jq '.[] | "\(.id) \(.tag_name) \(.target_commitish)"' > releases.txt
+          while read -r id tag ziel; do
+            # Nur Kennungen ersetzen; ein Zweigname wie "main" bleibt.
+            [[ "$ziel" =~ ^[0-9a-f]{40}$ ]] || continue
+            neu=$(awk -v t="$tag" '$1 == t { print $2 }' tags.txt)
+            [ -n "$neu" ] || { echo "::warning::$tag: kein neuer Commit, Ziel bleibt"; continue; }
+            gh api -X PATCH "repos/$REPO/releases/$id" -f target_commitish="$neu" > /dev/null
+          done < releases.txt
+
+      - name: Alte CI-Laeufe und Caches loeschen
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$REPO/actions/runs?per_page=100" --jq '.workflow_runs[].id' > laeufe.txt
+          while read -r lauf; do
+            [ "$lauf" = "$GITHUB_RUN_ID" ] && continue
+            gh api -X DELETE "repos/$REPO/actions/runs/$lauf" > /dev/null || echo "::warning::Lauf $lauf nicht geloescht"
+          done < laeufe.txt
+          gh api --paginate "repos/$REPO/actions/caches?per_page=100" --jq '.actions_caches[].id' > caches.txt
+          while read -r cache; do
+            gh api -X DELETE "repos/$REPO/actions/caches/$cache" > /dev/null || echo "::warning::Cache $cache nicht geloescht"
+          done < caches.txt
+
+      - name: Pruefen
+        run: |
+          set -euo pipefail
+          # Kein Tag und kein Zweig zeigt noch auf einen Stand mit dem Schluessel.
+          for art in tags heads; do
+            gh api --paginate "repos/$REPO/git/matching-refs/$art/" --jq '.[] | "\(.ref) \(.object.sha)"'
+          done > refs.txt
+          fehler=0
+          while read -r ref sha; do
+            if gh api "repos/$REPO/contents/ci/debug.keystore?ref=$sha" > /dev/null 2>&1; then
+              echo "::error::$ref zeigt auf $sha mit dem Schluessel"; fehler=1
+            fi
+          done < refs.txt
+          echo "Geprueft: $(wc -l < refs.txt) Verweise"
+          exit $fehler

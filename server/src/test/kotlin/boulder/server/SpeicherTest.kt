@@ -5,6 +5,7 @@ import boulder.austausch.Minute
 import boulder.austausch.Nacht
 import boulder.austausch.Tag
 import boulder.austausch.Training
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -27,6 +28,21 @@ class SpeicherTest {
             assertEquals(2, s.tage("2026-10-01", "2026-10-31").size)
             assertEquals(1, s.naechte(0, Long.MAX_VALUE).size)
             assertEquals(1, s.trainings(0, Long.MAX_VALUE).size)
+        }
+    }
+
+    @Test
+    fun dieDateiBleibtNachDemNeustart() {
+        val ordner = Files.createTempDirectory("boulder-speicher")
+        val pfad = ordner.resolve("boulder.db").toString()
+        try {
+            Speicher.oeffne(pfad).use { it.uebernimm(lieferung(5000.0), jetzt, 90) }
+            Speicher.oeffne(pfad).use { s ->
+                assertEquals(mapOf("schritte" to 5000.0), s.tage("2026-10-16", "2026-10-16").single().werte)
+                assertEquals("0.55.0", s.stand("app"))
+            }
+        } finally {
+            ordner.toFile().deleteRecursively()
         }
     }
 

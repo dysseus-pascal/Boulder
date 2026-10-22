@@ -54,7 +54,6 @@ algolia = "3.46.0"
 coredevices-speex = "c61d18a"
 mcp = "0.15.0"
 # Boulder: nur der eigene Server (server/).
-sqlite-jdbc = "3.53.4.0"
 slf4j = "2.0.20"
 glance = "1.1.1"
 #noinspection GradleDependency
@@ -169,7 +168,6 @@ coredevices-haversine = { group = "io.github.coredevices.haversine", name = "hav
 modelcontextprotocol-client = { module = "io.modelcontextprotocol:kotlin-sdk-client", version.ref = "mcp" }
 modelcontextprotocol-core = { module = "io.modelcontextprotocol:kotlin-sdk-core", version.ref = "mcp" }
 modelcontextprotocol-server = { module = "io.modelcontextprotocol:kotlin-sdk-server", version.ref = "mcp" }
-sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
 ktor-server-test-host = { module = "io.ktor:ktor-server-test-host", version.ref = "ktor" }
 androidx-glance = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }

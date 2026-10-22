@@ -47,7 +47,7 @@ dependencies {
     implementation(libs.modelcontextprotocol.server)
     implementation(libs.ktor.server.core)
     implementation(libs.ktor.server.cio)
-    implementation(libs.sqlite.jdbc)
+    implementation(libs.sqlite.bundled)
     runtimeOnly(libs.slf4j.simple)
 
     testImplementation(libs.kotlin.test.junit)

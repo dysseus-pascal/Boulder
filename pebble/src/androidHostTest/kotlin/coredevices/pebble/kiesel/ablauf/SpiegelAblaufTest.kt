@@ -161,6 +161,25 @@ class SpiegelAblaufTest {
     }
 
     @Test
+    fun ohneLesbarenPulsGehtEinTrainingTrotzdem() = mitAkte { akte ->
+        // Das Recht, den Puls zu lesen, ist verweigert: das Training geht ohne ihn.
+        akte.nichtLesbar = setOf(HeartRateRecord::class)
+        val beginn = jetzt - 86_400L
+        val id = lauf(akte, beginn, 30)
+        puls(akte, beginn + 60, 120, 131)
+        sende()
+        assertEquals(listOf(id to null), lieferungen.last().trainings.map { it.kennung to it.pulsMittel })
+        // Ist er lesbar, kommt das Training mit ihm wieder.
+        akte.nichtLesbar = emptySet()
+        sende()
+        assertEquals(listOf(id to 125), lieferungen.last().trainings.map { it.kennung to it.pulsMittel })
+        // Faellt das Lesen danach aus, bleibt der Puls auf dem Server: das Training geht nicht ohne ihn neu.
+        akte.nichtLesbar = setOf(HeartRateRecord::class)
+        sende(uhr = jetzt + Spiegelrechnung.GRUENDLICH_S + 1)
+        assertEquals(emptyList(), lieferungen.last().trainings)
+    }
+
+    @Test
     fun geloeschteTrainingeVerschwindenAuchAufDemServer() = mitAkte { akte ->
         val beginn = jetzt - 86_400L
         val eigenes = lauf(akte, beginn, 30)

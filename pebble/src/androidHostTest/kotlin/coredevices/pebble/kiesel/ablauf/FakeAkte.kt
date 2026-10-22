@@ -52,6 +52,10 @@ internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient 
     @Volatile
     var nurEigeneLesbar = false
 
+    /** Die Satzarten, deren Lesen die Akte abweist - wie ohne das Leserecht dafuer. */
+    @Volatile
+    var nichtLesbar: Set<KClass<out Record>> = emptySet()
+
     /** Wirft fuer einen Satz, den die Akte abweisen soll (etwa ein fehlendes Recht); null nimmt ihn. */
     @Volatile
     var weistAb: (Record) -> Exception? = { null }
@@ -168,6 +172,7 @@ internal class FakeAkte(private val eigenesPaket: String) : HealthConnectClient 
         lesungen += request
         val quellen = request.dataOriginFilter.map { it.packageName }.toSet()
         if (nurEigeneLesbar && quellen != setOf(eigenesPaket)) throw SecurityException("Im Hintergrund nur eigene Eintraege")
+        if (request.recordType in nichtLesbar) throw SecurityException("Kein Leserecht fuer ${request.recordType.simpleName}")
         val passend = synchronized(this) {
             eintraege.filter { e ->
                 e.satz::class == request.recordType && (quellen.isEmpty() || e.herkunft in quellen) && trifft(e.satz, request.timeRangeFilter)

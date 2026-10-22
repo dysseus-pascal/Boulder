@@ -356,8 +356,12 @@ internal object Spiegel {
     private suspend fun trainings(context: Context, gesendet: Map<String, String>, jetzt: Long, tage: Long): Trainingslauf? {
         val gelesen = TrainingsDaten.fuerSpiegel(context, tage) ?: return null
         val neu = gelesen.trainings.mapNotNull { t ->
-            // Liest die Akte den Puls nicht, wartet das Training auf den naechsten Lauf.
-            val (mittel, max) = TrainingsDaten.pulsKennzahlen(context, t.sitzung) ?: return@mapNotNull null
+            // Liest die Akte den Puls nicht (Recht verweigert, Rate-Limit): ein neues Training geht ohne ihn
+            // und kommt mit ihm wieder, sobald er lesbar ist. Ein schon gesendetes wartet - sonst loeschte
+            // ein Fehler seinen Puls auf dem Server.
+            val puls = TrainingsDaten.pulsKennzahlen(context, t.sitzung)
+            if (puls == null && t.id in gesendet) return@mapNotNull null
+            val (mittel, max) = puls ?: (null to null)
             val training = Training(
                 kennung = t.id, sport = context.getString(t.sport.nameId),
                 beginn = t.sitzung.startTime.epochSecond, ende = t.sitzung.endTime.epochSecond,

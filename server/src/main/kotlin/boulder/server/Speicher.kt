@@ -20,8 +20,8 @@ import kotlinx.serialization.builtins.serializer
  * Der Spiegel von Boulders Daten in SQLite. Jede Lieferung ersetzt, was sie mitbringt: eine Nacht
  * oder ein Training kommt neu, solange es sich auf dem Telefon noch aendert (ein spaet bestaetigtes
  * Training) - darum Upsert. Einen Tag fuehrt sie mit dem gespeicherten zusammen ([Tag]). Dazu die
- * Clients und Zugaenge der Anmeldung (Anmeldung.kt), damit Claude nach einem Neustart angemeldet
- * bleibt.
+ * Zugaenge der Anmeldung (Anmeldung.kt), damit Claude nach einem Neustart angemeldet bleibt, und
+ * die Clients, die sich bei 0.55.0 registrierten; neue Clients stehen nur in ihrer Kennung.
  *
  * EINE VERBINDUNG, ALLES SYNCHRONISIERT: Boulder schickt hoechstens alle paar Minuten, Claude
  * fragt selten. Eine Verbindung darf nie von zwei Faeden zugleich benutzt werden.
@@ -141,24 +141,7 @@ class Speicher private constructor(private val db: SQLiteConnection) : AutoClose
         )
     }
 
-    /** Legt einen Client der Anmeldung an; die aeltesten ohne Zugang fallen, sobald es mehr als [HOECHSTENS_CLIENTS] sind. */
-    @Synchronized
-    fun legeClientAn(c: Client, jetzt: Long) {
-        aendere("INSERT INTO client(kennung, name, umleitungen, angelegt) VALUES(?, ?, ?, ?)") {
-            bindText(1, c.kennung)
-            bindText(2, c.name)
-            bindText(3, austauschJson.encodeToString(LISTE, c.umleitungen))
-            bindLong(4, jetzt)
-        }
-        // Registrieren darf jeder (so verlangt es Claude); ohne Grenze fuellte ein Fremder die Datenbank.
-        // Ein Client mit Zugang bleibt: er gehoert zu einer gelungenen Anmeldung.
-        vergissAbgelaufene(jetzt)
-        aendere(
-            "DELETE FROM client WHERE kennung IN (SELECT kennung FROM client WHERE kennung NOT IN (SELECT client FROM zugang) " +
-                "ORDER BY angelegt DESC, rowid DESC LIMIT -1 OFFSET ?)"
-        ) { bindInt(1, HOECHSTENS_CLIENTS) }
-    }
-
+    /** Ein Client aus 0.55.0 (Anmeldung.client). */
     @Synchronized
     fun client(kennung: String): Client? =
         zeilen("SELECT name, umleitungen FROM client WHERE kennung = ?", { bindText(1, kennung) }) {
@@ -257,7 +240,6 @@ class Speicher private constructor(private val db: SQLiteConnection) : AutoClose
     companion object {
         private val WERTE = MapSerializer(String.serializer(), Double.serializer())
         private val LISTE = ListSerializer(String.serializer())
-        const val HOECHSTENS_CLIENTS = 100
 
         /** Oeffnet oder legt an; ":memory:" fuer Tests. */
         fun oeffne(pfad: String): Speicher {

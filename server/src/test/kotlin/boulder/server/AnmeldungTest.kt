@@ -78,6 +78,7 @@ class AnmeldungTest {
         umleitung: String = claude,
         state: String = "a b+c",
         entscheid: String = "ja",
+        von: String? = null,
     ): HttpResponse = submitForm("/authorize", parameters {
         append("response_type", "code")
         append("client_id", client)
@@ -87,7 +88,10 @@ class AnmeldungTest {
         append("state", state)
         append("token", token)
         append("entscheid", entscheid)
-    })
+    }) {
+        // So meldet cloudflared im selben Pod die Adresse im Internet (absender in App.kt).
+        if (von != null) header("CF-Connecting-IP", von)
+    }
 
     /** Der Code aus der Umleitung zu Claude. */
     private fun code(r: HttpResponse): String {
@@ -300,6 +304,66 @@ class AnmeldungTest {
     }
 
     @Test
+    fun einFremderSperrtNurSichSelbst() = testApplication {
+        server()
+        val b = browser()
+        val client = b.kennung()
+        repeat(Anmeldung.HOECHSTENS_FEHLVERSUCHE) {
+            assertEquals(HttpStatusCode.Forbidden, b.gibFrei(client, token = "falsch".repeat(8), von = "203.0.113.7").status)
+        }
+        assertEquals(HttpStatusCode.TooManyRequests, b.gibFrei(client, von = "203.0.113.7").status)
+        // Der Besitzer an einem anderen Anschluss meldet sich trotzdem an.
+        code(b.gibFrei(client, von = "198.51.100.2"))
+        // IPv6 zaehlt je /64: eine andere Adresse im selben Netz bleibt gesperrt, ein anderes Netz nicht.
+        repeat(Anmeldung.HOECHSTENS_FEHLVERSUCHE) { b.gibFrei(client, token = "falsch".repeat(8), von = "2001:db8:1:2::1") }
+        assertEquals(HttpStatusCode.TooManyRequests, b.gibFrei(client, von = "2001:db8:1:2:ffff::9").status)
+        code(b.gibFrei(client, von = "2001:db8:1:3::1"))
+    }
+
+    @Test
+    fun bereicheDerSperre() {
+        assertEquals("203.0.113.7", Anmeldung.bereich("203.0.113.7"))
+        assertEquals("20010db800010002/64", Anmeldung.bereich("2001:db8:1:2::1"))
+        assertEquals(Anmeldung.bereich("2001:db8:1:2::1"), Anmeldung.bereich("[2001:db8:1:2:ffff::9]"))
+        assertEquals("localhost", Anmeldung.bereich("localhost"))
+    }
+
+    @Test
+    fun registrierenSchreibtNichtsUndVerdraengtNichts() {
+        val speicher = Speicher.oeffne(":memory:")
+        lateinit var claude: String
+        testApplication {
+            server(speicher)
+            val b = browser()
+            claude = b.kennung()
+            // Eine Flut von Registrierungen, waehrend der Besitzer das Token eintippt.
+            repeat(300) { assertEquals(HttpStatusCode.Created, b.registriere("http://localhost:$it/callback").status) }
+            code(b.gibFrei(claude))
+        }
+        assertEquals(null, speicher.client(claude))
+        // Die Kennung gilt auch nach einem Neustart, ohne Datenbank - mit demselben MCP-Token.
+        testApplication {
+            server(Speicher.oeffne(":memory:"))
+            code(browser().gibFrei(claude))
+        }
+    }
+
+    @Test
+    fun eineVeraenderteKennungGiltNicht() = testApplication {
+        server()
+        val b = browser()
+        val echt = b.kennung()
+        val (daten, unterschrift) = echt.split('.')
+        val fremd = java.util.Base64.getUrlEncoder().withoutPadding()
+            .encodeToString("""{"u":["https://evil.example/cb"],"n":"Claude","z":"x"}""".toByteArray())
+        for (falsch in listOf("$fremd.$unterschrift", "$daten.${unterschrift.reversed()}", "$daten.$unterschrift.x", "$daten.!!")) {
+            val r = b.gibFrei(falsch, umleitung = "https://evil.example/cb")
+            assertEquals(HttpStatusCode.BadRequest, r.status, falsch)
+            assertNull(r.headers[HttpHeaders.Location])
+        }
+    }
+
+    @Test
     fun zugaengeLaufenAb() = testApplication {
         server()
         val b = browser()
@@ -326,6 +390,8 @@ class AnmeldungTest {
             val b = browser()
             assertEquals(HttpStatusCode.Unauthorized, b.mcpMit(alt.second).status)
             assertEquals("invalid_grant", fehler(b.erneuere(alt.first, alt.third)))
+            // Auch die Kennung des Clients gilt nicht mehr: Claude registriert sich neu.
+            assertEquals(HttpStatusCode.BadRequest, b.gibFrei(alt.first, token = "n".repeat(40)).status)
         }
     }
 

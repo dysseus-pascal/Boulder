@@ -13,6 +13,7 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.util.escapeHTML
 import io.ktor.utils.io.readRemaining
 import kotlinx.io.readByteArray
 import kotlinx.serialization.SerialName
@@ -44,6 +45,11 @@ import javax.crypto.spec.SecretKeySpec
  *
  * GESPEICHERT WIRD NUR EIN PRUEFWERT, ein HMAC mit dem MCP-Token als Schluessel: die Datenbank
  * verraet keinen Zugang, und ein neues MCP-Token meldet jeden Client ab.
+ *
+ * WER NICHT ANGEMELDET IST, SCHREIBT NICHTS UND SPERRT NUR SICH: die Kennung eines Clients traegt
+ * seine Daten selbst, unterschrieben ([kennung]), und die Sperre nach falschen Tokens gilt je
+ * Absender ([gesperrt]). Sonst verdraengte eine Flut von Registrierungen den Client, den Claude
+ * gerade angelegt hat, und zehn falsche Tokens eines Fremden sperrten den Besitzer aus.
  */
 class Anmeldung(
     private val adresse: String,
@@ -55,7 +61,16 @@ class Anmeldung(
 
     // Nur im Speicher: ein Code lebt eine Minute, ein Neustart dazwischen kostet eine neue Anmeldung.
     private val codes = ConcurrentHashMap<String, Code>()
-    private val fehlversuche = ArrayDeque<Long>()
+
+    // Die Zeiten der falschen Tokens je Absender ([bereich]), der am laengsten ruhige zuerst; ab
+    // HOECHSTENS_ABSENDER faellt er heraus. Nur unter synchronized(fehlversuche).
+    private val fehlversuche = object : LinkedHashMap<String, ArrayDeque<Long>>(16, 0.75f, true) {
+        override fun removeEldestEntry(aeltester: MutableMap.MutableEntry<String, ArrayDeque<Long>>) = size > HOECHSTENS_ABSENDER
+    }
+
+    // Ein eigener Schluessel fuer die Kennungen der Clients, aus dem MCP-Token: eine Unterschrift,
+    // die /register jedem gibt, taugt so nirgends als Pruefwert eines Tokens.
+    private val clientSchluessel = hmac(mcpToken.toByteArray(), "boulder-client".toByteArray())
 
     private class Code(val client: String, val umleitung: String, val challenge: String, val ablauf: Long)
 
@@ -90,11 +105,11 @@ class Anmeldung(
     suspend fun registriere(call: ApplicationCall) {
         val r = koerper(call)?.let { runCatching { JSON.decodeFromString(Registrierung.serializer(), it) }.getOrNull() }
             ?: return jsonFehler(call, "invalid_client_metadata")
-        if (r.umleitungen.isEmpty() || r.umleitungen.size > 10 || !r.umleitungen.all(::umleitungErlaubt)) {
+        if (r.umleitungen.isEmpty() || r.umleitungen.size > 10 || !r.umleitungen.all { it.length <= 200 && umleitungErlaubt(it) }) {
             return jsonFehler(call, "invalid_redirect_uri")
         }
-        val c = Speicher.Client(neu(), r.name?.trim()?.take(60)?.ifEmpty { null } ?: "MCP client", r.umleitungen)
-        speicher.legeClientAn(c, jetzt())
+        val daten = ClientDaten(r.umleitungen, r.name?.trim()?.take(60)?.ifEmpty { null } ?: "MCP client", neu().take(16))
+        val c = Speicher.Client(kennung(daten), daten.name, daten.umleitungen)
         call.respondText(buildJsonObject {
             put("client_id", c.kennung)
             put("client_id_issued_at", jetzt())
@@ -118,11 +133,12 @@ class Anmeldung(
         val a = pruefe(call, p) ?: return
         if (p["entscheid"] != "ja") return call.respondRedirect(ziel(a, "error" to "access_denied"))
         val t = jetzt()
+        val wer = bereich(absender(call))
         // Vor dem Vergleich: auch das richtige Token hilft waehrend der Sperre nicht, sonst
         // verriete die Antwort dem Ratenden den Treffer doch.
-        if (gesperrt(t)) return formularSeite(call, a, HttpStatusCode.TooManyRequests, "Too many wrong tokens. Try again in 15 minutes.")
+        if (gesperrt(wer, t)) return formularSeite(call, a, HttpStatusCode.TooManyRequests, "Too many wrong tokens. Try again in 15 minutes.")
         if (!gleich(p["token"].orEmpty().trim(), mcpToken)) {
-            synchronized(fehlversuche) { fehlversuche.addLast(t) }
+            synchronized(fehlversuche) { fehlversuche.getOrPut(wer) { ArrayDeque() }.addLast(t) }
             return formularSeite(call, a, HttpStatusCode.Forbidden, "Wrong token.")
         }
         val code = neu()
@@ -172,7 +188,7 @@ class Anmeldung(
      * und mit ihm einen Weg, Nutzer weiterzuleiten.
      */
     private suspend fun pruefe(call: ApplicationCall, p: Map<String, String>): Anfrage? {
-        val client = p["client_id"]?.let(speicher::client)
+        val client = p["client_id"]?.let(::client)
         if (client == null) {
             seite(call, HttpStatusCode.BadRequest, "<p>Unknown client. Remove the connector in Claude and add it again.</p>")
             return null
@@ -196,9 +212,36 @@ class Anmeldung(
         return a
     }
 
-    private fun gesperrt(t: Long): Boolean = synchronized(fehlversuche) {
-        while (fehlversuche.isNotEmpty() && fehlversuche.first() < t - SPERRE_S) fehlversuche.removeFirst()
-        fehlversuche.size >= HOECHSTENS_FEHLVERSUCHE
+    /** Hat [wer] in den letzten [SPERRE_S] Sekunden [HOECHSTENS_FEHLVERSUCHE] falsche Tokens geschickt? */
+    private fun gesperrt(wer: String, t: Long): Boolean = synchronized(fehlversuche) {
+        val l = fehlversuche[wer] ?: return false
+        while (l.isNotEmpty() && l.first() < t - SPERRE_S) l.removeFirst()
+        if (l.isEmpty()) fehlversuche.remove(wer)
+        l.size >= HOECHSTENS_FEHLVERSUCHE
+    }
+
+    /**
+     * Die Kennung eines Clients: seine Daten und ihr HMAC, beides Base64. Registrieren schreibt so
+     * nichts, und ein neues MCP-Token entwertet jede Kennung wie jeden Zugang.
+     */
+    private fun kennung(d: ClientDaten): String {
+        val inhalt = JSON.encodeToString(ClientDaten.serializer(), d).toByteArray()
+        return B64.encodeToString(inhalt) + "." + B64.encodeToString(hmac(clientSchluessel, inhalt))
+    }
+
+    /**
+     * Der Client hinter [kennung]; null, wenn die Unterschrift nicht stimmt. Eine Kennung ohne Punkt
+     * stammt aus 0.55.0, als Clients noch in der Datenbank standen.
+     */
+    private fun client(kennung: String): Speicher.Client? {
+        val teile = kennung.split('.')
+        if (teile.size == 1) return speicher.client(kennung)
+        if (teile.size != 2) return null
+        val inhalt = runCatching { B64_LESEN.decode(teile[0]) }.getOrNull() ?: return null
+        val unterschrift = runCatching { B64_LESEN.decode(teile[1]) }.getOrNull() ?: return null
+        if (!MessageDigest.isEqual(unterschrift, hmac(clientSchluessel, inhalt))) return null
+        val d = runCatching { JSON.decodeFromString(ClientDaten.serializer(), inhalt.decodeToString()) }.getOrNull() ?: return null
+        return Speicher.Client(kennung, d.name, d.umleitungen)
     }
 
     private suspend fun formularSeite(call: ApplicationCall, a: Anfrage, status: HttpStatusCode, fehler: String?) {
@@ -228,11 +271,7 @@ class Anmeldung(
         return a.umleitung + trenner + alle.joinToString("&") { (k, v) -> k + "=" + URLEncoder.encode(v, Charsets.UTF_8).replace("+", "%20") }
     }
 
-    private fun pruefwert(token: String): String {
-        val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(mcpToken.toByteArray(), "HmacSHA256"))
-        return HexFormat.of().formatHex(mac.doFinal(token.toByteArray()))
-    }
+    private fun pruefwert(token: String): String = HexFormat.of().formatHex(hmac(mcpToken.toByteArray(), token.toByteArray()))
 
     private fun neu(): String = ByteArray(32).also(zufall::nextBytes).let(B64::encodeToString)
 
@@ -249,12 +288,16 @@ class Anmeldung(
         const val ERNEUERUNG_S = 90 * 86_400L
         const val SPERRE_S = 15 * 60L
         const val HOECHSTENS_FEHLVERSUCHE = 10
+
+        /** So viele Absender merkt sich die Sperre; je Absender hoechstens zehn Zeiten. */
+        const val HOECHSTENS_ABSENDER = 10_000
         private const val HOECHSTENS_FORMULAR = 16 * 1024
         private const val ZUGANG = "zugang"
         private const val ERNEUERUNG = "erneuerung"
         private val CHALLENGE = Regex("[A-Za-z0-9_-]{43}")
         private val VERIFIER = Regex("[A-Za-z0-9._~-]{43,128}")
         private val B64 = Base64.getUrlEncoder().withoutPadding()
+        private val B64_LESEN = Base64.getUrlDecoder()
         private val JSON = Json { ignoreUnknownKeys = true }
         private val CLAUDE = setOf("https://claude.ai/api/mcp/auth_callback", "https://claude.com/api/mcp/auth_callback")
         private val LOOPBACK = setOf("localhost", "127.0.0.1", "[::1]")
@@ -283,15 +326,18 @@ class Anmeldung(
 
         private fun gleich(a: String, b: String) = MessageDigest.isEqual(a.toByteArray(), b.toByteArray())
 
-        private fun html(text: String) = buildString {
-            for (z in text) when (z) {
-                '&' -> append("&amp;")
-                '<' -> append("&lt;")
-                '>' -> append("&gt;")
-                '"' -> append("&quot;")
-                '\'' -> append("&#39;")
-                else -> append(z)
-            }
+        private fun hmac(schluessel: ByteArray, daten: ByteArray): ByteArray =
+            Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(schluessel, "HmacSHA256")) }.doFinal(daten)
+
+        private fun html(text: String) = text.escapeHTML()
+
+        /**
+         * Der Teil einer Adresse, den die Sperre zaehlt: IPv4 ganz, IPv6 je /64 - so viele Adressen
+         * hat schon ein einzelner Anschluss, und jede bekaeme sonst eigene zehn Versuche.
+         */
+        internal fun bereich(absender: String): String {
+            val b = Netz.literal(absender) ?: return absender
+            return if (b.size == 16) HexFormat.of().formatHex(b, 0, 8) + "/64" else absender
         }
 
         /** Ein Formular oder eine Registrierung im Koerper; null, wenn er groesser ist, als die je sein muessen. */
@@ -346,6 +392,18 @@ class Anmeldung(
 private class Registrierung(
     @SerialName("redirect_uris") val umleitungen: List<String> = emptyList(),
     @SerialName("client_name") val name: String? = null,
+)
+
+/**
+ * Was die Kennung eines Clients traegt; kurze Namen, die Kennung steht in jeder Adresse an
+ * /authorize. [zufall] macht jede Registrierung zu einem eigenen Client (RFC 7591): zwei Connectors
+ * mit gleichen Angaben teilen sich sonst Kennung und Erneuerungstokens.
+ */
+@Serializable
+private class ClientDaten(
+    @SerialName("u") val umleitungen: List<String>,
+    @SerialName("n") val name: String,
+    @SerialName("z") val zufall: String,
 )
 
 internal fun Route.anmeldung(a: Anmeldung) {

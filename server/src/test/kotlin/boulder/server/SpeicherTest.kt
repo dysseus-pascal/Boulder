@@ -58,6 +58,34 @@ class SpeicherTest {
     }
 
     @Test
+    fun einTagBehaeltWasBoulderGeradeNichtKennt() {
+        Speicher.oeffne(":memory:").use { s ->
+            fun tag(werte: Map<String, Double>, entfernt: List<String> = emptyList()) =
+                s.uebernimm(Lieferung(gesendet = jetzt, zone = "UTC", app = "0.56.0", tage = listOf(Tag("2026-10-16", werte, entfernt))), jetzt, 90)
+            tag(mapOf("schritte" to 5000.0, "wasser" to 2000.0, "koffein_mg" to 150.0))
+            // Ohne Wasser und Koffein, etwa weil der Tag aus dem Fenster der Akte fiel: sie bleiben.
+            tag(mapOf("schritte" to 5200.0))
+            assertEquals(mapOf("schritte" to 5200.0, "wasser" to 2000.0, "koffein_mg" to 150.0), s.tage("2026-10-16", "2026-10-16").single().werte)
+            // Das Glas wurde geloescht: Boulder kennt das Wasser dieses Tages und sagt es.
+            tag(mapOf("schritte" to 5200.0), entfernt = listOf("wasser"))
+            assertEquals(mapOf("schritte" to 5200.0, "koffein_mg" to 150.0), s.tage("2026-10-16", "2026-10-16").single().werte)
+            // Bleibt nichts, faellt der Tag weg.
+            tag(emptyMap(), entfernt = listOf("schritte", "koffein_mg"))
+            assertEquals(emptyList(), s.tage("2026-10-01", "2026-10-31"))
+            assertEquals(null, s.umfang().ersterTag)
+        }
+    }
+
+    @Test
+    fun entfernteTrainingsVerschwinden() {
+        Speicher.oeffne(":memory:").use { s ->
+            s.uebernimm(lieferung(5000.0).copy(trainings = listOf(Training("s:1", "Run", jetzt - 9000, jetzt - 7200, 1800), Training("s:2", "Run", jetzt - 9000, jetzt - 7080, 1920))), jetzt, 90)
+            s.uebernimm(Lieferung(gesendet = jetzt, zone = "UTC", app = "0.56.0", trainingsEntfernt = listOf("s:1", "unbekannt")), jetzt, 90)
+            assertEquals(listOf("s:2"), s.trainings(0, Long.MAX_VALUE).map { it.kennung })
+        }
+    }
+
+    @Test
     fun alteMinutenFallenWeg() {
         Speicher.oeffne(":memory:").use { s ->
             val alt = Minute(jetzt - 91 * 86_400L, 1, 2, 3, 4)

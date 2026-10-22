@@ -62,7 +62,7 @@ class WerkzeugeTest {
         // Beginn 15.10. 20:00 Ortszeit; eingeschlafen nach 100 min (21:40), aufgewacht nach 580 min (05:40 am 16.10.).
         val beginn = 1_792_087_200L
         val w = werkzeuge(lieferung(naechte = listOf(Nacht(
-            beginn, 7200, 100, 580, 450, 51, 54, messstufe = 4,
+            beginn, 7200, 100, 580, 450, 51, 54, messstufe = 4, akkuBeginn = 100, akkuEnde = 100, geladen = true,
             abschnitte = listOf(Abschnitt(100, 160, 1), Abschnitt(160, 220, 2), Abschnitt(220, 250, 3)),
             hrvFenster = listOf(HrvFenster(120, 50, 52), HrvFenster(130, 70, 50), HrvFenster(140, 60, 51)),
         ))))
@@ -71,6 +71,7 @@ class WerkzeugeTest {
         assertTrue("stages total: light 60 min, deep 60 min, REM 30 min" in text, text)
         assertTrue("21:40-22:40 light" in text, text)
         assertTrue("RMSSD median 60 ms, range 50-70 ms" in text, text)
+        assertTrue("watch battery: 100% -> 100% (charged during the night, no consumption figure)" in text, text)
         assertEquals("no night ending on 2026-10-15", w.nacht(LocalDate.parse("2026-10-15")))
     }
 
@@ -90,7 +91,7 @@ class WerkzeugeTest {
 
     @Test
     fun standNenntZoneUndUmfang() {
-        val text = werkzeuge(lieferung(tage = listOf(Tag("2026-10-16", emptyMap())))).stand()
+        val text = werkzeuge(lieferung(tage = listOf(Tag("2026-10-16", mapOf("schritte" to 8123.0))))).stand()
         assertTrue("timezone: Europe/Zurich" in text, text)
         assertTrue("last upload: 2026-10-16 14:00 (app 0.55.0)" in text, text)
         assertTrue("watch firmware: v4.41.1-b31" in text, text)

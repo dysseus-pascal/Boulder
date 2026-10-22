@@ -23,15 +23,31 @@ data class Lieferung(
     val trainings: List<Training> = emptyList(),
     val minuten: List<Minute> = emptyList(),
     val stand: Stand? = null,
+    /**
+     * Die Kennungen gesendeter Trainings, die Boulder nicht mehr fuehrt: in der Akte geloescht
+     * oder einem Doppel aus einer anderen App gewichen. Der Server loescht sie.
+     */
+    val trainingsEntfernt: List<String> = emptyList(),
 ) {
     companion object {
         const val FASSUNG = 1
     }
 }
 
-/** Die Tageswerte wie in Trends und Sicherung: Spalte ("schritte", "schlaf" ...) -> Wert. */
+/**
+ * Die Tageswerte wie in Trends und Sicherung: Spalte ("schritte", "schlaf" ...) -> Wert.
+ *
+ * DER SERVER FUEHRT ZUSAMMEN: [werte] ersetzen gespeicherte Werte gleichen Namens, die Spalten in
+ * [entfernt] fallen weg, alle anderen bleiben. Boulder kennt nicht jede Spalte jedes Tages - Wasser
+ * und Koffein liest es nur, solange der Tag im Fenster der Akte liegt und die Akte antwortet.
+ */
 @Serializable
-data class Tag(val datum: String, val werte: Map<String, Double>)
+data class Tag(
+    val datum: String,
+    val werte: Map<String, Double>,
+    /** Die Spalten, die Boulder fuer diesen Tag sicher kennt und die es nicht (mehr) gibt. */
+    val entfernt: List<String> = emptyList(),
+)
 
 /** Eine Nacht der Firmware; Minuten ab [beginn], wie in der App. */
 @Serializable
@@ -48,6 +64,8 @@ data class Nacht(
     val akkuEnde: Int? = null,
     val abschnitte: List<Abschnitt> = emptyList(),
     val hrvFenster: List<HrvFenster> = emptyList(),
+    /** Hing die Uhr nachts am Ladegeraet? Dann sagt der Akku nichts ueber den Verbrauch. */
+    val geladen: Boolean = false,
 )
 
 /** [phase] wie SchlafPhase der Firmware: 0 wach, 1 leicht, 2 tief, 3 REM, 4 Schlaf ohne Phase. */

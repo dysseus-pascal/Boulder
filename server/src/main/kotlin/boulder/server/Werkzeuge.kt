@@ -87,7 +87,9 @@ class Werkzeuge(private val speicher: Speicher) {
             appendLine("fell asleep: ${uhr.format(ort(n.einschlafen))}, woke up: ${uhr.format(ort(n.aufwachen))}, asleep: ${n.schlafMinuten} min")
             appendLine("resting heart rate: ${n.ruhepuls.takeIf { it > 0 }?.let { "$it bpm" } ?: "-"}, HRV (RMSSD): ${n.hrv.takeIf { it > 0 }?.let { "$it ms" } ?: "-"}")
             n.messstufe?.let { appendLine("measuring level: $it of 5") }
-            if (n.akkuBeginn != null || n.akkuEnde != null) appendLine("watch battery: ${n.akkuBeginn ?: "-"}% -> ${n.akkuEnde ?: "-"}%")
+            if (n.akkuBeginn != null || n.akkuEnde != null) {
+                appendLine("watch battery: ${n.akkuBeginn ?: "-"}% -> ${n.akkuEnde ?: "-"}%" + if (n.geladen) " (charged during the night, no consumption figure)" else "")
+            }
             if (n.abschnitte.isNotEmpty()) {
                 val summe = n.abschnitte.groupBy { it.phase }.mapValues { (_, l) -> l.sumOf { it.bis - it.von } }
                 appendLine("stages total: " + PHASEN.entries.filter { it.key in summe }.joinToString(", ") { "${it.value} ${summe[it.key]} min" })

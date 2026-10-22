@@ -17,10 +17,11 @@ import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 
 /**
- * Der Spiegel von Boulders Daten in SQLite. Jede Lieferung ersetzt, was sie mitbringt: ein Tag,
- * eine Nacht oder ein Training kommt neu, solange er sich auf dem Telefon noch aendert (der
- * laufende Tag, ein spaet bestaetigtes Training) - darum Upsert. Dazu die Clients und Zugaenge
- * der Anmeldung (Anmeldung.kt), damit Claude nach einem Neustart angemeldet bleibt.
+ * Der Spiegel von Boulders Daten in SQLite. Jede Lieferung ersetzt, was sie mitbringt: eine Nacht
+ * oder ein Training kommt neu, solange es sich auf dem Telefon noch aendert (ein spaet bestaetigtes
+ * Training) - darum Upsert. Einen Tag fuehrt sie mit dem gespeicherten zusammen ([Tag]). Dazu die
+ * Clients und Zugaenge der Anmeldung (Anmeldung.kt), damit Claude nach einem Neustart angemeldet
+ * bleibt.
  *
  * EINE VERBINDUNG, ALLES SYNCHRONISIERT: Boulder schickt hoechstens alle paar Minuten, Claude
  * fragt selten. Eine Verbindung darf nie von zwei Faeden zugleich benutzt werden.
@@ -30,14 +31,13 @@ class Speicher private constructor(private val db: SQLiteConnection) : AutoClose
     @Synchronized
     fun uebernimm(l: Lieferung, jetzt: Long, minutenTage: Int): Quittung {
         transaktion {
-            jeEintrag("INSERT INTO tag(datum, werte) VALUES(?, ?) ON CONFLICT(datum) DO UPDATE SET werte = excluded.werte", l.tage) { t ->
-                bindText(1, t.datum)
-                bindText(2, austauschJson.encodeToString(WERTE, t.werte))
-            }
+            l.tage.forEach(::uebernimmTag)
             jeEintrag("INSERT INTO nacht(beginn, daten) VALUES(?, ?) ON CONFLICT(beginn) DO UPDATE SET daten = excluded.daten", l.naechte) { n ->
                 bindLong(1, n.beginn)
                 bindText(2, austauschJson.encodeToString(Nacht.serializer(), n))
             }
+            // Erst entfernen, dann uebernehmen: was eine Lieferung mitbringt, steht danach da.
+            jeEintrag("DELETE FROM training WHERE kennung = ?", l.trainingsEntfernt) { bindText(1, it) }
             jeEintrag(
                 "INSERT INTO training(kennung, beginn, daten) VALUES(?, ?, ?) " +
                     "ON CONFLICT(kennung) DO UPDATE SET beginn = excluded.beginn, daten = excluded.daten",
@@ -65,6 +65,26 @@ class Speicher private constructor(private val db: SQLiteConnection) : AutoClose
             aendere("DELETE FROM minute WHERE zeit < ?") { bindLong(1, jetzt - minutenTage * 86_400L) }
         }
         return Quittung(l.tage.size, l.naechte.size, l.trainings.size, l.minuten.size)
+    }
+
+    /**
+     * Neue Werte ersetzen gespeicherte gleichen Namens, [Tag.entfernt] faellt weg, der Rest bleibt:
+     * schickt Boulder einen Tag ohne Wasser, weil es die Akte gerade nicht lesen kann, bleibt das
+     * Wasser hier stehen. Bleibt gar nichts, faellt der Tag weg.
+     */
+    private fun uebernimmTag(t: Tag) {
+        val alt = zeilen("SELECT werte FROM tag WHERE datum = ?", { bindText(1, t.datum) }) {
+            austauschJson.decodeFromString(WERTE, getText(0))
+        }.firstOrNull().orEmpty()
+        val werte = alt - t.entfernt.toSet() + t.werte
+        if (werte.isEmpty()) {
+            aendere("DELETE FROM tag WHERE datum = ?") { bindText(1, t.datum) }
+            return
+        }
+        aendere("INSERT INTO tag(datum, werte) VALUES(?, ?) ON CONFLICT(datum) DO UPDATE SET werte = excluded.werte") {
+            bindText(1, t.datum)
+            bindText(2, austauschJson.encodeToString(WERTE, werte))
+        }
     }
 
     private fun setze(schluessel: String, wert: String) =

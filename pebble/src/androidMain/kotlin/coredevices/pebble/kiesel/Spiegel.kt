@@ -40,6 +40,7 @@ import kotlinx.serialization.builtins.serializer
 import org.koin.mp.KoinPlatform
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -257,10 +258,9 @@ internal object Spiegel {
         val fassung = versuche("Spiegel", "Fassung lesen") { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.orEmpty()
 
         val alteTage = karte(context, G_TAGE)
-        val tageJetzt = if (an(context, Art.TAGE)) {
-            Spiegelrechnung.tage(Trenddaten.lies(context, api, merken = false)).also { if (it == null) logger.i { "Akte nicht ganz lesbar, Tage warten" } }
-        } else null
-        val tage = tageJetzt?.let { Spiegelrechnung.neueTage(it, alteTage) }.orEmpty()
+        val tage = if (an(context, Art.TAGE)) {
+            Spiegelrechnung.neueTage(Spiegelrechnung.tage(Trenddaten.lies(context, api, merken = false), LocalDate.now()), alteTage)
+        } else emptyList()
 
         val alteNaechte = karte(context, G_NAECHTE)
         val naechte = if (an(context, Art.NAECHTE)) neueNaechte(api, alteNaechte, jetzt) else emptyList()
@@ -286,7 +286,7 @@ internal object Spiegel {
 
         // Erst nach der Quittung gilt etwas als gesendet: ging die Lieferung verloren, kommt sie wieder.
         val e = p.edit()
-        e.putString(G_TAGE, json(alteTage + tage.associate { it.datum to Spiegelrechnung.abdruck(it.werte) }))
+        e.putString(G_TAGE, json(alteTage + tage.associate { it.datum to Spiegelrechnung.abdruck(it) }))
         e.putString(G_NAECHTE, json(alteNaechte + naechte.associate { it.beginn.toString() to Spiegelrechnung.abdruck(it) }))
         if (trainings != null) {
             // Was aus dem Fenster der Akte faellt, kommt nicht wieder; der Rest bleibt, auch was ein

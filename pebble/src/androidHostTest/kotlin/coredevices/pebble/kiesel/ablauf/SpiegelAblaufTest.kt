@@ -5,6 +5,7 @@ import boulder.austausch.Lieferung
 import boulder.austausch.Quittung
 import boulder.austausch.austauschJson
 import coredevices.pebble.R
+import coredevices.pebble.kiesel.Akte
 import coredevices.pebble.kiesel.KieselVerlauf
 import coredevices.pebble.kiesel.Spiegel
 import coredevices.pebble.kiesel.Spiegelpost
@@ -215,6 +216,20 @@ class SpiegelAblaufTest {
         minuten += neu
         sende(uhr = jetzt + 900)
         assertTrue(neu.timestamp in lieferungen.last().minuten.map { it.zeit })
+    }
+
+    @Test
+    fun tageGehenAuchOhneGanzeAkte() {
+        // Eine Akte, deren Abfragen je Tag scheitern - wie ohne das freiwillige Recht "Ernaehrung lesen".
+        Akte.ersatz = FakeAkte(context.packageName)
+        try {
+            Spiegel.speichere(context, ziel)
+            sende()
+            val tage = lieferungen.single().tage
+            assertTrue(tage.isNotEmpty() && tage.all { "schlaf" in it.werte && it.entfernt.isEmpty() }, tage.toString())
+        } finally {
+            Akte.ersatz = null
+        }
     }
 
     @Test

@@ -50,20 +50,34 @@ internal object Spiegelrechnung {
     fun abdruck(text: String): String =
         MessageDigest.getInstance("SHA-256").digest(text.toByteArray()).take(8).joinToString("") { Integer.toHexString(it.toInt() and 0xff).padStart(2, '0') }
 
-    /** Die Werte eines Tages; ihre Reihenfolge zaehlt nicht. */
-    fun abdruck(werte: Map<String, Double>): String = abdruck(werte.toSortedMap().entries.joinToString(";") { "${it.key}=${it.value}" })
+    /**
+     * Ein Tag, wie er gesendet wuerde; die Reihenfolge der Werte zaehlt nicht. Ohne [Tag.entfernt]
+     * derselbe Abdruck wie bis 0.55.0, als es nur die Werte gab.
+     */
+    fun abdruck(t: Tag): String {
+        val werte = t.werte.toSortedMap().entries.joinToString(";") { "${it.key}=${it.value}" }
+        return abdruck(if (t.entfernt.isEmpty()) werte else werte + "|-" + t.entfernt.sorted().joinToString(","))
+    }
 
-    /** Die Tage, deren Werte neu oder anders sind als beim letzten Senden ([gesendet]: Datum -> Abdruck). */
-    fun neueTage(tage: Map<LocalDate, Map<String, Double>>, gesendet: Map<String, String>): List<Tag> =
-        tage.filterValues { it.isNotEmpty() }.toSortedMap()
-            .filter { (tag, werte) -> gesendet[tag.toString()] != abdruck(werte) }
-            .map { (tag, werte) -> Tag(tag.toString(), werte) }
+    /** Die Tage, die neu oder anders sind als beim letzten Senden ([gesendet]: Datum -> Abdruck). */
+    fun neueTage(tage: List<Tag>, gesendet: Map<String, String>): List<Tag> = tage.filter { gesendet[it.datum] != abdruck(it) }
 
     /**
-     * Die Tage zum Senden; null ohne ganze Akte. Im Hintergrund ohne Leserecht fehlten Wasser und
-     * Koffein, und der Server ersetzte die Tage ohne sie. Die Uhrwerte kommen beim naechsten Lauf mit.
+     * Die Tage zum Senden, aufsteigend. Der Server fuehrt sie mit seinen zusammen ([Tag]): was hier
+     * fehlt, weil die Akte gerade nicht antwortet oder der Tag aus ihrem Fenster fiel, bleibt dort.
+     * Nur die ganz gelesenen Spalten der Akte ([Trendstand.akteGanz]) nennt ein Tag in ihrem
+     * Fenster als entfernt, wenn sie ihm fehlen - so verschwindet auch ein geloeschtes Glas.
      */
-    fun tage(stand: Trendstand): Map<LocalDate, Map<String, Double>>? = if (stand.akteHeil) jeTag(stand.eigen) else null
+    fun tage(stand: Trendstand, heute: LocalDate): List<Tag> {
+        val werte = jeTag(stand.eigen)
+        val ab = heute.minusDays(Trenddaten.TAGE)
+        val fenster = if (stand.akteGanz.isEmpty()) emptyList() else generateSequence(ab) { it.plusDays(1) }.takeWhile { it <= heute }.toList()
+        return (werte.keys + fenster).toSortedSet().map { tag ->
+            val w = werte[tag].orEmpty()
+            val imFenster = tag >= ab && tag <= heute
+            Tag(tag.toString(), w, if (imFenster) stand.akteGanz.filter { it !in w }.sorted() else emptyList())
+        }.filter { it.werte.isNotEmpty() || it.entfernt.isNotEmpty() }
+    }
 
     /** Die Reihen der Trends je Tag, wie die Sicherung sie schreibt. */
     fun jeTag(reihen: Reihen): Map<LocalDate, Map<String, Double>> =

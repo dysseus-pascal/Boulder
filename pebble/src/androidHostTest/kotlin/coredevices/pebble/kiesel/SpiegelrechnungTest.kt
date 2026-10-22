@@ -10,6 +10,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class SpiegelrechnungTest {
     private val jetzt = 1_792_152_000L
@@ -33,20 +34,27 @@ class SpiegelrechnungTest {
 
     @Test
     fun nurNeueOderGeaenderteTage() {
-        val tage = mapOf(
-            LocalDate.of(2026, 10, 16) to mapOf("schritte" to 5000.0),
-            LocalDate.of(2026, 10, 15) to mapOf("schritte" to 9000.0, "schlaf" to 431.0),
+        val tage = listOf(
+            Tag("2026-10-15", mapOf("schritte" to 9000.0, "schlaf" to 431.0)),
+            Tag("2026-10-16", mapOf("schritte" to 5000.0)),
         )
         val erste = Spiegelrechnung.neueTage(tage, emptyMap())
         assertEquals(listOf("2026-10-15", "2026-10-16"), erste.map { it.datum })
-        val gesendet = erste.associate { it.datum to Spiegelrechnung.abdruck(it.werte) }
+        val gesendet = erste.associate { it.datum to Spiegelrechnung.abdruck(it) }
         assertEquals(emptyList(), Spiegelrechnung.neueTage(tage, gesendet))
         // Die Reihenfolge der Spalten ist kein neuer Wert.
-        val umgestellt = tage + (LocalDate.of(2026, 10, 15) to linkedMapOf("schlaf" to 431.0, "schritte" to 9000.0))
+        val umgestellt = listOf(Tag("2026-10-15", linkedMapOf("schlaf" to 431.0, "schritte" to 9000.0)), tage[1])
         assertEquals(emptyList(), Spiegelrechnung.neueTage(umgestellt, gesendet))
-        val spaeter = tage + (LocalDate.of(2026, 10, 16) to mapOf("schritte" to 7500.0))
+        val spaeter = listOf(tage[0], Tag("2026-10-16", mapOf("schritte" to 7500.0)))
         assertEquals(listOf(Tag("2026-10-16", mapOf("schritte" to 7500.0))), Spiegelrechnung.neueTage(spaeter, gesendet))
-        assertEquals(emptyList(), Spiegelrechnung.neueTage(mapOf(LocalDate.of(2026, 10, 17) to emptyMap()), gesendet))
+        // Was ein Tag als entfernt nennt, gehoert zu seinem Abdruck.
+        assertEquals(1, Spiegelrechnung.neueTage(listOf(tage[1].copy(entfernt = listOf("wasser"))), gesendet).size)
+    }
+
+    @Test
+    fun einTagOhneEntferntBehaeltDenAbdruckVon055() {
+        // So rechnete 0.55.0 den Abdruck der Werte: nach dem Update geht kein Tag deshalb noch einmal.
+        assertEquals(Spiegelrechnung.abdruck("schlaf=431.0;schritte=9000.0"), Spiegelrechnung.abdruck(Tag("2026-10-15", mapOf("schritte" to 9000.0, "schlaf" to 431.0))))
     }
 
     @Test
@@ -90,10 +98,23 @@ class SpiegelrechnungTest {
     }
 
     @Test
-    fun ohneGanzeAkteKeineTage() {
-        val tag = LocalDate.of(2026, 10, 15)
-        val eigen = mapOf("schritte" to listOf(tag to 9000.0))
-        assertEquals(mapOf(tag to mapOf("schritte" to 9000.0)), Spiegelrechnung.tage(Trendstand(eigen, emptyMap(), akteHeil = true)))
-        assertNull(Spiegelrechnung.tage(Trendstand(eigen, emptyMap(), akteHeil = false)))
+    fun tageNennenNurGanzGeleseneSpaltenAlsEntfernt() {
+        val heute = LocalDate.of(2026, 10, 16)
+        val eigen = mapOf(
+            "schritte" to listOf(heute.minusDays(1) to 9000.0, heute.minusDays(200) to 8000.0),
+            "wasser" to listOf(heute.minusDays(1) to 1500.0),
+        )
+        // Die Akte antwortete nicht ganz: die Tage gehen trotzdem und nennen nichts als entfernt.
+        val ohneAkte = Spiegelrechnung.tage(Trendstand(eigen, emptyMap()), heute)
+        assertEquals(listOf("2026-03-30", "2026-10-15"), ohneAkte.map { it.datum })
+        assertTrue(ohneAkte.all { it.entfernt.isEmpty() })
+        // Wasser ganz gelesen: im Fenster der Akte nennt jeder Tag ohne Wasser es als entfernt,
+        // auch einer ohne jeden anderen Wert; der Tag vor dem Fenster nicht.
+        val mitWasser = Spiegelrechnung.tage(Trendstand(eigen, emptyMap(), akteGanz = setOf("wasser")), heute)
+        assertEquals(Tag("2026-10-15", mapOf("schritte" to 9000.0, "wasser" to 1500.0)), mitWasser.single { it.datum == "2026-10-15" })
+        assertEquals(Tag("2026-10-16", emptyMap(), listOf("wasser")), mitWasser.single { it.datum == "2026-10-16" })
+        assertEquals(Tag("2026-03-30", mapOf("schritte" to 8000.0)), mitWasser.single { it.datum == "2026-03-30" })
+        assertEquals(Trenddaten.TAGE + 2, mitWasser.size.toLong())
+        assertEquals(mitWasser.map { it.datum }.sorted(), mitWasser.map { it.datum })
     }
 }

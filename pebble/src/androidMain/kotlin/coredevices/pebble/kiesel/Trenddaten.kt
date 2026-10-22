@@ -25,10 +25,12 @@ internal typealias Reihen = Map<String, List<Pair<LocalDate, Double>>>
 /**
  * Was die Trends zeigen, mit Herkunft: [eigen] misst Boulder selbst (aus Uhr
  * und Akte, aeltere Tage aus dem Tagesspeicher), [vorgeschichte] stammt aus
- * einer Sicherung. [reihen] fuegt beides zusammen. [akteHeil]: keine Abfrage
- * der Akte schlug fehl - sonst fehlen Wasser und Koffein in [eigen].
+ * einer Sicherung. [reihen] fuegt beides zusammen. [akteGanz]: die Spalten der
+ * Akte (Wasser, Koffein), die fuer jeden Tag ihres Fensters ([Trenddaten.TAGE])
+ * ganz gelesen sind - fehlt dort ein Wert, gibt es ihn nicht. Den anderen
+ * fehlen Werte, wenn die Akte nicht antwortete oder nicht da ist.
  */
-internal class Trendstand(val eigen: Reihen, val vorgeschichte: Reihen, val akteHeil: Boolean = true) {
+internal class Trendstand(val eigen: Reihen, val vorgeschichte: Reihen, val akteGanz: Set<String> = emptySet()) {
     val reihen: Reihen = Trenddaten.mitVorgeschichte(eigen, vorgeschichte)
 
     /** Der erste eigene Tag je Reihe; davor spricht die Vorgeschichte. */
@@ -249,9 +251,15 @@ internal object Trenddaten {
 
     /**
      * Wasser und Koffein aus der Akte - ein Uhrschub aendert sie nicht. [heil]: keine der
-     * Abfragen schlug fehl; nur dann taugt das Ergebnis fuer die naechsten Schuebe.
+     * Abfragen schlug fehl; nur dann taugt das Ergebnis fuer die naechsten Schuebe. [ganz]: die
+     * Spalten, die gelesen sind, wie [Trendstand.akteGanz].
      */
-    private class Akteteil(val wasser: List<Pair<LocalDate, Double>>, val koffein: List<Pair<LocalDate, Double>>, val heil: Boolean)
+    private class Akteteil(
+        val wasser: List<Pair<LocalDate, Double>>,
+        val koffein: List<Pair<LocalDate, Double>>,
+        val heil: Boolean,
+        val ganz: Set<String>,
+    )
 
     /** Die Akte je Tag, solange eine Trendseite sichtbar ist ([seiteSichtbar]). */
     private val akteteile = Seitencache<LocalDate, Akteteil>()
@@ -319,38 +327,42 @@ internal object Trenddaten {
         // Abgeschlossene Tage der Uhr festschreiben, bevor das Housekeeping sie loescht.
         Tagesspeicher.halte(context, festzuschreiben(neu, heute), merken)
         val eigen = mitArchiv(neu, Tagesspeicher.eigene(context, merken), heute)
-        Trendstand(eigen, mitEinschlafen(Tagesspeicher.alle(context, merken)), akte.heil).also { if (merken) zuletzt = it }
+        Trendstand(eigen, mitEinschlafen(Tagesspeicher.alle(context, merken)), akte.ganz).also { if (merken) zuletzt = it }
     }
 
     private suspend fun ausDerAkte(context: Context, heute: LocalDate, zone: ZoneId): Akteteil {
         val von = heute.minusDays(TAGE)
-        val klient = Akte(context).bereit()
-        // Scheitert eine Abfrage (versuche gibt null), steht sie leer da - das darf kein Schub uebernehmen.
-        var heil = true
-        suspend fun jeTag(metrik: AggregateMetric<*>, wert: (Any) -> Double): List<Pair<LocalDate, Double>> = versuche(TAG, "Akte je Tag") {
-            klient?.aggregateGroupByPeriod(
+        // Ohne Akte gibt es nichts zu lesen: heil, aber ganz gelesen ist nichts.
+        val klient = Akte(context).bereit() ?: return Akteteil(emptyList(), emptyList(), heil = true, ganz = emptySet())
+        // Scheitert eine Abfrage, gibt versuche null: leer fuer die Trends, nicht ganz fuer den Spiegel.
+        suspend fun jeTag(metrik: AggregateMetric<*>, wert: (Any) -> Double): List<Pair<LocalDate, Double>>? = versuche(TAG, "Akte je Tag") {
+            klient.aggregateGroupByPeriod(
                 AggregateGroupByPeriodRequest(
                     setOf(metrik),
                     TimeRangeFilter.between(von.atStartOfDay(), heute.plusDays(1).atStartOfDay()),
                     Period.ofDays(1),
                 )
-            ).orEmpty().mapNotNull { g -> g.result[metrik]?.let { g.startTime.toLocalDate() to wert(it) } }.filter { it.second > 0 }
-        } ?: emptyList<Pair<LocalDate, Double>>().also { heil = false }
+            ).mapNotNull { g -> g.result[metrik]?.let { g.startTime.toLocalDate() to wert(it) } }.filter { it.second > 0 }
+        }
         val wasser = jeTag(HydrationRecord.VOLUME_TOTAL) { (it as androidx.health.connect.client.units.Volume).inMilliliters }
         // Seit wann Boulder selbst Wasser eintraegt (Drinktervall): erst ab da ist ein Tag ohne Kaffee einer mit 0 mg.
         // Als Liste, weil null hier zweierlei hiesse: eine leere Liste ist "kein Glas", null ein Fehler.
         val glasAb = versuche(TAG, "Erstes Glas") {
             listOfNotNull(
-                klient?.liesEinen(
+                klient.liesEinen(
                     context, HydrationRecord::class, TimeRangeFilter.between(von.atStartOfDay(), heute.plusDays(1).atStartOfDay()),
                     neuester = false, herkunft = Herkunft.EIGENE,
                 )?.startTime?.atZone(zone)?.toLocalDate()
             )
-        }.also { if (it == null) heil = false }?.firstOrNull()
-        val koffein = koffeinMitNull(
-            jeTag(NutritionRecord.CAFFEINE_TOTAL) { (it as androidx.health.connect.client.units.Mass).inMilligrams }, wasser, glasAb, heute,
+        }
+        val koffeinRoh = jeTag(NutritionRecord.CAFFEINE_TOTAL) { (it as androidx.health.connect.client.units.Mass).inMilligrams }
+        val koffein = koffeinMitNull(koffeinRoh.orEmpty(), wasser.orEmpty(), glasAb?.firstOrNull(), heute)
+        val heil = wasser != null && glasAb != null && koffeinRoh != null
+        return Akteteil(
+            wasser.orEmpty(), koffein, heil,
+            // Koffein ist erst mit Wasser und erstem Glas ganz: aus ihnen kommen die Tage mit 0 mg.
+            ganz = setOfNotNull(Spalte.WASSER.schluessel.takeIf { wasser != null }, Spalte.KOFFEIN.schluessel.takeIf { heil }),
         )
-        return Akteteil(wasser, koffein, heil)
     }
 }
 

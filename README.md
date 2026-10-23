@@ -6,15 +6,16 @@
 
 <p align="center">
   <b>Your Pebble, fully unleashed.</b><br>
-  Real sleep phases. Heart rate, HRV and blood oxygen. Workouts, water, supplements and turn-by-turn navigation.<br>
-  On your wrist and in one beautiful app.
+  Real sleep phases. Heart rate, HRV and blood oxygen. Workouts and turn-by-turn navigation.<br>
+  On your wrist and in one beautiful app. Water and supplements come with two add-ons.
 </p>
 
 <p align="center">
   <a href="https://github.com/dysseus-pascal/Boulder/releases/latest"><b>Get Boulder</b></a>
   &nbsp;·&nbsp;
   <a href="https://github.com/dysseus-pascal/boulder-firmware/releases">Boulder firmware</a>
-  &nbsp;·&nbsp;
+  <br>
+  Add-ons from the Pebble App Store:
   <a href="https://apps.repebble.com/e5b37daa64c24c5cbe11dd05">Drinktervall</a>
   &nbsp;·&nbsp;
   <a href="https://apps.repebble.com/04848268a8b24e949f4eb832">SupCycle</a>
@@ -35,8 +36,8 @@ It lasts for days on a charge, has an always-on screen and is readable in bright
 Open Boulder and your day is already told for you.
 
 - **A greeting that gets you.** One line sums up your night, your resting heart and your steps so far, like "Short night: 7:59 h of sleep and a resting heart rate as usual."
-- **Today so far.** A living timeline of your day: your heart rate curve, steps, workouts, every glass of water, every coffee and every supplement. Swipe back to the morning, and when you return to the app it glides smoothly to *now*.
-- **Everything one tap away.** Sport, Heart & Body, Water and your supplement Stack each get their own card with the number that matters right now.
+- **Today so far.** A living timeline of your day: your heart rate curve, steps and workouts, and with the [add-ons](#add-ons) every glass of water, every coffee and every supplement. Swipe back to the morning, and when you return to the app it glides smoothly to *now*.
+- **Everything one tap away.** Sport and Heart & Body each get their own card with the number that matters right now, and so do Water and your supplement Stack with the add-ons.
 - **Steps this week**, day by day, measured against the goal you set yourself.
 
 ## Sleep, decoded
@@ -55,7 +56,7 @@ Your Pebble works through your night while you sleep and has the answer ready wh
 - **When you fell asleep and when you woke up**, tuned night after night against a dedicated sleep tracker.
 - **Your body during sleep:** heart rate, blood oxygen and HRV through the night, with your resting heart rate and lowest oxygen level.
 - **A verdict at a glance:** "Well rested" or "Short night", plus your last nights side by side.
-- **Blood oxygen on your terms.** Measure it all day, during workouts or, with the next Boulder firmware, only at night, and save battery where you don't need it.
+- **Blood oxygen on your terms.** Measure it all day, during workouts or only at night, and save battery where you don't need it.
 
 ## Heart & Body
 
@@ -115,14 +116,18 @@ Let **OsmAnd** navigate on your phone, then put the phone in your pocket. Your P
 
 Perfect for the bike, the city and the trail, with OsmAnd's offline maps. Kieselstrasse is built into the Boulder firmware and you switch it on in Boulder under Navigation.
 
-## Drinktervall: stay hydrated
+## Add-ons
+
+Boulder does not need them, but they make it even better: **Drinktervall** and **SupCycle** are two separate watch apps from the Pebble App Store. Install the ones you like, and Boulder shows everything they log.
+
+### Add-on: Drinktervall, stay hydrated
 
 <p align="center">
   <img src="docs/readme/watch-drinktervall.png" alt="Drinktervall on the watch: next reminder, drinking plan, the animated glass, a reminder, the drinks menu and tea with milk" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://apps.repebble.com/e5b37daa64c24c5cbe11dd05"><b>Get Drinktervall in the Pebble App Store</b></a>
+  <a href="https://apps.repebble.com/e5b37daa64c24c5cbe11dd05"><b>Get the Drinktervall add-on in the Pebble App Store</b></a>
 </p>
 
 The friendliest drinking reminder on any wrist.
@@ -139,14 +144,14 @@ The friendliest drinking reminder on any wrist.
 
 **Better with Boulder:** every glass shows up on your day's timeline and on the Water page with the last seven days. Coffee feeds straight into your caffeine curve.
 
-## SupCycle: supplements, perfectly timed
+### Add-on: SupCycle, supplements perfectly timed
 
 <p align="center">
   <img src="docs/readme/watch-supcycle.png" alt="SupCycle on the watch: today's supplements, a ticked-off dose, the cycle overview, a reminder and the animated capsule" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://apps.repebble.com/04848268a8b24e949f4eb832"><b>Get SupCycle in the Pebble App Store</b></a>
+  <a href="https://apps.repebble.com/04848268a8b24e949f4eb832"><b>Get the SupCycle add-on in the Pebble App Store</b></a>
 </p>
 
 Vitamins, minerals, cures and cycles, all handled by your watch.
@@ -181,8 +186,9 @@ Everything that happens on your wrist comes from the **Boulder firmware** for th
 
 1. **Download Boulder** from the [latest release](https://github.com/dysseus-pascal/Boulder/releases/latest) and install it. Boulder takes the place of the Pebble app on your phone, so keep one or the other.
 2. **Pair your Pebble** and let Boulder update it to the Boulder firmware.
-3. **Add Drinktervall and SupCycle** from the Pebble App Store and connect OsmAnd under Navigation for Kieselstrasse.
-4. **Wear it.** Your first night tells you more than you'd think.
+3. **Connect OsmAnd** under Navigation for Kieselstrasse.
+4. **Pick your add-ons** if you like: Drinktervall and SupCycle from the Pebble App Store.
+5. **Wear it.** Your first night tells you more than you'd think.
 
 ## Credits
 

@@ -14,6 +14,8 @@
   <a href="https://github.com/dysseus-pascal/Boulder/releases/latest"><b>Get Boulder</b></a>
   &nbsp;·&nbsp;
   <a href="https://github.com/dysseus-pascal/boulder-firmware/releases">Boulder firmware</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/dysseus-pascal/PebbleOS">Firmware source</a>
   <br>
   Add-ons from the Pebble App Store:
   <a href="https://apps.repebble.com/e5b37daa64c24c5cbe11dd05">Drinktervall</a>
@@ -181,6 +183,8 @@ Vitamins, minerals, cures and cycles, all handled by your watch.
 ## The Boulder firmware
 
 Everything that happens on your wrist comes from the **Boulder firmware** for the Pebble Time 2: the sleep analysis, the Health app, Kieselsport, the breathing exercises and Kieselstrasse. Boulder brings you new versions automatically, right in the app. Every update is signed, and Boulder only installs the real thing.
+
+The firmware is open source, just like the app: its code lives in [dysseus-pascal/PebbleOS](https://github.com/dysseus-pascal/PebbleOS) (branch `v2`), built on [PebbleOS](https://github.com/coredevices/PebbleOS) by Core Devices.
 
 ## Get started
 

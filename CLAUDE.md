@@ -55,7 +55,9 @@ die Regeln von Gravel, mit diesen Abweichungen:
   `boulder.db` sichern und die Uhr zuerst auf b24 stellen. Im Code nicht zu
   beheben: das Leeren macht die alte Fassung.
 - Firmware kommt aus den Releases von `dysseus-pascal/boulder-firmware`
-  (`vX.Y.Z-bN`, siehe `GithubReleases.kt`).
+  (`vX.Y.Z-bN`, siehe `GithubReleases.kt`). Ihr Quellcode liegt oeffentlich in
+  `dysseus-pascal/PebbleOS` (Standardzweig `v2`). Dort ist auch der Zweig `notizen` oeffentlich:
+  keine Zugangsdaten, Schluessel oder anderes Privates hineinschreiben.
 - Gravel-Stand: 0.3.3, der letzte. Boulder baut nicht mehr auf Gravel auf, weil
   Gravel selbst ein Fork ist: keine Gravel-Fassungen mehr nachziehen (Entscheid vom
   13.10.2026). Herkunft ist Gravel (`david-cant-code/pebble-app-degoogled`), ohne

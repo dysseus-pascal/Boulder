@@ -24,6 +24,10 @@ die Regeln von Gravel, mit diesen Abweichungen:
   Der Debug-Build braucht auf dem Telefon rund die Haelfte mehr Speicher und ist
   nur zum Entwickeln da. Release-Builds sind nicht debuggable: `run-as` geht dort
   nicht, die Datenbank kommt nur ueber die Sicherung heraus.
+- Das Repo ist zum Veroeffentlichen neu angelegt (23.10.2026): ganze Geschichte, aber ohne
+  `ci/debug.keystore`, darum mit anderen Commit-Kennungen. Releases und Tags bis 0.57.1 liegen
+  nur im privaten Archiv `dysseus-pascal/Boulder-archiv`, dessen Commits den Schluessel tragen:
+  nie von dort oder aus einem Klon von vor dem 23.10. hierher pushen.
 - Gravels Health-Teil ist ersetzt durch den von Kiesel-Helper (archiviert). Er
   steht in `pebble/src/androidMain/kotlin/coredevices/pebble/kiesel/`: Reiter
   Health und Training, Nachtansicht, Trends, Widget, Sicherung, die Begleiter der

@@ -1,21 +1,29 @@
 package coredevices.pebble.kiesel.ablauf
 
+import android.Manifest
 import android.content.Context
+import android.content.Intent
+import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.ExerciseRoute
 import androidx.health.connect.client.records.ExerciseRouteResult
 import androidx.health.connect.client.records.ExerciseSegment
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
+import androidx.health.connect.client.units.Length
+import coredevices.pebble.R
 import coredevices.pebble.kiesel.Akte
 import coredevices.pebble.kiesel.KieselNachricht
 import coredevices.pebble.kiesel.KieselEinstellungen
 import coredevices.pebble.kiesel.Kieselsport
 import coredevices.pebble.kiesel.Pulskurve
 import coredevices.pebble.kiesel.Spur
+import coredevices.pebble.kiesel.SpurDienst
 import coredevices.pebble.kiesel.TrainingEintrag
 import coredevices.pebble.kiesel.TrainingsDaten
 import coredevices.pebble.kiesel.Sport
+import coredevices.pebble.kiesel.ansicht.PIN_ARTEN
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,6 +37,7 @@ import org.junit.Before
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.File
 import java.time.Instant
@@ -334,5 +343,87 @@ class KieselsportAblaufTest {
         // Die Pause bleibt: sie haengt nicht an den Bahnen.
         val pausen = s.segments.filter { it.segmentType == ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE }.map(::spanne)
         assertEquals(listOf(600L to 900L), pausen)
+    }
+
+    /** Was den Spurdienst startete - ein Stopp traegt eine Aktion, ein Start nicht. */
+    private fun spurStarts(): List<Intent> = shadowOf(RuntimeEnvironment.getApplication()).allStartedServices
+        .filter { it.component?.className == SpurDienst::class.java.name && it.action == null }
+
+    @Test
+    fun indoor_ortet_weder_beim_start_noch_nach_der_pause() {
+        shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.ACCESS_FINE_LOCATION)
+        bisZurZusammenfassung(art = 8)
+        assertEquals(emptyList(), spurStarts())
+        // Gegenprobe mit derselben Erlaubnis: Bike ortet beim Start und wieder nach der Pause.
+        bisZurZusammenfassung(art = 1)
+        assertEquals(2, spurStarts().size)
+    }
+
+    @Test
+    fun indoor_steht_als_stationaeres_radfahren_in_der_akte() {
+        bisZurZusammenfassung(art = 8)
+        val meldung = verarbeite(zusammenfassung(art = 8, mitAbschnitten = false), gespeichert + 5)
+        assertFalse(Kieselsport.gescheitert(context, meldung), "Meldung $meldung")
+        val s = sitzung()
+        assertEquals(ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY, s.exerciseType)
+        assertEquals(context.getString(R.string.ks_a_titel_indoor), s.title)
+        assertEquals(Sport.Indoor, Sport.von(s))
+        // Die Akte nimmt nur Stuecke, die zur Sportart passen: die Pause muss auch auf der Rolle bleiben.
+        val pausen = s.segments.filter { it.segmentType == ExerciseSegment.EXERCISE_SEGMENT_TYPE_PAUSE }.map(::spanne)
+        assertEquals(listOf(600L to 900L), pausen)
+        assertEquals(dauer, TrainingEintrag(s, Sport.Indoor, true, 0.0).sekunden)
+    }
+
+    @Test
+    fun eine_fremde_rolle_zeigt_weder_strecke_noch_route() {
+        val paket = "com.andere.rolle"
+        // Distanz und Route, wie eine App sie aus einer virtuellen Welt mitschreibt - oder draussen aus dem GPS.
+        fun fahrt(von: Instant, art: Int) {
+            val bis = von.plusSeconds(dauer)
+            val route = ExerciseRoute(listOf(
+                ExerciseRoute.Location(time = von.plusSeconds(60), latitude = 47.0, longitude = 8.0),
+                ExerciseRoute.Location(time = von.plusSeconds(120), latitude = 47.01, longitude = 8.0),
+            ))
+            akte.legeAb(
+                ExerciseSessionRecord(
+                    startTime = von, startZoneOffset = null, endTime = bis, endZoneOffset = null,
+                    metadata = Metadata.manualEntry(), exerciseType = art, exerciseRoute = route,
+                ),
+                paket,
+            )
+            akte.legeAb(
+                DistanceRecord(
+                    startTime = von, startZoneOffset = null, endTime = bis, endZoneOffset = null,
+                    distance = Length.meters(12_000.0), metadata = Metadata.manualEntry(),
+                ),
+                paket,
+            )
+        }
+        fahrt(Instant.ofEpochSecond(b), ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY)
+        // Gegenprobe: dieselbe App am Tag davor draussen - dort zaehlen Strecke und Route.
+        fahrt(Instant.ofEpochSecond(b - 86_400), ExerciseSessionRecord.EXERCISE_TYPE_BIKING)
+
+        val trainings = runBlocking { TrainingsDaten.uebersicht(context) }.trainings
+        assertEquals(0.0, trainings.single { it.sport == Sport.Indoor }.meter)
+        assertTrue(trainings.single { it.sport == Sport.Bike }.meter > 0)
+        val sitzungen = akte.saetze<ExerciseSessionRecord>()
+        val rolle = sitzungen.single { it.exerciseType == ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY }
+        val draussen = sitzungen.single { it.exerciseType == ExerciseSessionRecord.EXERCISE_TYPE_BIKING }
+        assertEquals(emptyList(), TrainingsDaten.punkte(context, rolle))
+        assertEquals(2, TrainingsDaten.punkte(context, draussen).size)
+    }
+
+    @Test
+    fun jede_art_hat_ihren_pin_an_ihrer_nummer_plus_eins() {
+        // 0 ist kein Pin, dann jede Art der Uhr unter ihrer Nummer plus eins (einstellungen.c der Firmware).
+        val arten = generateSequence(0L) { it + 1 }
+            .takeWhile { Kieselsport.artAlsSatzart(context, it).first != ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT }
+            .toList()
+        assertEquals(R.string.ks_n_kein_pin, PIN_ARTEN.first())
+        assertEquals(arten.size + 1, PIN_ARTEN.size)
+        arten.forEach { art ->
+            val (satzart, titel) = Kieselsport.artAlsSatzart(context, art)
+            assertEquals(context.getString(Sport.von(satzart, titel).nameId), context.getString(PIN_ARTEN[art.toInt() + 1]), "Pin fuer Art $art")
+        }
     }
 }

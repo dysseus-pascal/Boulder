@@ -137,6 +137,7 @@ internal object Kieselsport {
         5 -> ExerciseSessionRecord.EXERCISE_TYPE_YOGA to context.getString(R.string.ks_a_titel_yoga)
         6 -> ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_POOL to context.getString(R.string.ks_a_titel_schwimmen)
         ART_ATEM.toInt() -> ExerciseSessionRecord.EXERCISE_TYPE_GUIDED_BREATHING to context.getString(R.string.ks_a_titel_atem)
+        8 -> ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY to context.getString(R.string.ks_a_titel_indoor)
         else -> ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT to context.getString(R.string.ks_training)
     }
 
@@ -368,7 +369,8 @@ internal object Kieselsport {
             val artNummer = felder[SP_ART] ?: -1
             val (_, name) = artAlsSatzart(context, artNummer)
             // NUR WO ES EINE STRECKE GIBT, laeuft das GPS: Laufen, Bike,
-            // Wandern, MTB. In der Halle zeichnete es nur Rauschen auf.
+            // Wandern, MTB. In der Halle zeichnete es nur Rauschen auf - darum
+            // auch nicht bei Indoor (8), obwohl es ein Rad ist.
             val mitStrecke = artNummer in setOf(0L, 1L, 2L, 4L)
             // Pause und Weiter mit ihrer Uhrzeit: die Uhr zaehlt aktive Sekunden,
             // die Akte braucht die Uhrzeit (Trainingspausen).

@@ -23,6 +23,7 @@
     <string name="ks_sport_laufen">Running</string>
     <string name="ks_sport_bike">Bike</string>
     <string name="ks_sport_mtb">Bike MTB</string>
+    <string name="ks_sport_indoor">Indoor</string>
     <string name="ks_sport_wandern">Hiking</string>
     <string name="ks_sport_kraft">Strength</string>
     <string name="ks_sport_yoga">Yoga</string>

@@ -1,5 +1,6 @@
 package coredevices.pebble.kiesel
 
+import androidx.health.connect.client.records.ExerciseSessionRecord
 import kotlinx.serialization.json.Json
 import java.time.Instant
 import kotlin.test.Test
@@ -167,5 +168,15 @@ class KieselsportTest {
         assertEquals(12, r.runden(10_000))
         assertEquals("4-7-8-0", r.toString())
         assertEquals(Sport.Atem, Sport.von(androidx.health.connect.client.records.ExerciseSessionRecord.EXERCISE_TYPE_GUIDED_BREATHING, null))
+    }
+
+    @Test
+    fun stationaeresRadfahrenIstIndoor() {
+        // Auch die Rolle einer fremden App, und "MTB" im Titel macht sie nicht zum Mountainbike.
+        assertEquals(Sport.Indoor, Sport.von(ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY, null))
+        assertEquals(Sport.Indoor, Sport.von(ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY, "MTB intervals"))
+        // Draussen entscheidet weiter der Titel.
+        assertEquals(Sport.Bike, Sport.von(ExerciseSessionRecord.EXERCISE_TYPE_BIKING, "Bike Road/Gravel"))
+        assertEquals(Sport.Mtb, Sport.von(ExerciseSessionRecord.EXERCISE_TYPE_BIKING, "Bike MTB"))
     }
 }

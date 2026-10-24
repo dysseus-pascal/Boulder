@@ -1,6 +1,7 @@
 package coredevices.pebble.kiesel.ansicht
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import coredevices.pebble.kiesel.Sport
@@ -8,6 +9,7 @@ import theme.blackScheme
 import theme.greyScheme
 import theme.lightScheme
 import kotlin.math.abs
+import kotlin.math.sqrt
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
@@ -141,6 +143,28 @@ class FarbenTest {
         assertEquals(Farben.bewegung.tonIm(false), Farben.praeparat.tonIm(false))
         // Bike und MTB sind zwei Arten und brauchen zwei Farben.
         assertTrue(Farben.sport(Sport.Bike).flaecheDunkel != Farben.sport(Sport.Mtb).flaecheDunkel)
+    }
+
+    /** Wie weit zwei Farben fuer das Auge auseinanderliegen (Oklab); eben sichtbar ist etwa 0,02. */
+    private fun abstand(a: Color, b: Color): Float {
+        val x = a.convert(ColorSpaces.Oklab)
+        val y = b.convert(ColorSpaces.Oklab)
+        val dl = x.red - y.red
+        val da = x.green - y.green
+        val db = x.blue - y.blue
+        return sqrt(dl * dl + da * da + db * db)
+    }
+
+    @Test
+    fun indoorTraegtDenFarbtonDerUhrUndHebtSichVonDenRaedernAb() {
+        val indoor = Farben.sport(Sport.Indoor).flaecheDunkel
+        // Die Uhr zeigt Indoor in GColorRajah (FFAA55): derselbe Farbton, damit App und Uhr dieselbe Art zeigen.
+        assertTrue(abs(farbton(indoor) - farbton(Color(0xFFFFAA55))) < 2f, "Farbton ${farbton(indoor)} statt ${farbton(Color(0xFFFFAA55))}")
+        // Die drei Raeder stehen in Woche und Liste nebeneinander: deutlich verschieden, nicht nur messbar.
+        listOf(Sport.Bike, Sport.Mtb).forEach { rad ->
+            val d = abstand(indoor, Farben.sport(rad).flaecheDunkel)
+            assertTrue(d >= 0.08f, "Indoor neben $rad: ${"%.3f".format(d)} in Oklab")
+        }
     }
 
     @Test

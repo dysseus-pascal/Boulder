@@ -189,12 +189,15 @@ internal object Farben {
      * Die Toene der Sportarten aus Kiesel-Helper, KRAEFTIGER: auf Boulders
      * Grau wirkten die gedeckten Erdfarben ausgewaschen. MTB EIN DUNKLERES
      * OCKER als Bike: beide zaehlen als eigene Art, und im Wochenstapel lagen
-     * zwei gleiche Schichten ohne Grenze.
+     * zwei gleiche Schichten ohne Grenze. INDOOR IM FARBTON DER UHR (Rajah,
+     * FFAA55), heller und blasser: in Rajahs eigener Helligkeit waere es vom
+     * Gelb von Bike kaum zu unterscheiden.
      */
     private val sportarten: Map<Sport, Farbe> = mapOf(
         Sport.Laufen to 0xFFE8622E,
         Sport.Bike to 0xFFE2A422,
         Sport.Mtb to 0xFFB8792A,
+        Sport.Indoor to 0xFFF5B87A,
         Sport.Wandern to 0xFF8DB53C,
         Sport.Kraft to 0xFFD9453A,
         Sport.Yoga to 0xFFA85CB4,

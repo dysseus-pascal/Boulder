@@ -41,6 +41,18 @@ class WochenrechnungTest {
     }
 
     @Test
+    fun die_drei_raeder_liegen_im_stapel_beieinander() {
+        // Wie im Bike-Menue der Uhr: Strasse/Gravel, MTB, Indoor - kein Wandern dazwischen.
+        val woche = Wochenrechnung.wochen(listOf(
+            Einheit(heute, Sport.Wandern, 40),
+            Einheit(heute, Sport.Indoor, 45),
+            Einheit(heute, Sport.Bike, 60),
+            Einheit(heute, Sport.Mtb, 50),
+        ), heute).last()
+        assertEquals(listOf(Sport.Bike, Sport.Mtb, Sport.Indoor, Sport.Wandern), woche.teile.map { it.first })
+    }
+
+    @Test
     fun verteilung_nach_zeit_mit_anzahl_und_prozent() {
         val anteile = Wochenrechnung.verteilung(listOf(
             Einheit(heute, Sport.Laufen, 30),

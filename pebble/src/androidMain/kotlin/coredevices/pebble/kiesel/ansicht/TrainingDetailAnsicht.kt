@@ -154,6 +154,7 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
             // Bei der Atemuebung dieselbe Frage wie beim Yoga: wurde man ruhiger?
             Sport.Yoga, Sport.Atem -> Yoga(d, ton, maxpuls)
             Sport.Schwimmen -> Schwimmen(d, ton, maxpuls)
+            Sport.Indoor -> Indoor(d, ton, maxpuls)
             else -> Strecke(d, ton, maxpuls, imperial, routeHolen)
         }
         Sauerstoff(d, ton)
@@ -353,6 +354,20 @@ private fun Kilometerkarte(km: List<Trainingsanalyse.Kilometer>, rad: Boolean, t
 /** Breite je Spalte; null heisst: nimmt den Rest. */
 private val KM_SPALTEN = listOf<Dp?>(44.dp, null, 64.dp, 48.dp, 48.dp)
 private val SATZ_SPALTEN = listOf<Dp?>(40.dp, 48.dp, null, 56.dp, 56.dp)
+
+// --- Indoor ----------------------------------------------------------------------
+
+/**
+ * Auf der Rolle wie auf dem Rad, nur ohne Strecke: Zeit, Puls, Zonen und
+ * Kalorien stehen schon oben, hier der Puls ueber die Zeit. Karte, Tempo und
+ * Kilometer gibt es dort nicht ([Sport.ohneStrecke]) - auch keine Route zum
+ * Freigeben, die eine fremde App womoeglich dazuschrieb.
+ */
+@Composable
+private fun Indoor(d: TrainingDetail, ton: Color, maxpuls: Int) {
+    if (d.puls.size < 2) Kasten { Leerzeile(stringResource(R.string.ks_v_nichts_weiter)) }
+    PulsUeberZeit(d, ton, maxpuls)
+}
 
 // --- Kraft ---------------------------------------------------------------------
 

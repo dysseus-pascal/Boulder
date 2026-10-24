@@ -46,10 +46,10 @@ import java.time.LocalTime
 import java.util.Locale
 
 /** Die Pin-Arten in der Reihenfolge der Uhr: 0 kein Pin, dann Sportart + 1. */
-private val PIN_ARTEN = listOf(
+internal val PIN_ARTEN = listOf(
     R.string.ks_n_kein_pin, R.string.ks_sport_laufen, R.string.ks_sport_bike, R.string.ks_sport_wandern,
     R.string.ks_sport_kraft, R.string.ks_sport_mtb, R.string.ks_sport_yoga, R.string.ks_sport_schwimmen,
-    R.string.ks_sport_atem,
+    R.string.ks_sport_atem, R.string.ks_sport_indoor,
 )
 
 /**

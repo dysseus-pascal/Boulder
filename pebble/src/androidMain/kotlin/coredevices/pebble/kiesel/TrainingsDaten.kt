@@ -31,6 +31,13 @@ internal enum class Sport {
     Laufen,
     Bike,
     Mtb,
+    /**
+     * Velo auf der Rolle oder dem Hometrainer: Indoor von Kieselsport und
+     * stationaeres Radfahren anderer Apps. Gleich hinter MTB: die Reihenfolge
+     * ist die des Wochenstapels (Wochenrechnung), und dort liegen die drei
+     * Raeder beieinander wie im Bike-Menue der Uhr.
+     */
+    Indoor,
     Wandern,
     Kraft,
     Yoga,
@@ -48,6 +55,7 @@ internal enum class Sport {
         Laufen -> R.string.ks_sport_laufen
         Bike -> R.string.ks_sport_bike
         Mtb -> R.string.ks_sport_mtb
+        Indoor -> R.string.ks_sport_indoor
         Wandern -> R.string.ks_sport_wandern
         Kraft -> R.string.ks_sport_kraft
         Yoga -> R.string.ks_sport_yoga
@@ -56,8 +64,19 @@ internal enum class Sport {
         Anderes -> R.string.ks_training
     }
 
-    /** Ist die Geschwindigkeit hier die Aussage (km/h) und nicht das Tempo (min/km)? */
+    /**
+     * Ist die Geschwindigkeit hier die Aussage (km/h) und nicht das Tempo (min/km)?
+     * Indoor nicht: dort gibt es keins von beiden ([ohneStrecke]).
+     */
     val rad: Boolean get() = this == Bike || this == Mtb
+
+    /**
+     * Zeigt diese Art nie Distanz, Tempo oder Route? NUR INDOOR: was eine fremde
+     * App dort an Strecke dazuschreibt, ist gedacht (Rolle, virtuelle Welt) und
+     * zaehlte sonst mit den echten Kilometern der Woche. TrainingsDaten liest
+     * darum keine; Liste, Woche, Widget und Detail folgen daraus.
+     */
+    val ohneStrecke: Boolean get() = this == Indoor
 
     /**
      * Bleibt die Strecke metrisch, auch mit "Imperial Units"? NUR BEIM
@@ -79,9 +98,9 @@ internal enum class Sport {
         fun von(art: Int, titel: String?): Sport = when (art) {
             ExerciseSessionRecord.EXERCISE_TYPE_RUNNING,
             ExerciseSessionRecord.EXERCISE_TYPE_RUNNING_TREADMILL -> Laufen
-            ExerciseSessionRecord.EXERCISE_TYPE_BIKING,
-            ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY ->
-                if (titel?.contains("MTB") == true) Mtb else Bike
+            ExerciseSessionRecord.EXERCISE_TYPE_BIKING -> if (titel?.contains("MTB") == true) Mtb else Bike
+            // Die Rolle kennt die Akte selbst: was im Titel steht, aendert daran nichts.
+            ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY -> Indoor
             ExerciseSessionRecord.EXERCISE_TYPE_HIKING,
             ExerciseSessionRecord.EXERCISE_TYPE_WALKING -> Wandern
             ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING,
@@ -261,9 +280,11 @@ internal object TrainingsDaten {
      * aus der Distanz, die die fremde App selbst zur Sitzung schrieb, aus den
      * Bahnen. Ohne Spur zaehlte die Woche 1500 m Schwimmen frueher
      * als 0 km. [ausPunkten]: die Laenge der Punkte, null unter zwei Punkten.
+     * Indoor hat keine ([Sport.ohneStrecke]).
      */
     private fun strecke(context: Context, s: ExerciseSessionRecord, ausPunkten: Double?, distanzen: Distanzen): Double =
-        ausPunkten?.takeIf { it > 0 }
+        if (Sport.von(s).ohneStrecke) 0.0
+        else ausPunkten?.takeIf { it > 0 }
             ?: gemerkteStrecke(context, s.metadata.id)
             ?: distanzen.eigene[distanzKennung(s)]?.takeIf { it > 0 }
             ?: distanzen.fremde(s).takeIf { it > 0 }
@@ -339,9 +360,11 @@ internal object TrainingsDaten {
      * Die Spur eines Trainings, beschnitten auf seine Sitzung - wie die Route in
      * der Akte. So zeigen Liste, Karte und Detail dieselbe Strecke, die dort
      * steht. Ohne Spurdatei die Route der Akte, wenn sie sie herausgibt
-     * (eine fremde nur nach Zustimmung, siehe [routeGesperrt]).
+     * (eine fremde nur nach Zustimmung, siehe [routeGesperrt]). Indoor hat
+     * keine ([Sport.ohneStrecke]).
      */
     fun punkte(context: Context, s: ExerciseSessionRecord): List<Spur.Punkt> {
+        if (Sport.von(s).ohneStrecke) return emptyList()
         val beginn = s.startTime.epochSecond
         val stempel = Spur.stempel(beginn, beginn, s.endTime.epochSecond, Spur.groesse(context, beginn))
         gemerkt.hole(stempel)?.let { return it }

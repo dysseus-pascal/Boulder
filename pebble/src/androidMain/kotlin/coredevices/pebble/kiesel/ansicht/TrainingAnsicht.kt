@@ -29,6 +29,7 @@ import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.Air
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Hiking
+import androidx.compose.material.icons.outlined.PedalBike
 import androidx.compose.material.icons.outlined.Pool
 import androidx.compose.material.icons.outlined.SelfImprovement
 import androidx.compose.material.icons.outlined.Timer
@@ -93,6 +94,8 @@ import java.time.ZoneId
 internal fun Sport.zeichen(): ImageVector = when (this) {
     Sport.Laufen -> Icons.AutoMirrored.Outlined.DirectionsRun
     Sport.Bike, Sport.Mtb -> Icons.AutoMirrored.Outlined.DirectionsBike
+    // Ein Rad ohne Fahrer: erkennbar ein Rad, und doch nicht die Ausfahrt daneben in der Liste.
+    Sport.Indoor -> Icons.Outlined.PedalBike
     Sport.Wandern -> Icons.Outlined.Hiking
     Sport.Kraft -> Icons.Outlined.FitnessCenter
     Sport.Yoga -> Icons.Outlined.SelfImprovement

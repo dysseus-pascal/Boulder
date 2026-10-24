@@ -23,6 +23,10 @@
   <a href="https://apps.repebble.com/04848268a8b24e949f4eb832">SupCycle</a>
 </p>
 
+<p align="center">
+  <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://add/https://github.com/dysseus-pascal/Boulder"><img src="docs/readme/badge-obtainium.png" alt="Get it on Obtainium" height="56"></a>
+</p>
+
 ---
 
 Boulder is the companion app that turns your Pebble into a complete health and fitness watch. It does everything you expect from the Pebble app: notifications, watchfaces, the app store, music and weather. On top of that comes a whole world of its own. Your nights get real sleep phases, your heart gets a story, your workouts get a coach on your wrist, and your bike rides get turn-by-turn directions. Together with the **Boulder firmware** for the Pebble Time 2, your watch measures more, understands more and shows you more than ever before.
@@ -188,7 +192,7 @@ The firmware is open source, just like the app: its code lives in [dysseus-pasca
 
 ## Get started
 
-1. **Download Boulder** from the [latest release](https://github.com/dysseus-pascal/Boulder/releases/latest) and install it. Boulder takes the place of the Pebble app on your phone, so keep one or the other.
+1. **Download Boulder** from the [latest release](https://github.com/dysseus-pascal/Boulder/releases/latest) and install it, or add it to [Obtainium](https://obtainium.imranr.dev) with the button above to get every update automatically. Boulder takes the place of the Pebble app on your phone, so keep one or the other.
 2. **Pair your Pebble** and let Boulder update it to the Boulder firmware.
 3. **Connect OsmAnd** under Navigation for Kieselstrasse.
 4. **Pick your add-ons** if you like: Drinktervall and SupCycle from the Pebble App Store.

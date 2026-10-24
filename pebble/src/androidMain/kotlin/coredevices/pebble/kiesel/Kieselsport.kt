@@ -127,6 +127,8 @@ internal object Kieselsport {
      *
      * "MTB" STEHT IN JEDER SPRACHE IM TITEL: die Akte kennt nur ein Radfahren,
      * und eine Trainingsansicht erkennt das Mountainbike nur am Titel.
+     *
+     * DIE GPS-FASSUNGEN (10, 12) WIE IHRE ART: in der Akte zeigt die Route den Unterschied ([ortet]).
      */
     fun artAlsSatzart(context: Context, art: Long): Pair<Int, String> = when (art.toInt()) {
         0 -> ExerciseSessionRecord.EXERCISE_TYPE_RUNNING to context.getString(R.string.ks_a_titel_laufen)
@@ -138,8 +140,19 @@ internal object Kieselsport {
         6 -> ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_POOL to context.getString(R.string.ks_a_titel_schwimmen)
         ART_ATEM.toInt() -> ExerciseSessionRecord.EXERCISE_TYPE_GUIDED_BREATHING to context.getString(R.string.ks_a_titel_atem)
         8 -> ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY to context.getString(R.string.ks_a_titel_indoor)
+        9, 10 -> ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_OPEN_WATER to context.getString(R.string.ks_a_titel_freiwasser)
+        11, 12 -> ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT to context.getString(R.string.ks_a_titel_offen)
         else -> ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT to context.getString(R.string.ks_training)
     }
+
+    /**
+     * Zeichnet das Telefon die Strecke auf? NUR WO ES EINE GIBT, nicht in der Halle: bei Indoor (8)
+     * zeichnete das GPS nur Rauschen auf. Im Freiwasser und bei Custom waehlt man auf der Uhr die
+     * GPS-Fassung (10, 12), wenn das Telefon mitkommt.
+     */
+    fun ortet(art: Long): Boolean = art in ORTENDE_ARTEN
+
+    private val ORTENDE_ARTEN = setOf(0L, 1L, 2L, 4L, 10L, 12L)
 
     /** Ein Abschnitt eines Trainings: ein Satz beim Kraft, eine Bahn beim Schwimmen. */
     data class Abschnitt(val ab: Long, val anzahl: Int, val dauer: Long)
@@ -368,10 +381,7 @@ internal object Kieselsport {
             val beginn = felder[SP_BEGINN] ?: return null
             val artNummer = felder[SP_ART] ?: -1
             val (_, name) = artAlsSatzart(context, artNummer)
-            // NUR WO ES EINE STRECKE GIBT, laeuft das GPS: Laufen, Bike,
-            // Wandern, MTB. In der Halle zeichnete es nur Rauschen auf - darum
-            // auch nicht bei Indoor (8), obwohl es ein Rad ist.
-            val mitStrecke = artNummer in setOf(0L, 1L, 2L, 4L)
+            val mitStrecke = ortet(artNummer)
             // Pause und Weiter mit ihrer Uhrzeit: die Uhr zaehlt aktive Sekunden,
             // die Akte braucht die Uhrzeit (Trainingspausen).
             val zeit = zeitDerMeldung(felder[SP_ZEIT], beginn, empfangen)
@@ -512,7 +522,7 @@ internal object Kieselsport {
         // abgewiesen wurde: der naechste Versuch der Uhr ersetzt sie nur.
         // MIT DER ZONE DER NACHRICHT, wie die Sitzung: sonst truegen Saetze desselben Trainings verschiedene Versaetze.
         val meter = if (strecke > 0) strecke else (felder[SP_METER] ?: 0).toDouble()
-        Trainingswerte.schreibeStrecke(context, beginn, anfang, ende, meter, punkte, zone)
+        Trainingswerte.schreibeStrecke(context, beginn, anfang, ende, meter, punkte, zone, mitAufstieg = !Sport.von(satzart, name).ohneAufstieg)
         Trainingswerte.schreibeKalorienDerUhr(context, beginn, anfang, ende, kcal, zone)
 
         // YOGA BRINGT EINE HRV MIT - als eigener Satz zum Ende des Trainings.
@@ -583,7 +593,7 @@ internal object Kieselsport {
         val minuten = ((Duration.between(anfang, ende).seconds - pausenSek) / 60).toInt()
         val kurz = context.getString(R.string.ks_a_nachgetragen, name, minuten, ", " + streckeText(strecke, satzart, name))
         val meldung = schreibe(context, satz, kurz)
-        Trainingswerte.schreibeStrecke(context, beginn, anfang, ende, strecke, punkte)
+        Trainingswerte.schreibeStrecke(context, beginn, anfang, ende, strecke, punkte, mitAufstieg = !Sport.von(satzart, name).ohneAufstieg)
         // Erst jetzt gibt es das Fenster, in dem die schon gelieferte Kurve zaehlt.
         Trainingswerte.schreibeKalorienAusPuls(context, beginn)
         return meldung.also { KieselVerlauf.merke(context, it) }

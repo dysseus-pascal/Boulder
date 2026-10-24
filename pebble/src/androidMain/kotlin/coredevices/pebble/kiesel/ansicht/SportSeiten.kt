@@ -201,6 +201,9 @@ internal fun SportTrendAnsicht() = Laden { d ->
 
 // --- Spuren zum Nachtragen -----------------------------------------------------------
 
+/** Was eine liegengebliebene Spur gewesen sein kann: nur eine Art, bei der das Telefon ortet ([Kieselsport.ortet]). */
+internal val NACHTRAGBARE_ARTEN = listOf(2L, 0L, 1L, 4L, 10L, 12L)
+
 /**
  * Spuren, zu denen kein Training in der Akte steht. Eintragen fragt nach der
  * Art; Ausblenden laesst die Spur liegen, zeigt sie aber nicht mehr.
@@ -236,13 +239,12 @@ internal fun SpurenAnsicht() {
     }
 
     artFuer?.let { spur ->
-        // Welche Art war es? Nur die mit Strecke - nur zu ihnen gibt es Spuren.
         AlertDialog(
             onDismissRequest = { artFuer = null },
             title = { Text(stringResource(R.string.ks_t_welche_art)) },
             text = {
                 Column {
-                    listOf(2L, 0L, 1L, 4L).forEach { art ->
+                    NACHTRAGBARE_ARTEN.forEach { art ->
                         TextButton(onClick = {
                             artFuer = null
                             scope.launch {

@@ -53,6 +53,23 @@ class WochenrechnungTest {
     }
 
     @Test
+    fun becken_und_freiwasser_liegen_beieinander_und_custom_zuletzt() {
+        // Wie auf der Uhr: Becken und Freiwasser im Schwimm-Menue, Custom am Ende - es gehoert zu keiner Art.
+        val woche = Wochenrechnung.wochen(listOf(
+            Einheit(heute, Sport.Offen, 30),
+            Einheit(heute, Sport.Atem, 10),
+            Einheit(heute, Sport.Freiwasser, 45),
+            Einheit(heute, Sport.Anderes, 20),
+            Einheit(heute, Sport.Schwimmen, 40),
+            Einheit(heute, Sport.Laufen, 25),
+        ), heute).last()
+        assertEquals(
+            listOf(Sport.Laufen, Sport.Schwimmen, Sport.Freiwasser, Sport.Atem, Sport.Anderes, Sport.Offen),
+            woche.teile.map { it.first },
+        )
+    }
+
+    @Test
     fun verteilung_nach_zeit_mit_anzahl_und_prozent() {
         val anteile = Wochenrechnung.verteilung(listOf(
             Einheit(heute, Sport.Laufen, 30),

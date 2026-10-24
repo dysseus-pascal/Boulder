@@ -6,6 +6,7 @@ import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -178,5 +179,31 @@ class KieselsportTest {
         // Draussen entscheidet weiter der Titel.
         assertEquals(Sport.Bike, Sport.von(ExerciseSessionRecord.EXERCISE_TYPE_BIKING, "Bike Road/Gravel"))
         assertEquals(Sport.Mtb, Sport.von(ExerciseSessionRecord.EXERCISE_TYPE_BIKING, "Bike MTB"))
+    }
+
+    @Test
+    fun beckenFreiwasserUndOffenesTrainingSindDreiArten() {
+        // Auch bei fremden Apps: das Becken und das offene Wasser zaehlen getrennt.
+        assertEquals(Sport.Schwimmen, Sport.von(ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_POOL, null))
+        assertEquals(Sport.Freiwasser, Sport.von(ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_OPEN_WATER, null))
+        // Ein Training ohne Sportart ist Custom, gleich von wem; was Boulder sonst nicht kennt, bleibt "Workout".
+        assertEquals(Sport.Offen, Sport.von(ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT, null))
+        assertEquals(Sport.Anderes, Sport.von(ExerciseSessionRecord.EXERCISE_TYPE_ROWING, null))
+    }
+
+    @Test
+    fun freiwasserSchwimmtMetrischUndCustomFaehrtMitGeschwindigkeit() {
+        // Freiwasser hat Strecke und Route, wenn das Telefon mitschwamm - in Metern, je 100 m, ohne Aufstieg.
+        assertFalse(Sport.Freiwasser.ohneStrecke)
+        assertTrue(Sport.Freiwasser.immerMetrisch)
+        assertTrue(Sport.Freiwasser.ohneAufstieg)
+        assertFalse(Sport.Freiwasser.rad)
+        assertTrue(Sport.Schwimmen.immerMetrisch)
+        assertTrue(Sport.Schwimmen.ohneAufstieg)
+        // Custom: welche Bewegung es war, weiss niemand - die Geschwindigkeit, die Einheiten des Schalters.
+        assertFalse(Sport.Offen.ohneStrecke)
+        assertFalse(Sport.Offen.immerMetrisch)
+        assertFalse(Sport.Offen.ohneAufstieg)
+        assertTrue(Sport.Offen.rad)
     }
 }

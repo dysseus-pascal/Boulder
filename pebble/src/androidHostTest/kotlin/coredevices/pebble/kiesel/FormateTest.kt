@@ -139,6 +139,16 @@ class FormateTest {
     }
 
     @Test
+    fun schwimmtempoJeHundertMeter() {
+        // 1500 m in 31:15 sind 2:05 je 100 m - Schwimmer zaehlen in 100 m, nicht in Kilometern.
+        assertEquals(Formate.Angabe("2:05", "/100 m"), f.tempoJe100(1500.0, 1875))
+        assertNull(f.tempoJe100(0.0, 600))
+        assertNull(f.tempoJe100(1500.0, 0))
+        // Unter 0,2 m/s ist es Treiben, kein Tempo - dieselbe Grenze wie an Land.
+        assertNull(f.tempoJe100(100.0, 600))
+    }
+
+    @Test
     fun hoeheGewichtUndGroesse() {
         assertEquals(Formate.Angabe("600", "m"), f.hoehe(600.0, false, us))
         assertEquals(Formate.Angabe("1,969", "ft"), f.hoehe(600.0, true, us))

@@ -191,7 +191,9 @@ internal object Farben {
      * OCKER als Bike: beide zaehlen als eigene Art, und im Wochenstapel lagen
      * zwei gleiche Schichten ohne Grenze. INDOOR IM FARBTON DER UHR (Rajah,
      * FFAA55), heller und blasser: in Rajahs eigener Helligkeit waere es vom
-     * Gelb von Bike kaum zu unterscheiden.
+     * Gelb von Bike kaum zu unterscheiden. FREIWASSER IN DER FARBE DER UHR
+     * (VividCerulean, 00AAFF). OFFEN IM FARBTON DER UHR (Folly, FF0055), heller:
+     * Folly selbst ist die Zone 5 im selben Detail und laege naeher an Kraft.
      */
     private val sportarten: Map<Sport, Farbe> = mapOf(
         Sport.Laufen to 0xFFE8622E,
@@ -202,8 +204,10 @@ internal object Farben {
         Sport.Kraft to 0xFFD9453A,
         Sport.Yoga to 0xFFA85CB4,
         Sport.Schwimmen to 0xFF2CB0C6,
+        Sport.Freiwasser to 0xFF00AAFF,
         Sport.Atem to 0xFF5B7CE0,
         Sport.Anderes to 0xFF9C8B7C,
+        Sport.Offen to 0xFFFF3D7E,
     ).mapValues { abgedunkelt(c(it.value)) }
 
     /** Die Farbe einer Sportart: Kreis, Stapel, Karte - und abgedunkelt fuer Schrift auf heller Karte. */

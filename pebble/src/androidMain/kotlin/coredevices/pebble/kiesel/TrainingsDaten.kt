@@ -42,9 +42,13 @@ internal enum class Sport {
     Kraft,
     Yoga,
     Schwimmen,
+    /** Schwimmen im offenen Wasser (9, 10, fremde Apps) - hinter dem Becken: im Wochenstapel liegen die Baeder beieinander. */
+    Freiwasser,
     /** Die Atemuebung von Kieselsport und gefuehrtes Atmen anderer Apps. */
     Atem,
-    Anderes;
+    Anderes,
+    /** Ein Training ohne Sportart: Custom (11, 12) wie Pebbles "Workout", OTHER_WORKOUT fremder Apps - zuletzt wie im Menue der Uhr. */
+    Offen;
 
     /**
      * Der Name als Ressource. ALS GETTER, nicht als Feld: sonst luede schon
@@ -60,15 +64,18 @@ internal enum class Sport {
         Kraft -> R.string.ks_sport_kraft
         Yoga -> R.string.ks_sport_yoga
         Schwimmen -> R.string.ks_sport_schwimmen
+        Freiwasser -> R.string.ks_sport_freiwasser
         Atem -> R.string.ks_sport_atem
         Anderes -> R.string.ks_training
+        Offen -> R.string.ks_sport_offen
     }
 
     /**
      * Ist die Geschwindigkeit hier die Aussage (km/h) und nicht das Tempo (min/km)?
-     * Indoor nicht: dort gibt es keins von beiden ([ohneStrecke]).
+     * Indoor nicht: dort gibt es keins von beiden ([ohneStrecke]). OFFEN SCHON: welche Bewegung es
+     * war, weiss niemand - die Geschwindigkeit sagt bei jeder etwas, das Tempo nur zu Fuss.
      */
-    val rad: Boolean get() = this == Bike || this == Mtb
+    val rad: Boolean get() = this == Bike || this == Mtb || this == Offen
 
     /**
      * Zeigt diese Art nie Distanz, Tempo oder Route? NUR INDOOR: was eine fremde
@@ -83,9 +90,13 @@ internal enum class Sport {
      * SCHWIMMEN: das Becken ist an der Uhr in Metern eingestellt, und
      * "0.9 mi" ueber "1,500 m" in den Bahnen waeren zwei Masse fuer dieselbe
      * Strecke. Hier und nicht in einer Ansicht, damit Sport, der Health-
-     * Zeitstrahl und das Widget dieselbe Regel lesen.
+     * Zeitstrahl und das Widget dieselbe Regel lesen. Im Freiwasser ebenso:
+     * dort gilt das Tempo je 100 m wie im Becken.
      */
-    val immerMetrisch: Boolean get() = this == Schwimmen
+    val immerMetrisch: Boolean get() = this == Schwimmen || this == Freiwasser
+
+    /** Kein Aufstieg beim Schwimmen - auf dem See waere er Rauschen des GPS. Sportseite, Detail und Akte lesen diese Regel. */
+    val ohneAufstieg: Boolean get() = this == Schwimmen || this == Freiwasser
 
     companion object {
         /**
@@ -107,9 +118,10 @@ internal enum class Sport {
             ExerciseSessionRecord.EXERCISE_TYPE_WEIGHTLIFTING -> Kraft
             ExerciseSessionRecord.EXERCISE_TYPE_YOGA,
             ExerciseSessionRecord.EXERCISE_TYPE_PILATES -> Yoga
-            ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_POOL,
-            ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_OPEN_WATER -> Schwimmen
+            ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_POOL -> Schwimmen
+            ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_OPEN_WATER -> Freiwasser
             ExerciseSessionRecord.EXERCISE_TYPE_GUIDED_BREATHING -> Atem
+            ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT -> Offen
             else -> Anderes
         }
     }

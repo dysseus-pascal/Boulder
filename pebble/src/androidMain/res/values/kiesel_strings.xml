@@ -10,7 +10,9 @@
     <string name="ks_a_titel_yoga">Yoga</string>
     <string name="ks_a_titel_atem">Breathing</string>
     <string name="ks_a_atem">%1$d rounds of %2$s s (inhale, hold, exhale, hold)</string>
-    <string name="ks_a_titel_schwimmen">Swimming</string>
+    <string name="ks_a_titel_schwimmen">Swimming Pool</string>
+    <string name="ks_a_titel_freiwasser">Swimming Open water</string>
+    <string name="ks_a_titel_offen">Custom</string>
     <string name="ks_training">Workout</string>
     <string name="ks_a_bahnen">%1$d lengths</string>
     <string name="ks_a_a_m">of %1$d m</string>

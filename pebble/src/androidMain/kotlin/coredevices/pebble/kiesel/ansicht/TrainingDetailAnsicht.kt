@@ -124,11 +124,13 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
                         Kennzahl(streckeVon(t, imperial), stringResource(R.string.ks_t_strecke))
                         if (t.sport.rad) {
                             Formate.geschwindigkeit(t.meter, t.sekunden, imperial)?.let { Kennzahl(it, stringResource(R.string.ks_t_tempo_rad)) }
+                        } else if (t.sport == Sport.Freiwasser) {
+                            Formate.tempoJe100(t.meter, t.sekunden)?.let { Kennzahl(it, stringResource(R.string.ks_t_tempo)) }
                         } else if (t.sport != Sport.Schwimmen) {
                             Formate.tempo(t.meter, t.sekunden, imperial)?.let { Kennzahl(it, stringResource(R.string.ks_t_tempo)) }
                         }
                         // Die Punkte sind schon auf die Sitzung beschnitten (TrainingsDaten.punkte).
-                        val auf = remember(d.punkte) { Trainingsanalyse.aufstieg(d.punkte) }
+                        val auf = remember(d.punkte) { if (t.sport.ohneAufstieg) 0.0 else Trainingsanalyse.aufstieg(d.punkte) }
                         if (auf > 0) Kennzahl(Formate.hoehe(auf, imperial), stringResource(R.string.ks_t_aufstieg))
                     }
                     if (d.puls.isNotEmpty()) {
@@ -154,6 +156,7 @@ internal fun TrainingDetailAnsicht(id: String, setzeTitel: (String) -> Unit) {
             // Bei der Atemuebung dieselbe Frage wie beim Yoga: wurde man ruhiger?
             Sport.Yoga, Sport.Atem -> Yoga(d, ton, maxpuls)
             Sport.Schwimmen -> Schwimmen(d, ton, maxpuls)
+            Sport.Freiwasser -> Freiwasser(d, ton, maxpuls, routeHolen)
             Sport.Indoor -> Indoor(d, ton, maxpuls)
             else -> Strecke(d, ton, maxpuls, imperial, routeHolen)
         }
@@ -365,6 +368,39 @@ private val SATZ_SPALTEN = listOf<Dp?>(40.dp, 48.dp, null, 56.dp, 56.dp)
  */
 @Composable
 private fun Indoor(d: TrainingDetail, ton: Color, maxpuls: Int) {
+    if (d.puls.size < 2) Kasten { Leerzeile(stringResource(R.string.ks_v_nichts_weiter)) }
+    PulsUeberZeit(d, ton, maxpuls)
+}
+
+// --- Freiwasser ------------------------------------------------------------------
+
+/**
+ * Im offenen Wasser gibt es keine Bahn. Die Strecke nur, wenn das Telefon mitschwamm (Freiwasser
+ * GPS) oder eine fremde App sie schrieb - ihr Tempo je 100 m auf der Karte, ohne Hoehe und
+ * Kilometer ([Sport.ohneAufstieg]). Ohne Strecke kein "No route": ohne GPS ist das der Normalfall.
+ */
+@Composable
+private fun Freiwasser(d: TrainingDetail, ton: Color, maxpuls: Int, routeHolen: (() -> Unit)?) {
+    val strecke = remember(d) { Trainingsanalyse.strecke(d.punkte) }
+    if (strecke.size >= 2) {
+        val (langsam, schnell) = remember(strecke) { Trainingsanalyse.tempoSpanne(strecke) }
+        Abschnitt(stringResource(R.string.ks_v_tempo_karte)) {
+            Farbkarte(
+                strecke, remember(strecke) { strecke.map { it.tempo } }, langsam, schnell,
+                Modifier.fillMaxWidth().height(300.dp).clip(RoundedCornerShape(10.dp)),
+            )
+            // m/s als Strecke je Sekunde - derselbe Weg wie tempoAngabe.
+            Farblegende(
+                Formate.tempoJe100(langsam, 1)?.text ?: Formate.FEHLT,
+                Formate.tempoJe100(schnell, 1)?.text ?: Formate.FEHLT,
+            )
+        }
+    } else if (routeHolen != null) Kasten {
+        Knopfzeile(
+            stringResource(R.string.ks_t_route), zeichen = { Tonkreis(Zeichen.ort, Farben.sport(Sport.Freiwasser)) },
+            knopf = stringResource(R.string.ks_t_zeigen), onClick = routeHolen,
+        )
+    }
     if (d.puls.size < 2) Kasten { Leerzeile(stringResource(R.string.ks_v_nichts_weiter)) }
     PulsUeberZeit(d, ton, maxpuls)
 }

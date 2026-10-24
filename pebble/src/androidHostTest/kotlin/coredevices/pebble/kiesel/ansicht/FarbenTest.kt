@@ -168,6 +168,23 @@ class FarbenTest {
     }
 
     @Test
+    fun freiwasserUndCustomTragenDenFarbtonDerUhrUndHebenSichVonJederArtAb() {
+        // Die Uhr zeigt Freiwasser in GColorVividCerulean (00AAFF) und Custom in GColorFolly (FF0055).
+        mapOf(Sport.Freiwasser to Color(0xFF00AAFF), Sport.Offen to Color(0xFFFF0055)).forEach { (art, uhr) ->
+            val f = Farben.sport(art).flaecheDunkel
+            assertTrue(abs(farbton(f) - farbton(uhr)) < 2f, "$art: Farbton ${farbton(f)} statt ${farbton(uhr)}")
+            // Chips, Kalender und Verteilung stellen jede Art neben jede andere, nicht nur die Nachbarn im Stapel.
+            Sport.entries.filter { it != art }.forEach { andere ->
+                val d = abstand(f, Farben.sport(andere).flaecheDunkel)
+                assertTrue(d >= 0.08f, "$art neben $andere: ${"%.3f".format(d)} in Oklab")
+            }
+        }
+        // Folly selbst ist die Zone 5, die im Detail desselben Trainings steht.
+        val zone5 = abstand(Farben.sport(Sport.Offen).flaecheDunkel, Farben.trainingszonen[5].flaecheDunkel)
+        assertTrue(zone5 >= 0.02f, "Custom wie Zone 5: ${"%.3f".format(zone5)} in Oklab")
+    }
+
+    @Test
     fun sportUndZonenflaechenSindDieUhrfarben() {
         // Kreis, Stapel und Kartenlinie zeigen die Farben der Uhr - sie duerfen sich nicht leise verschieben.
         assertEquals(Color(0xFFE8622E), Farben.sport(Sport.Laufen).flaecheDunkel)

@@ -28,7 +28,12 @@
     <string name="ks_sport_kraft">Strength</string>
     <string name="ks_sport_yoga">Yoga</string>
     <string name="ks_sport_atem">Breathing</string>
-    <string name="ks_sport_schwimmen">Swimming</string>
+    <string name="ks_sport_schwimmen">Pool</string>
+    <string name="ks_sport_freiwasser">Open water</string>
+    <string name="ks_sport_offen">Custom</string>
+    <!-- Arten der Uhr ohne eigene Sportart in der App, fuer die Pins: die Strecke macht den Unterschied. -->
+    <string name="ks_sport_freiwasser_gps">Open water GPS</string>
+    <string name="ks_sport_offen_gps">Custom GPS</string>
     <string name="ks_zone_unter">below zone\u00A01</string>
     <string name="ks_zone_1">Recovery</string>
     <string name="ks_zone_2">Base</string>

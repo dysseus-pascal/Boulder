@@ -86,10 +86,11 @@ internal object Trainingswerte {
     /**
      * Distanz, Hoehenmeter und Tempo eines Trainings - [punkte] schon auf die Sitzung beschnitten.
      * [zone]: die der Nachricht (KieselNachricht.zoneBeimEmpfang), wie bei der Sitzung.
+     * [mitAufstieg]: false beim Schwimmen ([Sport.ohneAufstieg]).
      */
     suspend fun schreibeStrecke(
         context: Context, beginn: Long, anfang: Instant, ende: Instant, meter: Double, punkte: List<Spur.Punkt>,
-        zone: ZoneId = ZoneId.systemDefault(),
+        zone: ZoneId = ZoneId.systemDefault(), mitAufstieg: Boolean = true,
     ) {
         val klient = Akte(context).bereit() ?: return
         if (meter > 0) {
@@ -101,8 +102,8 @@ internal object Trainingswerte {
                 )
             }
         }
-        // Derselbe Aufstieg, den Sportseite und Detail zeigen (Trainingsanalyse.hoehen).
-        val auf = Trainingsanalyse.aufstieg(punkte)
+        // Derselbe Aufstieg, den Sportseite und Detail zeigen (Trainingsanalyse.hoehen) - und wie dort keiner im Wasser.
+        val auf = if (mitAufstieg) Trainingsanalyse.aufstieg(punkte) else 0.0
         if (auf > 0) {
             schreibe(klient) {
                 ElevationGainedRecord(

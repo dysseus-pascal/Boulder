@@ -27,12 +27,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DirectionsBike
 import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
 import androidx.compose.material.icons.outlined.Air
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.Hiking
 import androidx.compose.material.icons.outlined.PedalBike
 import androidx.compose.material.icons.outlined.Pool
 import androidx.compose.material.icons.outlined.SelfImprovement
 import androidx.compose.material.icons.outlined.Timer
+import androidx.compose.material.icons.outlined.Waves
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -100,8 +102,12 @@ internal fun Sport.zeichen(): ImageVector = when (this) {
     Sport.Kraft -> Icons.Outlined.FitnessCenter
     Sport.Yoga -> Icons.Outlined.SelfImprovement
     Sport.Schwimmen -> Icons.Outlined.Pool
+    // Wellen statt Schwimmer: das offene Wasser ist der Unterschied zum Becken daneben.
+    Sport.Freiwasser -> Icons.Outlined.Waves
     Sport.Atem -> Icons.Outlined.Air
     Sport.Anderes -> Icons.Outlined.Timer
+    // Das Herz, mit dem Pebble sein offenes "Workout" zeigt.
+    Sport.Offen -> Icons.Outlined.FavoriteBorder
 }
 
 /** Der Tonkreis in der Farbe der Sportart - in Liste, Woche, Detail und Verteilung derselbe. */
@@ -372,14 +378,17 @@ private fun Grosses(t: TrainingEintrag, puls: Int?, punkte: List<Spur.Punkt>, on
     val werte = buildList<Pair<Formate.Angabe, String>> {
         add(Formate.dauerTeile(t.minuten) to dauerName)
         if (t.meter > 0) add(streckeVon(t, imperial) to streckeName)
-        // Im Becken sagt das Tempo je Kilometer nichts - dort zaehlt die Bahn (Detail).
-        if (t.sport != Sport.Schwimmen) {
-            val tempo = if (t.sport.rad) Formate.geschwindigkeit(t.meter, sekunden, imperial) else Formate.tempo(t.meter, sekunden, imperial)
-            tempo?.let { add(it to tempoName) }
+        val tempo = when {
+            // Im Becken sagt das Tempo je Kilometer nichts - dort zaehlt die Bahn (Detail).
+            t.sport == Sport.Schwimmen -> null
+            t.sport == Sport.Freiwasser -> Formate.tempoJe100(t.meter, sekunden)
+            t.sport.rad -> Formate.geschwindigkeit(t.meter, sekunden, imperial)
+            else -> Formate.tempo(t.meter, sekunden, imperial)
         }
+        tempo?.let { add(it to tempoName) }
         puls?.let { add(Formate.menge(it.toLong(), "bpm") to pulsName) }
         // Der Aufstieg statt des Tempos, wenn es bergauf ging: er sagt mehr ueber die Tour.
-        val auf = Trainingsanalyse.aufstieg(punkte)
+        val auf = if (t.sport.ohneAufstieg) 0.0 else Trainingsanalyse.aufstieg(punkte)
         if (auf >= 10) {
             val i = indexOfFirst { it.second == tempoName }
             val wert = Formate.hoehe(auf, imperial) to aufName

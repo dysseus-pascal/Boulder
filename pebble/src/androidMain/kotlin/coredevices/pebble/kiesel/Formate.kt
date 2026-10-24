@@ -235,6 +235,10 @@ internal object Formate {
     fun tempo(meter: Double, sekunden: Long, imperial: Boolean): Angabe? =
         Sportrechnung.tempo(meter, sekunden)?.let { tempo(it, imperial) }
 
+    /** Das Tempo beim Schwimmen, "2:05 /100 m" - metrisch wie das Becken; null wie bei [Sportrechnung.tempo]. */
+    fun tempoJe100(meter: Double, sekunden: Long): Angabe? =
+        Sportrechnung.tempo(meter, sekunden)?.let { Angabe(minutenSekunden(Math.round(it / 10.0)), "/100 m") }
+
     /** Eine Geschwindigkeit: "16.2 km/h" oder "10.1 mph". */
     fun geschwindigkeit(kmh: Double, imperial: Boolean, locale: Locale = Locale.getDefault()): Angabe =
         Angabe(String.format(locale, "%.1f", geschwindigkeitIn(kmh, imperial)), geschwindigkeitEinheit(imperial))

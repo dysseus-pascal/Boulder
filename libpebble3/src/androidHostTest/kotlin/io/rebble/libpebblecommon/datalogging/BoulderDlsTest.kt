@@ -25,6 +25,9 @@ import kotlin.test.assertTrue
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Welche Datalogging-Tags Boulder als Nacht liest: 88/89 nur mit genau der
@@ -34,6 +37,8 @@ import kotlin.uuid.Uuid
  * Echtes Datalogging, echter HealthDataProcessor, echte Room-Datenbanken; nur
  * die Quarantaene liegt in einem Temp-Ordner.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class BoulderDlsTest {
     private val ordner = Files.createTempDirectory("boulder-dls").toFile()
     private var db: Database? = null

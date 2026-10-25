@@ -10,12 +10,17 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Boulder: die Ziele auf dem Weg zur Uhr - die Zeile in der Datenbank Health,
  * wie die Synchronisation (BlobDB) sie abholt. Derselbe Wert noch einmal darf
  * nicht erneut gehen, sonst schickte jeder Start der App ihn wieder.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class ZieleZurUhrTest {
     private var db: Database? = null
 

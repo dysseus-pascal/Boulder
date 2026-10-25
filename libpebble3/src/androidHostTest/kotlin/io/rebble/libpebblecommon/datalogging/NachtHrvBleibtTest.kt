@@ -17,6 +17,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.time.Clock
 import kotlin.time.Instant
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * KEINE LEERE HRV UEBER EINE GEMESSENE (0.52). Bis Firmware b24 lagen die
@@ -29,6 +32,8 @@ import kotlin.time.Instant
  * HealthDataProcessor in die echte Room-Datenbank im Speicher. Dazu das
  * bedingte Eintragen der Reparatur (setzeHrvWennLeer) an derselben Datenbank.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class NachtHrvBleibtTest {
     private var db: Database? = null
     private var boulder: BoulderDatenbank? = null

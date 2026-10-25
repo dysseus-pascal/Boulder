@@ -207,3 +207,15 @@ dependencies {
         }
     }
 }*/
+
+// Boulder: die Datenbanktests bauen Room mit BundledSQLiteDriver. Dessen Android-Fassung bringt
+// SQLite nur fuer Telefone mit; in den Hosttests laeuft darum die JVM-Fassung derselben Klassen,
+// deren Jar SQLite fuer Linux, macOS und Windows enthaelt. Robolectric, weil Room beim Upsert
+// die Meldung der SQLException liest und Androids Attrappe sie verwirft.
+configurations.matching { it.name == "androidHostTestRuntimeClasspath" }.configureEach {
+    exclude(group = "androidx.sqlite", module = "sqlite-bundled-android")
+}
+kotlin.sourceSets.getByName("androidHostTest").dependencies {
+    runtimeOnly("androidx.sqlite:sqlite-bundled-jvm:${libs.versions.sqlite.get()}") { isTransitive = false }
+    implementation(libs.robolectric)
+}

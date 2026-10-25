@@ -71,6 +71,7 @@ class PKJSAppPipelineTest {
         // Cores JsRunner (Netzrechte, Konfig-Nachrichten): fuer diese Tests ohne Wirkung.
         override val networkAccess: NetworkAccess = NetworkAccess { _, _ -> PluginNetworkVerdict.Allowed }
         override suspend fun signalConfigMessage(requestId: Int, json: String) {}
+        override suspend fun signalAudioStream(json: String) {}
     }
 
     private class Aufbau(

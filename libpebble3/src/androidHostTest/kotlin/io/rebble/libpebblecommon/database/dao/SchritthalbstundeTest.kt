@@ -8,12 +8,17 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * DIE SCHRITTE JE HALBE STUNDE fuer das Tagesband, gezaehlt von der echten
  * Room-Abfrage: volle halbe Stunden, nur Fenster mit Schritten, das Ende
  * ausgeschlossen.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class SchritthalbstundeTest {
     private var db: Database? = null
 

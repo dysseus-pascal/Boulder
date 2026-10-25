@@ -1233,7 +1233,8 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     topLevelType = TopLevelType.Phone,
                     section = Section.Health,
                     selectedItem = healthSettings.spo2MeasurementInterval,
-                    items = HRMonitoringInterval.entries,
+                    // Fuenf Minuten gibt es nur fuer den Puls; die Uhr bietet fuer SpO2 10, 30 und 60.
+                    items = HRMonitoringInterval.entries - HRMonitoringInterval.FiveMin,
                     onItemSelected = {
                         libPebble.updateHealthSettings(
                             healthSettings.copy(spo2MeasurementInterval = it)
@@ -1241,6 +1242,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     },
                     itemText = {
                         when (it) {
+                            HRMonitoringInterval.FiveMin -> "Every 5 minutes"
                             HRMonitoringInterval.TenMin -> "Every 10 minutes"
                             HRMonitoringInterval.ThirtyMin -> "Every 30 minutes"
                             HRMonitoringInterval.OneHour -> "Every hour"

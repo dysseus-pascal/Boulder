@@ -19,11 +19,16 @@ import kotlin.test.assertFails
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.uuid.Uuid
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Zwei Wetter-Updates kurz nacheinander: am Ende gilt das zweite, auch wenn
  * das erste laenger an der Datenbank haengt.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class WetterReihenfolgeTest {
     private var db: Database? = null
 

@@ -153,6 +153,7 @@ class LockerImSpeicher : LockerEntryRealDao {
     override suspend fun incrementOrderIndexes(fromIndex: Int, toIndex: Int, type: String) = verschiebe(fromIndex, toIndex, type, 1)
     override suspend fun decrementOrderIndexes(fromIndex: Int, toIndex: Int, type: String) = verschiebe(fromIndex, toIndex, type, -1)
     override suspend fun updateSync(syncLimit: Int) = Unit
+    override suspend fun updateMicrophoneGrant(id: Uuid, granted: Boolean, hashcode: Int) = Unit
     override suspend fun getEntry(id: Uuid): LockerEntry? = zeilen[id]?.takeIf { !it.deleted }?.record
 
     // --- im Test nicht gebraucht ---

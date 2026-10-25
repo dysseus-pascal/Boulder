@@ -22,6 +22,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.time.Clock
 import kotlin.uuid.Uuid
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Boulder: die Timeline-API (timeline-api.rebble.io) im Telefon nachgebildet, mit der echten
@@ -29,6 +32,8 @@ import kotlin.uuid.Uuid
  * nicht mit 500 enden, der Pin muss weg. (Cores eigener RemoteTimelineEmulatorTest prueft das
  * Umsetzen der Pins.)
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class RemoteTimelineLoeschTest {
     private val app = Uuid.parse("00000000-0000-0000-0000-0000000000ee")
     private val url = "https://timeline-api.rebble.io/v1/user/pins/trinken-1"

@@ -39,6 +39,9 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.uuid.Uuid
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Erst sichern, dann bestaetigen: die Uhr gibt ein Datalogging-Paket nach dem
@@ -46,6 +49,8 @@ import kotlin.uuid.Uuid
  * HealthDataProcessor auf der echten Room-Datenbank; nur die Uhr (Protokoll)
  * und die Quarantaene-Ablage (ein Temp-Ordner) sind gestellt.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class DlsBestaetigungTest {
     private val ordner = Files.createTempDirectory("dls-quarantaene").toString()
     private var db: Database? = null

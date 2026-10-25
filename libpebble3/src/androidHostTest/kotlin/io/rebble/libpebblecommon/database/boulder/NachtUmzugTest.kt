@@ -8,6 +8,7 @@ import androidx.sqlite.execSQL
 import io.rebble.libpebblecommon.SystemAppIDs.SYSTEM_APP_UUID
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.database.Database
+import io.rebble.libpebblecommon.database.TestKontext
 import io.rebble.libpebblecommon.database.dao.NachtDao
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
@@ -43,12 +44,17 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
 import kotlin.time.TestTimeSource
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Der einmalige Umzug der Naechte aus libpebble3.db nach boulder.db, mit den
  * echten Datenbanken der App (getRoomDatabase, getBoulderDatenbank) auf dem
  * echten Treiber, in einem eigenen Ordner.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class NachtUmzugTest {
     private val ordner = Files.createTempDirectory("nacht-umzug").toFile()
     private val tmpVorher = System.getProperty("java.io.tmpdir")
@@ -102,8 +108,8 @@ class NachtUmzugTest {
         c.execSQL("INSERT INTO overlay_data VALUES (1759000000, 1800, 8, 900, 0, 50, 0, 0, 1)")
     }
 
-    private fun alt(): Database = getRoomDatabase(AppContext()).also { offen += it }
-    private fun neu(): BoulderDatenbank = getBoulderDatenbank(AppContext()).also { offen += it }
+    private fun alt(): Database = getRoomDatabase(AppContext(TestKontext(ordner))).also { offen += it }
+    private fun neu(): BoulderDatenbank = getBoulderDatenbank(AppContext(TestKontext(ordner))).also { offen += it }
     private fun umzug(alt: Database, neu: BoulderDatenbank, zeit: TestTimeSource = TestTimeSource()) =
         NachtUmzug(alt, neu, uhr, zeit)
 

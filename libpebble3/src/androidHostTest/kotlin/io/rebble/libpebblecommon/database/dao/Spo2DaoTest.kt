@@ -9,9 +9,14 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 // Boulder: vorher unter androidInstrumentedTest, das das Plugin nicht kennt - der
 // Test wurde nie gebaut. Jetzt auf der echten Room-Datenbank im Speicher.
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class Spo2DaoTest {
     private var db: Database? = null
 

@@ -34,6 +34,9 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.uuid.Uuid
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Neben einem Begleiter, der jede Nachricht sofort bestaetigt, schickt die Uhr
@@ -46,6 +49,8 @@ import kotlin.uuid.Uuid
  * (AppRunState), die Nachrichten kommen als AppMessagePush ueber den echten
  * AppMessageService, der eingebaute Begleiter nimmt sie erst spaeter ab.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class BegleiterEingangTest {
     private val uuid = Uuid.parse("00000000-0000-0000-0000-0000000000cc")
     private var db: Database? = null

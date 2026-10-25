@@ -21,6 +21,9 @@ import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Die Tageszahlen fuer die Uhr (Durchschnitt, Wochenwerte) rechnet ein Schub der
@@ -28,6 +31,8 @@ import kotlin.time.Instant
  * (dls_endpoint.c); am Ende eines Schubs muss trotzdem gerechnet werden - und am
  * selben Tag wieder, wenn eine Stunde vergangen ist.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class TageszahlenTest {
     private var db: Database? = null
     private var boulder: BoulderDatenbank? = null

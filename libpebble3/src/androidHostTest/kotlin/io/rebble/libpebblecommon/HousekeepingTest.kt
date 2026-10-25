@@ -21,12 +21,17 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Instant
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Das Aufraeumen alle 6 Stunden: Minutendaten und SpO2 verfallen nach 90 Tagen
  * (Entscheidung 04.10.2026), die Naechte bleiben fuer immer. Ein Fehler darf
  * weder die App beenden noch die folgenden Durchgaenge.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class HousekeepingTest {
     private var db: Database? = null
     private var boulder: BoulderDatenbank? = null

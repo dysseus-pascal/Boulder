@@ -24,12 +24,17 @@ import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Eine Nacht mit mehr als 60 Abschnitten kommt in Teilen, jeder in einem eigenen
  * Paket. Teil 0 raeumt die Abschnitte der vorigen Fassung weg - laeuft Teil 1
  * daneben, darf er davon nicht getroffen werden.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class NachtSchreibwegTest {
     private var db: Database? = null
     private var boulder: BoulderDatenbank? = null

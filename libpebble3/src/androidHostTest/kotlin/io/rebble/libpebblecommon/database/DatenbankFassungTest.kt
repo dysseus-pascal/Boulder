@@ -30,6 +30,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertTrue
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Die Datenbanken ueber Fassungen hinweg, mit dem echten getRoomDatabase und
@@ -44,6 +47,8 @@ import kotlin.test.assertTrue
  * prueft (Room vergleicht nach der Migration das Schema mit den Entities und
  * wirft bei einer Abweichung). Die Nacht-Tabellen bleiben dabei liegen.
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [35])
 class DatenbankFassungTest {
     private val ordner = Files.createTempDirectory("libpebble3-db").toFile()
     private val tmpVorher = System.getProperty("java.io.tmpdir")
@@ -74,7 +79,7 @@ class DatenbankFassungTest {
     private val beginn = 1_790_445_600L
 
     private fun schreibeSpo2() = runBlocking {
-        val db = getRoomDatabase(AppContext())
+        val db = getRoomDatabase(AppContext(TestKontext(ordner)))
         db.spo2Dao().insertSpo2Readings(listOf(Spo2ReadingEntity(beginn, 96, 5), Spo2ReadingEntity(beginn + 60, 95, 5)))
         db.close()
     }
@@ -87,7 +92,7 @@ class DatenbankFassungTest {
         // Wie nach dem Zurueckspielen einer aelteren Fassung: die Datei ist neuer als das Schema.
         roh { it.execSQL("PRAGMA user_version = ${DATENBANK_VERSION + 1}") }
 
-        val db = getRoomDatabase(AppContext())
+        val db = getRoomDatabase(AppContext(TestKontext(ordner)))
         // Room leert weiterhin (fallbackToDestructiveMigrationOnDowngrade) ...
         assertTrue(spo2(db).isEmpty())
         db.close()
@@ -104,7 +109,7 @@ class DatenbankFassungTest {
     @Test
     fun dieEigeneFassungBleibtOhneKopie() {
         schreibeSpo2()
-        val db = getRoomDatabase(AppContext())
+        val db = getRoomDatabase(AppContext(TestKontext(ordner)))
         assertEquals(2, spo2(db).size)
         db.close()
         assertEquals(listOf("libpebble3.db"), dbDateien())
@@ -114,7 +119,7 @@ class DatenbankFassungTest {
     fun eineFassungAus50IstKeinDowngrade() {
         // Die Schwelle ist 1045, nicht mehr 50: eine Datei aus 0.49 (50) wird migriert, nicht beiseitegelegt.
         legeAn(50)
-        val db = getRoomDatabase(AppContext())
+        val db = getRoomDatabase(AppContext(TestKontext(ordner)))
         assertEquals(1, spo2(db).size)
         db.close()
         assertEquals(listOf("libpebble3.db"), dbDateien())
@@ -131,7 +136,7 @@ class DatenbankFassungTest {
         // Beiseitegelegt wird erst beim ersten Oeffnen durch Room, auf dessen Abfrage-Thread.
         schreibeSpo2()
         roh { it.execSQL("PRAGMA user_version = ${DATENBANK_VERSION + 1}") }
-        val db = getRoomDatabase(AppContext())
+        val db = getRoomDatabase(AppContext(TestKontext(ordner)))
         assertEquals(listOf("libpebble3.db"), dbDateien())
         assertTrue(spo2(db).isEmpty())
         db.close()
@@ -145,7 +150,7 @@ class DatenbankFassungTest {
         schreibeSpo2()
         roh { it.execSQL("PRAGMA user_version = ${DATENBANK_VERSION + 1}") }
         val inode = Files.getAttribute(datei.toPath(), "unix:ino")
-        val db = getRoomDatabase(AppContext())
+        val db = getRoomDatabase(AppContext(TestKontext(ordner)))
         spo2(db)
         db.close()
         val kopie = beiseite().single { it.name.startsWith("libpebble3-v${DATENBANK_VERSION + 1}-") && it.name.endsWith(".db") }
@@ -173,7 +178,7 @@ class DatenbankFassungTest {
     // --- boulder.db ---
 
     private fun schreibeNacht() = runBlocking {
-        val db = getBoulderDatenbank(AppContext())
+        val db = getBoulderDatenbank(AppContext(TestKontext(ordner)))
         db.nachtDao().speichereNachtTeil(
             NachtEntity(beginn, 7200, 30, 450, 400, 50, 40),
             ersterTeil = true,
@@ -188,7 +193,7 @@ class DatenbankFassungTest {
         roh(boulderDatei) { it.execSQL("PRAGMA user_version = ${BOULDER_DB_VERSION + 1}") }
 
         // Ohne Schutz wirft Room hier (keine Migration 2 -> 1); mit Schutz beginnt boulder.db neu.
-        val db = getBoulderDatenbank(AppContext())
+        val db = getBoulderDatenbank(AppContext(TestKontext(ordner)))
         assertEquals(null, runBlocking { db.nachtDao().juengsteNacht() })
         db.close()
         assertTrue(ordner.listFiles()!!.none { it.name.startsWith("boulder-v") })
@@ -203,7 +208,7 @@ class DatenbankFassungTest {
     @Test
     fun dieEigeneBoulderFassungBleibtOhneKopie() {
         schreibeNacht()
-        val db = getBoulderDatenbank(AppContext())
+        val db = getBoulderDatenbank(AppContext(TestKontext(ordner)))
         assertEquals(beginn, runBlocking { db.nachtDao().juengsteNacht()?.beginnUtc })
         db.close()
         assertEquals(listOf("boulder.db"), dbDateien())
@@ -249,11 +254,11 @@ class DatenbankFassungTest {
 
     private fun migriereVon(fassung: Int) {
         val tabellen = legeAn(fassung)
-        val db = getRoomDatabase(AppContext())
+        val db = getRoomDatabase(AppContext(TestKontext(ordner)))
         // Der erste Zugriff oeffnet: Room migriert auf DATENBANK_VERSION und prueft das Schema.
         spo2(db)
         // Danach der Umzug, wie beim Start der App: die Nacht aus der alten Tabelle kommt nach boulder.db.
-        val boulder = getBoulderDatenbank(AppContext())
+        val boulder = getBoulderDatenbank(AppContext(TestKontext(ordner)))
         runBlocking { NachtUmzug(db, boulder).sicherstellen() }
         val umgezogen = runBlocking { boulder.nachtDao().naechte(0, Long.MAX_VALUE) }
         boulder.close()

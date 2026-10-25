@@ -23,6 +23,7 @@ import io.rebble.libpebblecommon.database.dao.WatchPrefRealDao
 import io.rebble.libpebblecommon.database.dao.WeatherAppRealDao
 import io.rebble.libpebblecommon.database.entity.AppPrefsEntryDao
 import io.rebble.libpebblecommon.database.dao.HealthSettingsEntryRealDao
+import io.rebble.libpebblecommon.database.entity.BOULDER_SPO2_SCHLUESSEL
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.di.ConnectionCoroutineScope
 import io.rebble.libpebblecommon.di.PlatformConfig
@@ -302,9 +303,8 @@ class BlobDB(
     }
 
     // The watch firmware sends health settings (activityPreferences, unitsDistance,
-    // hrmPreferences, heartRatePreferences, bloodOxygenPreferences, bloodOxygenActivityPreferences,
-    // spo2Preferences) via the WatchPrefs BlobDB, but the phone stores them in HealthParams. Route
-    // those keys to the health settings DAO.
+    // hrmPreferences, heartRatePreferences) via the WatchPrefs BlobDB, but the phone stores
+    // them in HealthParams. Route those keys to the health settings DAO.
     private fun effectiveDatabaseFor(message: DbWrite): BlobDatabase {
         if (message.database != BlobDatabase.WatchPrefs) return message.database
         val key = message.key.toByteArray().decodeToString().trimEnd(NUL_CHAR)
@@ -312,10 +312,8 @@ class BlobDB(
             "activityPreferences",
             "unitsDistance",
             "hrmPreferences",
-            "heartRatePreferences",
-            "bloodOxygenPreferences",
-            "bloodOxygenActivityPreferences",
-            "spo2Preferences" -> BlobDatabase.HealthParams
+            "heartRatePreferences" -> BlobDatabase.HealthParams
+            in BOULDER_SPO2_SCHLUESSEL -> BlobDatabase.HealthParams // Boulder: SpO2 (BoulderSpo2.kt)
             else -> message.database
         }
     }

@@ -415,9 +415,6 @@ class FakeLibPebble : LibPebble {
             hrZone1Threshold = 130,
             hrZone2Threshold = 154,
             hrZone3Threshold = 172,
-            bloodOxygenEnabled = false,
-            bloodOxygenActivityEnabled = false,
-            spo2MeasurementInterval = HRMonitoringInterval.TenMin,
         )) }
 
     override fun updateHealthSettings(healthSettings: HealthSettings) {}
@@ -605,6 +602,8 @@ class FakeLibPebble : LibPebble {
     override suspend fun setzeNachtHrvWennLeer(beginnUtc: Long, hrv: Int) = false
 
     override suspend fun setzeZiele(schritte: Int, schlafMin: Int) {}
+    override val spo2Einstellungen = flowOf(io.rebble.libpebblecommon.database.entity.Spo2Einstellungen())
+    override fun setzeSpo2Einstellungen(einstellungen: io.rebble.libpebblecommon.database.entity.Spo2Einstellungen) {}
     override suspend fun getAverageSpo2(start: Long, end: Long): Double? = null
     override suspend fun getLatestSpo2Reading(): LatestSpo2? = null
     override suspend fun getActivitySessions(start: Long, end: Long) = emptyList<OverlayDataEntity>()

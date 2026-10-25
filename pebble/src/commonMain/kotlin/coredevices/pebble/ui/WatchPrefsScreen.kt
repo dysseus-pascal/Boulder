@@ -79,10 +79,6 @@ internal fun List<WatchPreference<*>>.hidePresetManagedBacklightPrefs(): List<Wa
     else filterNot { it.pref in PRESET_MANAGED_BACKLIGHT_PREFS }
 }
 
-/** Boulder: SpO2 im Schlaf steht bei Pebbles SpO2-Schaltern (WatchSettingsScreen), nicht in dieser Liste. */
-internal fun List<WatchPreference<*>>.ohneEigenenPlatz(): List<WatchPreference<*>> =
-    filterNot { it.pref == BoolWatchPref.BoulderSpo2Schlaf }
-
 // Rendered inside the single "Backlight Color" item (backlightColorPref), not loose in the list.
 private val BACKLIGHT_COLOR_SCHEDULE_PREFS = setOf<WatchPref<*>>(
     BoolWatchPref.BacklightColorDayNightEnabled,
@@ -118,7 +114,7 @@ fun watchPrefs(): List<SettingsItem> {
         settings.hidePresetManagedBacklightPrefs()
             .groupQuietTimeScheduleHours()
             .hideFoldedBacklightColorPrefs()
-            .ohneEigenenPlatz()
+            .ohneEigenenPlatz() // Boulder: SpO2 im Schlaf (BoulderSpo2Zeilen.kt)
             .map { item ->
                 when (val pref = item.pref) {
                     is BoolWatchPref -> booleanPref(pref.castParent(item), libPebble)
@@ -238,19 +234,6 @@ fun WatchPref<*>.topLevelType(): TopLevelType = when (this) {
     BoolWatchPref.BoulderSpo2Schlaf -> TopLevelType.Phone
     else -> TopLevelType.Watch
 }
-
-/** Boulder: der Schalter fuer SpO2 im Schlaf, fuer den Platz bei Pebbles SpO2-Schaltern. */
-internal fun spo2SchlafPref(item: WatchPreference<Boolean>, libPebble: LibPebble, show: () -> Boolean): SettingsItem =
-    basicSettingsToggleItem(
-        id = item.pref.id,
-        title = item.pref.displayName,
-        description = item.pref.description,
-        topLevelType = item.pref.topLevelType(),
-        section = item.pref.section(),
-        checked = item.valueOrDefault(),
-        show = show,
-        onCheckChanged = { enabled -> libPebble.setWatchPref(item.copy(value = enabled)) },
-    )
 
 private fun numberPref(item: WatchPreference<Long>, libPebble: LibPebble): SettingsItem {
     val pref = item.pref as NumberWatchPref

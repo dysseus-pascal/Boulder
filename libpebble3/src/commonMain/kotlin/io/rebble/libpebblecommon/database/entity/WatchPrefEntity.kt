@@ -282,12 +282,12 @@ enum class BoolWatchPref(
     MusicShowProgressBar("musicShowProgressBar", "Show Progress Bar", true),
     MusicShowAlbumArt("musicShowAlbumArt", "Show Album Art", false),
     // Boulder-Firmware ab b37 (boulder/messstufe.h): SpO2 auch in der Nachtruhe, wenn
-    // "Blood Oxygen" aus ist. Aeltere Firmware weist den Schluessel ab.
+    // "SpO2" aus ist. Aeltere Firmware weist den Schluessel ab.
     BoulderSpo2Schlaf(
         "boulderSpo2Schlaf",
-        "Blood Oxygen During Sleep",
+        "SpO2 During Sleep",
         false,
-        description = "Measure blood oxygen (SpO2) at night while you lie still (8 pm to 11 am), also with Blood Oxygen off. Precision sets how often. Needs the Boulder firmware b37 or newer.",
+        description = "Measure blood oxygen (SpO2) at night while you lie still (8 pm to 11 am), also with SpO2 off. Precision sets how often. Needs the Boulder firmware b37 or newer.",
     ),
     ;
 

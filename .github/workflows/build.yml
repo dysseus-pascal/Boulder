@@ -48,6 +48,12 @@ jobs:
           printf '%s' "$KEYSTORE" | base64 -d > ~/.android/debug.keystore
           test "$(sha256sum < ~/.android/debug.keystore | cut -d' ' -f1)" = 8398e03d2140f1f3ad6082f933f1324a59e9684eee01db159acffbd29ff0d544 \
             || { echo "::error::BOULDER_APK_KEYSTORE ist nicht Boulders Schluessel"; exit 1; }
+      # Boulder bleibt nah an Core: tools/boulder/vorlage.txt haelt fest, wie weit jede Core-Datei
+      # abweicht, und der Waechter haelt die Liste genau (siehe vorlage_waechter.py).
+      - name: Nähe zu Core
+        run: |
+          python3 -m unittest discover -s tools/boulder -p 'test_*.py'
+          python3 tools/boulder/vorlage_waechter.py
       - name: Tests
         # :server:test - der eigene Server ist ein JVM-Modul ohne jvmTest-Aufgabe.
         run: ./gradlew testDebugUnitTest testAndroidHostTest jvmTest :server:test

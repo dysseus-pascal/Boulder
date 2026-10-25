@@ -25,7 +25,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Boulder: "Blood Oxygen During Sleep" steht bei Pebbles SpO2-Schaltern auf der Seite des Telefons
+ * Boulder: "SpO2 During Sleep" steht bei Pebbles SpO2-Schaltern auf der Seite des Telefons
  * und schreibt die Uhr-Einstellung boulderSpo2Schlaf, die die Boulder-Firmware ab b37 liest.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -44,7 +44,7 @@ class Spo2SchlafTest {
     fun ein_tipp_schaltet_die_uhr_einstellung_ein() {
         val libPebble = FakeLibPebble()
         val eintrag = spo2SchlafPref(WatchPreference(BoolWatchPref.BoulderSpo2Schlaf, null), libPebble) { true }
-        assertEquals("Blood Oxygen During Sleep", eintrag.title)
+        assertEquals("SpO2 During Sleep", eintrag.title)
         val aktivitaet = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
         aktivitaet.setContent { MaterialTheme { eintrag.Item() } }
         shadowOf(Looper.getMainLooper()).idle()

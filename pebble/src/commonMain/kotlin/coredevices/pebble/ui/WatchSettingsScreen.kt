@@ -163,10 +163,8 @@ import io.rebble.libpebblecommon.permissions.PermissionPolicy
 import io.rebble.libpebblecommon.connection.AppContext
 import io.rebble.libpebblecommon.connection.ConnectedPebble
 import io.rebble.libpebblecommon.connection.KnownPebbleDevice
-import io.rebble.libpebblecommon.database.entity.BoolWatchPref
 import io.rebble.libpebblecommon.database.entity.HRMonitoringInterval
 import io.rebble.libpebblecommon.database.entity.HealthGender
-import io.rebble.libpebblecommon.database.dao.WatchPreference
 import io.rebble.libpebblecommon.database.entity.QuietTimeSchedule
 import io.rebble.libpebblecommon.js.PKJSApp
 import io.rebble.libpebblecommon.metadata.WatchType
@@ -264,9 +262,6 @@ object SettingsIds {
     const val HrmEnabled = "HrmEnabled"
     const val HrmMeasurementInterval = "HrmMeasurementInterval"
     const val HrmActivityTracking = "HrmActivityTracking"
-    const val BloodOxygenEnabled = "BloodOxygenEnabled"
-    const val BloodOxygenActivityEnabled = "BloodOxygenActivityEnabled"
-    const val Spo2MeasurementInterval = "Spo2MeasurementInterval"
 }
 
 data class SettingsItem(
@@ -526,10 +521,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
         }
     }
     val watchPrefs = watchPrefs()
-    // Boulder: SpO2 im Schlaf steht unten bei Pebbles SpO2-Schaltern, nicht unter den Uhr-Einstellungen.
-    val spo2Schlaf by remember(libPebble) {
-        libPebble.watchPrefs.map { prefs -> prefs.firstOrNull { it.pref == BoolWatchPref.BoulderSpo2Schlaf } }
-    }.collectAsState(null)
+    val boulderSpo2 = rememberBoulderSpo2(libPebble) // Boulder: SpO2 (BoulderSpo2Zeilen.kt)
     val coreAnalytics: CoreAnalytics = koinInject()
     val platformHealthSync: PlatformHealthSync = koinInject()
     val healthSyncTracker: HealthSyncTracker = koinInject()
@@ -548,7 +540,7 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
             experimentalDevices,
             loggedIn,
             watchPrefs,
-            spo2Schlaf,
+            boulderSpo2,
             rebbleVoiceAvailable,
             platformSttAvailable,
             anyWatchSupportsFiveMinHrm,
@@ -1202,76 +1194,13 @@ fun rememberSettingsItemsState(navBarNav: NavBarNav?, snackbarDisplay: SnackbarD
                     checked = healthSettings.hrmActivityTrackingEnabled,
                     show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
                     onCheckChanged = {
-                        // Turning HR During Activities off also disables activity SpO2 — the watch
-                        // clears it locally, but keep the app's synced setting in sync too.
                         libPebble.updateHealthSettings(
-                            healthSettings.copy(
-                                hrmActivityTrackingEnabled = it,
-                                bloodOxygenActivityEnabled = if (!it) false else healthSettings.bloodOxygenActivityEnabled,
-                            )
+                            healthSettings.copy(hrmActivityTrackingEnabled = it)
                         )
+                        boulderSpo2.nachHrImSport(libPebble, it) // Boulder
                     },
                 ),
-                basicSettingsToggleItem(
-                    id = SettingsIds.BloodOxygenEnabled,
-                    title = "Blood Oxygen",
-                    description = "Allow the watch to measure blood oxygen (SpO2). The sampling rate is configurable below.",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    checked = healthSettings.bloodOxygenEnabled,
-                    show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
-                    onCheckChanged = {
-                        libPebble.updateHealthSettings(
-                            healthSettings.copy(bloodOxygenEnabled = it)
-                        )
-                    },
-                ),
-                basicSettingsDropdownItem(
-                    id = SettingsIds.Spo2MeasurementInterval,
-                    title = "SpO2 Monitoring Rate",
-                    description = "How often the watch takes a background blood oxygen (SpO2) reading. Set to Off to pause background sampling. A faster rate can have an impact on battery life.",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    selectedItem = healthSettings.spo2MeasurementInterval,
-                    // Fuenf Minuten gibt es nur fuer den Puls; die Uhr bietet fuer SpO2 10, 30 und 60.
-                    items = HRMonitoringInterval.entries - HRMonitoringInterval.FiveMin,
-                    onItemSelected = {
-                        libPebble.updateHealthSettings(
-                            healthSettings.copy(spo2MeasurementInterval = it)
-                        )
-                    },
-                    itemText = {
-                        when (it) {
-                            HRMonitoringInterval.FiveMin -> "Every 5 minutes"
-                            HRMonitoringInterval.TenMin -> "Every 10 minutes"
-                            HRMonitoringInterval.ThirtyMin -> "Every 30 minutes"
-                            HRMonitoringInterval.OneHour -> "Every hour"
-                            HRMonitoringInterval.Disabled -> "Off"
-                        }
-                    },
-                    show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled && healthSettings.bloodOxygenEnabled },
-                ),
-                spo2Schlaf?.let { item ->
-                    @Suppress("UNCHECKED_CAST")
-                    spo2SchlafPref(item as WatchPreference<Boolean>, libPebble) {
-                        healthSettings.trackingEnabled && healthSettings.hrmEnabled
-                    }
-                },
-                basicSettingsToggleItem(
-                    id = SettingsIds.BloodOxygenActivityEnabled,
-                    title = "Blood Oxygen During Activities",
-                    description = "Take a blood oxygen (SpO2) reading roughly every 5 minutes during detected activities. Requires 'HR During Activities' to be enabled.",
-                    topLevelType = TopLevelType.Phone,
-                    section = Section.Health,
-                    checked = healthSettings.bloodOxygenActivityEnabled,
-                    enabled = healthSettings.hrmActivityTrackingEnabled,
-                    show = { healthSettings.trackingEnabled && healthSettings.hrmEnabled },
-                    onCheckChanged = {
-                        libPebble.updateHealthSettings(
-                            healthSettings.copy(bloodOxygenActivityEnabled = it)
-                        )
-                    },
-                ),
+                *boulderSpo2Zeilen(libPebble, healthSettings, boulderSpo2).toTypedArray(), // Boulder
                 basicSettingsToggleItem(
                     id = EnableActivityInsights,
                     title = "Activity Insights",

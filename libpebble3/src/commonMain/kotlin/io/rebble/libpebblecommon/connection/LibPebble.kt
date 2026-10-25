@@ -34,6 +34,7 @@ import io.rebble.libpebblecommon.database.entity.MuteState
 import io.rebble.libpebblecommon.database.entity.NotificationEntity
 import io.rebble.libpebblecommon.database.entity.NotificationRuleEntity
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.Spo2Einstellungen
 import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
@@ -293,6 +294,11 @@ interface HealthDataApi {
      * wenn sie jetzt nicht verbunden ist; derselbe Wert noch einmal geht nicht erneut.
      */
     suspend fun setzeZiele(schritte: Int, schlafMin: Int)
+
+    /** Boulder: die SpO2-Einstellungen der Uhr, die Core nicht synchronisiert (BoulderSpo2.kt). */
+    val spo2Einstellungen: Flow<Spo2Einstellungen>
+
+    fun setzeSpo2Einstellungen(einstellungen: Spo2Einstellungen)
 
     /** Returns the average SpO2 percent for readings in the range, or null if none. */
     suspend fun getAverageSpo2(start: Long, end: Long): Double?

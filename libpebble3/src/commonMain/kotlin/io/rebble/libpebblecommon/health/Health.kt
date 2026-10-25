@@ -21,9 +21,12 @@ import io.rebble.libpebblecommon.database.entity.HealthGender
 import io.rebble.libpebblecommon.database.entity.HealthSettingsEntryDao
 import io.rebble.libpebblecommon.database.entity.HealthStatDao
 import io.rebble.libpebblecommon.database.entity.OverlayDataEntity
+import io.rebble.libpebblecommon.database.entity.Spo2Einstellungen
 import io.rebble.libpebblecommon.database.entity.Spo2ReadingEntity
 import io.rebble.libpebblecommon.database.entity.getWatchSettings
 import io.rebble.libpebblecommon.database.entity.setImperialUnits
+import io.rebble.libpebblecommon.database.entity.setzeSpo2Einstellungen
+import io.rebble.libpebblecommon.database.entity.spo2Einstellungen
 import io.rebble.libpebblecommon.database.entity.setWatchSettings
 import io.rebble.libpebblecommon.database.entity.updateHeartRateZonesFromAge
 import io.rebble.libpebblecommon.datalogging.HealthDataProcessor
@@ -312,6 +315,12 @@ class Health(
         healthStatDao.insertOrReplace(BoulderZiele.zeile(schritte, schlafMin))
     }
 
+    override val spo2Einstellungen: Flow<Spo2Einstellungen> = healthSettingsDao.spo2Einstellungen()
+
+    override fun setzeSpo2Einstellungen(einstellungen: Spo2Einstellungen) {
+        bereich.launch { healthSettingsDao.setzeSpo2Einstellungen(einstellungen) }
+    }
+
     override suspend fun getAverageSpo2(start: Long, end: Long): Double? =
         spo2Dao.getAverageSpo2(start, end)
 
@@ -393,12 +402,6 @@ data class HealthSettings(
     val hrZone1Threshold: Short,
     val hrZone2Threshold: Short,
     val hrZone3Threshold: Short,
-    // BloodOxygenPreferences
-    val bloodOxygenEnabled: Boolean,
-    // BloodOxygenActivityPreferences (SpO2 during activities; gated by HR During Activities)
-    val bloodOxygenActivityEnabled: Boolean,
-    // Spo2Preferences — SpO2 monitoring rate; sampling runs only when bloodOxygenEnabled && rate != Disabled
-    val spo2MeasurementInterval: HRMonitoringInterval,
 )
 
 /** Time range for displaying health data */

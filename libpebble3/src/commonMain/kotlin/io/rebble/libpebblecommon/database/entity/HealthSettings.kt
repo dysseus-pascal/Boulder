@@ -9,16 +9,10 @@ import io.rebble.libpebblecommon.database.dao.BlobDbItem
 import io.rebble.libpebblecommon.database.dao.ValueParams
 import io.rebble.libpebblecommon.database.entity.ActivityPrefsValue.Companion.asBytes
 import io.rebble.libpebblecommon.database.entity.ActivityPrefsValue.Companion.encodeToString
-import io.rebble.libpebblecommon.database.entity.BloodOxygenActivityPreferencesValue.Companion.asBytes
-import io.rebble.libpebblecommon.database.entity.BloodOxygenActivityPreferencesValue.Companion.encodeToString
-import io.rebble.libpebblecommon.database.entity.BloodOxygenPreferencesValue.Companion.asBytes
-import io.rebble.libpebblecommon.database.entity.BloodOxygenPreferencesValue.Companion.encodeToString
 import io.rebble.libpebblecommon.database.entity.HeartRatePreferencesValue.Companion.asBytes
 import io.rebble.libpebblecommon.database.entity.HeartRatePreferencesValue.Companion.encodeToString
 import io.rebble.libpebblecommon.database.entity.HrmPreferencesValue.Companion.asBytes
 import io.rebble.libpebblecommon.database.entity.HrmPreferencesValue.Companion.encodeToString
-import io.rebble.libpebblecommon.database.entity.Spo2PreferencesValue.Companion.asBytes
-import io.rebble.libpebblecommon.database.entity.Spo2PreferencesValue.Companion.encodeToString
 import io.rebble.libpebblecommon.database.entity.UnitsDistanceValue.Companion.asBytes
 import io.rebble.libpebblecommon.database.entity.UnitsDistanceValue.Companion.encodeToString
 import io.rebble.libpebblecommon.health.HealthSettings
@@ -26,7 +20,7 @@ import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
 import io.rebble.libpebblecommon.services.FirmwareVersion
 import io.rebble.libpebblecommon.structmapper.SBoolean
 import io.rebble.libpebblecommon.structmapper.SByte
-import io.rebble.libpebblecommon.structmapper.SNullTerminatedString
+import io.rebble.libpebblecommon.structmapper.SFixedString
 import io.rebble.libpebblecommon.structmapper.SOptional
 import io.rebble.libpebblecommon.structmapper.SUByte
 import io.rebble.libpebblecommon.structmapper.SUShort
@@ -61,11 +55,11 @@ data class HealthSettingsEntry(
     @ColumnInfo(defaultValue = "0")
     val timestamp: MillisecondInstant = MillisecondInstant(Instant.fromEpochMilliseconds(0)),
 ) : BlobDbItem {
-    // Keys are sent NUL-terminated (key_size = strlen+1), matching every other synced setting
-    // (WatchPrefs) and the watch's strlen+1 backing-store lookup. Sending the key without the
-    // trailing NUL writes the bytes to flash but the live in-memory value never updates.
-    override fun key(): UByteArray =
-        SNullTerminatedString(StructMapper(), id).toBytes()
+    override fun key(): UByteArray = SFixedString(
+        mapper = StructMapper(),
+        initialSize = id.length,
+        default = id,
+    ).toBytes()
 
     override fun value(params: ValueParams): UByteArray? {
         if (!params.capabilities.contains(ProtocolCapsFlag.SupportsHealthInsights)) {
@@ -76,10 +70,8 @@ data class HealthSettingsEntry(
             KEY_HRM_PREFERENCES -> HrmPreferencesValue.fromString(value)?.asBytes(params.firmwareVersion)
             KEY_UNITS_DISTANCE -> UnitsDistanceValue.fromString(value)?.asBytes()
             KEY_HEART_RATE_PREFERENCES -> HeartRatePreferencesValue.fromString(value)?.asBytes()
-            KEY_BLOOD_OXYGEN_PREFERENCES -> BloodOxygenPreferencesValue.fromString(value)?.asBytes()
-            KEY_BLOOD_OXYGEN_ACTIVITY_PREFERENCES -> BloodOxygenActivityPreferencesValue.fromString(value)?.asBytes()
-            KEY_SPO2_PREFERENCES -> Spo2PreferencesValue.fromString(value)?.asBytes()
-            else -> null
+            // Boulder: SpO2 (BoulderSpo2.kt).
+            else -> boulderSpo2Wert(id, value, params)
         }
     }
 
@@ -92,9 +84,6 @@ private const val KEY_ACTIVITY_PREFERENCES = "activityPreferences"
 private const val KEY_HRM_PREFERENCES = "hrmPreferences"
 private const val KEY_UNITS_DISTANCE = "unitsDistance"
 private const val KEY_HEART_RATE_PREFERENCES = "heartRatePreferences"
-private const val KEY_BLOOD_OXYGEN_PREFERENCES = "bloodOxygenPreferences"
-private const val KEY_BLOOD_OXYGEN_ACTIVITY_PREFERENCES = "bloodOxygenActivityPreferences"
-private const val KEY_SPO2_PREFERENCES = "spo2Preferences"
 private val json = Json { ignoreUnknownKeys = true }
 
 // ActivityHRMSettings struct grew in firmware:
@@ -130,32 +119,12 @@ fun HealthSettingsEntryDao.getWatchSettings(): Flow<HealthSettings> {
     val heartRatePrefsFlow = getEntryFlow(KEY_HEART_RATE_PREFERENCES).map {
         HeartRatePreferencesValue.fromString(it?.value) ?: HeartRatePreferencesValue()
     }
-    val bloodOxygenPrefsFlow = getEntryFlow(KEY_BLOOD_OXYGEN_PREFERENCES).map {
-        BloodOxygenPreferencesValue.fromString(it?.value) ?: BloodOxygenPreferencesValue()
-    }
-    val bloodOxygenActivityPrefsFlow = getEntryFlow(KEY_BLOOD_OXYGEN_ACTIVITY_PREFERENCES).map {
-        BloodOxygenActivityPreferencesValue.fromString(it?.value) ?: BloodOxygenActivityPreferencesValue()
-    }
-    val spo2PrefsFlow = getEntryFlow(KEY_SPO2_PREFERENCES).map {
-        Spo2PreferencesValue.fromString(it?.value) ?: Spo2PreferencesValue()
-    }
-    // kotlinx.coroutines.flow.combine only has typed overloads up to 5 flows; bundle the three SpO2
-    // prefs into a triple so the outer combine stays within that limit.
-    val bloodOxygenCombined = combine(
-        bloodOxygenPrefsFlow,
-        bloodOxygenActivityPrefsFlow,
-        spo2PrefsFlow,
-    ) { prefs, activityPrefs, spo2Prefs ->
-        Triple(prefs, activityPrefs, spo2Prefs)
-    }
     return combine(
         activityPrefsFlow,
         unitPrefsFlow,
         hrmPrefsFlow,
         heartRatePrefsFlow,
-        bloodOxygenCombined,
-    ) { activityPrefs, unitPrefs, hrmPrefs, heartRatePrefs, bloodOxygen ->
-        val (bloodOxygenPrefs, bloodOxygenActivityPrefs, spo2Prefs) = bloodOxygen
+    ) { activityPrefs, unitPrefs, hrmPrefs, heartRatePrefs ->
         HealthSettings(
             heightMm = activityPrefs.heightMm,
             weightDag = activityPrefs.weightDag,
@@ -174,9 +143,6 @@ fun HealthSettingsEntryDao.getWatchSettings(): Flow<HealthSettings> {
             hrZone1Threshold = heartRatePrefs.zone1Threshold,
             hrZone2Threshold = heartRatePrefs.zone2Threshold,
             hrZone3Threshold = heartRatePrefs.zone3Threshold,
-            bloodOxygenEnabled = bloodOxygenPrefs.enabled,
-            bloodOxygenActivityEnabled = bloodOxygenActivityPrefs.enabled,
-            spo2MeasurementInterval = spo2Prefs.measurementInterval,
         )
     }
 }
@@ -236,33 +202,6 @@ suspend fun HealthSettingsEntryDao.setWatchSettings(healthSettings: HealthSettin
                 ageYears = healthSettings.ageYears,
                 restingHr = healthSettings.restingHr,
                 elevatedHr = healthSettings.elevatedHr,
-            ).encodeToString(),
-            timestamp = now,
-        )
-    )
-    insertOrReplace(
-        HealthSettingsEntry(
-            id = KEY_BLOOD_OXYGEN_PREFERENCES,
-            value = BloodOxygenPreferencesValue(
-                enabled = healthSettings.bloodOxygenEnabled,
-            ).encodeToString(),
-            timestamp = now,
-        )
-    )
-    insertOrReplace(
-        HealthSettingsEntry(
-            id = KEY_BLOOD_OXYGEN_ACTIVITY_PREFERENCES,
-            value = BloodOxygenActivityPreferencesValue(
-                enabled = healthSettings.bloodOxygenActivityEnabled,
-            ).encodeToString(),
-            timestamp = now,
-        )
-    )
-    insertOrReplace(
-        HealthSettingsEntry(
-            id = KEY_SPO2_PREFERENCES,
-            value = Spo2PreferencesValue(
-                measurementInterval = healthSettings.spo2MeasurementInterval,
             ).encodeToString(),
             timestamp = now,
         )
@@ -399,63 +338,6 @@ data class HeartRatePreferencesValue(
     }
 }
 
-/**
- * Blood oxygen (SpO2) monitoring preference. Defaults to OFF — the watch gates SpO2 on this
- * synced setting (the master on/off), so nothing is produced until it's enabled. Single byte:
- * 0x01 enabled, 0x00 disabled. The sampling *rate* is controlled independently by
- * [Spo2PreferencesValue]; SpO2 only runs when this is enabled AND the rate != Disabled.
- */
-@Serializable
-data class BloodOxygenPreferencesValue(
-    val enabled: Boolean = false,
-) {
-    companion object {
-        fun BloodOxygenPreferencesValue.encodeToString(): String = json.encodeToString(this)
-        fun fromString(value: String?): BloodOxygenPreferencesValue? = value?.let { json.decodeFromString(value) }
-        fun BloodOxygenPreferencesValue.asBytes(): UByteArray = BloodOxygenPreferencesBlobItem(
-            enabled = enabled,
-        ).toBytes()
-    }
-}
-
-/**
- * Blood oxygen (SpO2) during-activities preference. When enabled alongside "HR During Activities"
- * (hrmPreferences.activity_tracking_enabled), the watch takes ~one SpO2 reading every 5 minutes
- * during an auto-detected activity. Defaults to OFF. Same single-byte encoding as
- * [BloodOxygenPreferencesValue]: 0x01 enabled, 0x00 disabled.
- */
-@Serializable
-data class BloodOxygenActivityPreferencesValue(
-    val enabled: Boolean = false,
-) {
-    companion object {
-        fun BloodOxygenActivityPreferencesValue.encodeToString(): String = json.encodeToString(this)
-        fun fromString(value: String?): BloodOxygenActivityPreferencesValue? = value?.let { json.decodeFromString(value) }
-        fun BloodOxygenActivityPreferencesValue.asBytes(): UByteArray = BloodOxygenActivityPreferencesBlobItem(
-            enabled = enabled,
-        ).toBytes()
-    }
-}
-
-/**
- * SpO2 monitoring *rate* (measurement interval). Independent of the [BloodOxygenPreferencesValue]
- * master on/off — the watch only samples when that toggle is enabled AND this rate != Disabled.
- * Single byte encoding the [HRMonitoringInterval] enum (0..3); values >= 4 are not valid. The
- * watch enforces value_len == 1 on read-back, so the blob must be exactly one byte.
- */
-@Serializable
-data class Spo2PreferencesValue(
-    val measurementInterval: HRMonitoringInterval = HRMonitoringInterval.TenMin,
-) {
-    companion object {
-        fun Spo2PreferencesValue.encodeToString(): String = json.encodeToString(this)
-        fun fromString(value: String?): Spo2PreferencesValue? = value?.let { json.decodeFromString(value) }
-        fun Spo2PreferencesValue.asBytes(): UByteArray = Spo2PreferencesBlobItem(
-            measurementInterval = measurementInterval.value,
-        ).toBytes()
-    }
-}
-
 class ActivityPrefsBlobItem(
     heightMm: UShort,
     weightDag: UShort,
@@ -506,24 +388,6 @@ class HeartRatePreferencesBlobItem(
     val zone1Threshold = SUByte(m, zone1Threshold)
     val zone2Threshold = SUByte(m, zone2Threshold)
     val zone3Threshold = SUByte(m, zone3Threshold)
-}
-
-class BloodOxygenPreferencesBlobItem(
-    enabled: Boolean,
-) : StructMappable(endianness = Endian.Little) {
-    val enabled = SByte(m, if (enabled) 0x01 else 0x00)
-}
-
-class BloodOxygenActivityPreferencesBlobItem(
-    enabled: Boolean,
-) : StructMappable(endianness = Endian.Little) {
-    val enabled = SByte(m, if (enabled) 0x01 else 0x00)
-}
-
-class Spo2PreferencesBlobItem(
-    measurementInterval: Byte,
-) : StructMappable(endianness = Endian.Little) {
-    val measurementInterval = SByte(m, measurementInterval)
 }
 
 enum class HealthGender(

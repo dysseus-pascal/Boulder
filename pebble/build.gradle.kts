@@ -109,7 +109,6 @@ kotlin {
                 implementation(libs.firebase.crashlytics)
                 implementation(libs.firebase.auth)
                 implementation(libs.firebase.firestore)
-                implementation(libs.coredevices.speex)
                 api(project(":cactus"))
                 api(libs.algolia)
                 implementation(libs.reorderable)
@@ -126,9 +125,8 @@ kotlin {
         commonTest {
             dependencies {
                 implementation(libs.kotlin.test)
-                // Boulder: Firmware-Tests gegen ein nachgestelltes GitHub (MockEngine).
-                implementation(libs.ktor.client.mock)
                 implementation(libs.coroutines.test)
+                implementation(libs.ktor.client.mock)
             }
         }
 
@@ -139,14 +137,14 @@ kotlin {
                 // dependencies declared in commonMain.
                 implementation(compose.uiTooling)
                 implementation(libs.androidx.activity.compose)
+                implementation(libs.androidx.documentfile)
                 // gitlive's compile variant declares com.google.firebase:* without versions.
                 implementation(project.dependencies.platform(libs.firebase.bom))
                 // Boulder: Kiesel-Teile (Health Connect direkt, Trainingskarten, OsmAnd).
                 implementation(libs.health.connect)
                 implementation(libs.osmdroid)
                 implementation(project(":osmand-api"))
-                // Boulder: Sicherung in einen gewaehlten Ordner (SAF), taeglich per WorkManager.
-                implementation(libs.androidx.documentfile)
+                // Boulder: die Sicherung laeuft taeglich per WorkManager (den Ordner per SAF bringt Core mit).
                 implementation(libs.androidx.work)
                 // Boulder: das Format fuer den eigenen Server (Spiegel), dasselbe wie dort.
                 implementation(project(":austausch"))

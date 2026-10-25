@@ -147,6 +147,8 @@ internal const val DATABASE_FILENAME = "libpebble3.db"
         // Schritte haetten Schemas 1046..1048 gebraucht, die nie gebaut wurden. Boulders alte
         // Zaehlung vor 0.50 steht in BOULDER_ALTE_MIGRATIONEN.
         AutoMigration(from = UPSTREAM_VERSATZ + 45, to = UPSTREAM_VERSATZ + 49, spec = AutoMigration48::class),
+        // Boulder: ab hier Cores Schritte, um den Versatz verschoben.
+        AutoMigration(from = UPSTREAM_VERSATZ + 49, to = UPSTREAM_VERSATZ + 50),
     ],
     exportSchema = true,
 )

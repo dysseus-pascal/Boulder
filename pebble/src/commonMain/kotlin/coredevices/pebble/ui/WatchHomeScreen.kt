@@ -806,7 +806,8 @@ enum class WatchHomeNavTab(
     Index(
         Res.string.index,
         Icons.AutoMirrored.Outlined.Notes,
-        PebbleNavBarRoutes.IndexRoute
+        PebbleNavBarRoutes.IndexRoute,
+        { indexTabBadgeCount() }
     ),
     Watches(Res.string.devices, Icons.Outlined.Watch, PebbleNavBarRoutes.WatchesRoute),
     Gesundheit(Res.string.health, Icons.Outlined.FavoriteBorder, PebbleNavBarRoutes.GesundheitRoute),
@@ -835,6 +836,12 @@ enum class WatchHomeNavTab(
             return tabs
         }
     }
+}
+
+@Composable
+private fun indexTabBadgeCount(): Int {
+    val badge: IndexTabBadge = koinInject()
+    return badge.count.collectAsState(0).value
 }
 
 @Preview

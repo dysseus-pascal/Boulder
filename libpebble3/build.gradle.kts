@@ -70,8 +70,6 @@ kotlin {
         }
     }
 
-    jvm()
-
     listOf(
         iosArm64(),
         iosSimulatorArm64()
@@ -112,6 +110,7 @@ kotlin {
             implementation(libs.sqlite.bundled)
             api(libs.kotlinx.io.core)
             implementation(libs.kotlinx.io.okio)
+            implementation(libs.coredevices.speex)
             implementation(libs.okio)
             implementation(libs.kable)
             implementation(libs.kmpio)
@@ -133,27 +132,18 @@ kotlin {
             implementation(libs.kotlin.test)
             implementation(libs.coroutines.test)
             implementation(libs.ktor.client.mock)
+            implementation(libs.settings.test)
         }
 
         androidMain.dependencies {
             implementation(libs.androidx.core.ktx)
+            implementation(libs.androidx.documentfile)
             implementation(libs.pebblekit)
         }
 
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
             implementation(libs.ktor.websockets)
-        }
-
-        jvmMain.dependencies {
-        }
-
-        jvmTest.dependencies {
-            implementation(libs.kotlin.test)
-            implementation(libs.kotlin.test.junit)
-            implementation(libs.ktor.websockets)
-            implementation(libs.ktor.cio)
-            implementation(libs.ktor.client.okhttp)
         }
 
         getByName("androidDeviceTest").dependencies {
@@ -166,6 +156,7 @@ kotlin {
             implementation(libs.kotlin.test)
             implementation(libs.kotlin.test.junit)
             implementation(libs.coroutines.test)
+            implementation(libs.settings.test)
         }
     }
 }
@@ -182,10 +173,6 @@ afterEvaluate {
     tasks.named("kspAndroidMain") {
         dependsOn("kspCommonMainKotlinMetadata")
     }
-    // Boulder: Room auch fuer die JVM, siehe kspJvm unten.
-    tasks.named("kspKotlinJvm") {
-        dependsOn("kspCommonMainKotlinMetadata")
-    }
 
     if (enableIosTarget) {
         tasks.named("kspKotlinIosArm64") {
@@ -199,9 +186,6 @@ afterEvaluate {
 
 dependencies {
 //    add("kspCommonMainMetadata", libs.room.compiler)
-    // Boulder: Boulders Datenbanktests (Migrationen, Downgrade-Schutz, Naechte) laufen gegen die
-    // echte Room-Datenbank auf der JVM; ohne den Prozessor fehlt dort Database_Impl.
-    add("kspJvm", libs.room.compiler)
     add("kspCommonMainMetadata", project(":blobdbgen"))
     add("kspAndroid", libs.room.compiler)
 
@@ -223,4 +207,3 @@ dependencies {
         }
     }
 }*/
-

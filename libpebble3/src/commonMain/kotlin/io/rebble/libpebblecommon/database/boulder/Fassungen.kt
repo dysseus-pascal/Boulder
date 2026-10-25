@@ -14,14 +14,14 @@ import kotlin.time.Instant
 
 /**
  * Boulder: libpebble3.db zaehlt nur Upstream-Schritte, um diesen Versatz verschoben
- * (Upstream 49 = 1049). Boulders eigene Tabellen liegen in BoulderDatenbank (boulder.db),
- * mit eigener Zaehlung. Aus Cores AutoMigration(from = 49, to = 50) wird
- * from = UPSTREAM_VERSATZ + 49, to = UPSTREAM_VERSATZ + 50.
+ * (Upstream 50 = 1050). Boulders eigene Tabellen liegen in BoulderDatenbank (boulder.db),
+ * mit eigener Zaehlung. Aus Cores AutoMigration(from = 50, to = 51) wird
+ * from = UPSTREAM_VERSATZ + 50, to = UPSTREAM_VERSATZ + 51.
  */
 const val UPSTREAM_VERSATZ = 1000
 
 // Die Fassung des Schemas an einer Stelle: sichereNeuereDatenbank vergleicht damit.
-internal const val DATENBANK_VERSION = UPSTREAM_VERSATZ + 49
+internal const val DATENBANK_VERSION = UPSTREAM_VERSATZ + 50
 
 private val logger = Logger.withTag("BoulderFassungen")
 

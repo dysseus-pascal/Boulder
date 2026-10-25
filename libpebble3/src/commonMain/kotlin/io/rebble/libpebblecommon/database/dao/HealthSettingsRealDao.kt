@@ -30,6 +30,7 @@ import io.rebble.libpebblecommon.database.entity.Spo2PreferencesValue
 import io.rebble.libpebblecommon.database.entity.Spo2PreferencesValue.Companion.encodeToString
 import io.rebble.libpebblecommon.database.entity.UnitsDistanceValue
 import io.rebble.libpebblecommon.database.entity.UnitsDistanceValue.Companion.encodeToString
+import io.rebble.libpebblecommon.database.entity.updateHeartRateZonesFromAge
 import io.rebble.libpebblecommon.packets.blobdb.BlobResponse
 import io.rebble.libpebblecommon.services.blobdb.DbWrite
 import io.rebble.libpebblecommon.util.DataBuffer
@@ -160,6 +161,9 @@ interface HealthSettingsEntryRealDao : HealthSettingsEntryDao {
                 watchSynchHashcode = entry.recordHashCode(),
             )
         )
+        if (key == "activityPreferences" || key == "heartRatePreferences") {
+            updateHeartRateZonesFromAge()
+        }
         return BlobResponse.BlobStatus.Success
     }
 

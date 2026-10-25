@@ -38,12 +38,22 @@ die Regeln von Gravel, mit diesen Abweichungen:
 - Datalogging, Parser und Rohdaten-Tabellen der Minutendaten bleiben die Quelle;
   die Naechte rechnet die Boulder-Firmware (Tag 88 bzw. 0x4001, siehe `BoulderDls`).
 - Zwei Datenbanken: `libpebble3.db` zaehlt nur Upstream (Version =
-  `UPSTREAM_VERSATZ` 1000 + Upstream-Version, heute 1045); einzige Boulder-Reste
+  `UPSTREAM_VERSATZ` 1000 + Upstream-Version, heute 1050); einzige Boulder-Reste
   dort sind `spo2_readings` und `overlay_data.manual`. Eigene Tabellen nur in
-  `BoulderDatenbank` (`boulder.db`, eigene Zaehlung). Upstream-Patch mit
-  `git apply -3 --exclude='libpebble3/schema/*'`; aus Upstreams
-  `AutoMigration(from = 45, to = 46)` wird `from = UPSTREAM_VERSATZ + 45, to =
-  UPSTREAM_VERSATZ + 46`. `SchemaWaechterTest` vergleicht mit Upstream 45.
+  `BoulderDatenbank` (`boulder.db`, eigene Zaehlung). Aus Upstreams
+  `AutoMigration(from = 49, to = 50)` wird `from = UPSTREAM_VERSATZ + 49, to =
+  UPSTREAM_VERSATZ + 50`. `SchemaWaechterTest` vergleicht mit Upstream 50 (und mit 45, dem
+  Stand von 0.50 bis 0.53).
+- Core-Stand: 1.16.0.1 (Merge `d7292d166`). Cores Fassungen kommen per `git merge` ihres Tags
+  vom Remote `core` (`coredevices/mobileapp`, nie dorthin pushen). Cores Geschichte steckt seit
+  dem Neuanlegen des Repos mit anderen Kennungen darin; seit `d7292d166` ist Cores Commit
+  `721670d28` die Merge-Basis, ein Merge geht wieder direkt. Danach in `tools/boulder/vorlage.txt`
+  die Zeile `core` auf Cores Commit setzen (den zweiten Elternteil des Merges) und neu messen.
+- Nah an der Vorlage (Entscheid vom 25.10.2026): neue Boulder-Logik steht in eigenen Dateien, in
+  Cores Dateien nur ein Haken mit `// Boulder:`, der sie ruft. `tools/boulder/vorlage.txt` haelt
+  fest, wie viele Zeilen jede Core-Datei abweicht; `tools/boulder/vorlage_waechter.py` prueft das
+  in der CI vor den Tests (lokal ebenso aufrufen). Die Zahlen sollen nur sinken: eine weitere
+  Core-Datei oder mehr Zeilen brauchen einen Grund im Commit.
 - Rueckweg 0.50 -> 0.49 (oder aelter, per `adb install -d`): 0.50 hebt
   `libpebble3.db` auf 1045, und der alte Code von 0.49 (Fassung 50,
   `fallbackToDestructiveMigrationOnDowngrade`, ohne `DowngradeSchutz`) leert sie
@@ -72,8 +82,9 @@ die Regeln von Gravel, mit diesen Abweichungen:
   in `Akte.kt`), sonst stehen sie auf Reisen in der falschen Ortszeit.
 - Neuer eigener Code: deutsche Bezeichner und Kommentare, Kommentare erklaeren
   das WARUM.
-- Die Waechtertests in `:androidApp` lesen den Git-Index: nach dem Loeschen oder
-  Umbenennen von Dateien vor den Tests `git add -A`.
+- Boulders Datenbanktests in libpebble3 laufen als Android-Hosttests unter Robolectric (Room
+  liest beim Upsert die Meldung der SQLException, Androids Attrappe verwirft sie) und mit der
+  JVM-Fassung von sqlite-bundled (`libpebble3/build.gradle.kts`): Core hat das JVM-Ziel entfernt.
 
 ---
 

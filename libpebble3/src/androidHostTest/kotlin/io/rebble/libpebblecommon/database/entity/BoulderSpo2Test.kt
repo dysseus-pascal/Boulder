@@ -118,6 +118,17 @@ class BoulderSpo2Test {
     }
 
     @Test
+    fun einSatzMitNurEinemSchalterGehtNichtAnV442() = runTest {
+        val dao = dao()
+        val zeit = MillisecondInstant(Instant.fromEpochSeconds(1_780_000_000))
+        // Fehlt einer der beiden Schalter, wuerde er geraten: dann geht nichts.
+        dao.insertOrReplace(HealthSettingsEntry(SATZ, """{"measurementInterval":"OneHour","enabled":true}""", zeit))
+        assertNull(dao.wert(SATZ, b39))
+        dao.insertOrReplace(HealthSettingsEntry(SATZ, """{"measurementInterval":"OneHour","activityTrackingEnabled":true}""", zeit))
+        assertNull(dao.wert(SATZ, b39))
+    }
+
+    @Test
     fun derSatzVonDerUhrSetztAlleDreiZeilenUndGiltAlsSynchron() = runTest {
         val dao = dao()
         dao.setzeSpo2Einstellungen(Spo2Einstellungen(an = true, intervall = HRMonitoringInterval.TenMin, imSport = false))

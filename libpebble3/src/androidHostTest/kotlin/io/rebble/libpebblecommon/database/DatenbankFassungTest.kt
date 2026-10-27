@@ -177,10 +177,10 @@ class DatenbankFassungTest {
 
     // --- boulder.db ---
 
-    private fun schreibeNacht() = runBlocking {
+    private fun schreibeNacht(manuell: Boolean = false) = runBlocking {
         val db = getBoulderDatenbank(AppContext(TestKontext(ordner)))
         db.nachtDao().speichereNachtTeil(
-            NachtEntity(beginn, 7200, 30, 450, 400, 50, 40),
+            NachtEntity(beginn, 7200, 30, 450, 400, 50, 40, manuell = manuell),
             ersterTeil = true,
             listOf(NachtAbschnittEntity(beginn, 30, 200, 1), NachtAbschnittEntity(beginn, 200, 450, 2)),
         )
@@ -192,7 +192,7 @@ class DatenbankFassungTest {
         schreibeNacht()
         roh(boulderDatei) { it.execSQL("PRAGMA user_version = ${BOULDER_DB_VERSION + 1}") }
 
-        // Ohne Schutz wirft Room hier (keine Migration 2 -> 1); mit Schutz beginnt boulder.db neu.
+        // Ohne Schutz wirft Room hier (keine Migration zurueck); mit Schutz beginnt boulder.db neu.
         val db = getBoulderDatenbank(AppContext(TestKontext(ordner)))
         assertEquals(null, runBlocking { db.nachtDao().juengsteNacht() })
         db.close()
@@ -212,6 +212,68 @@ class DatenbankFassungTest {
         assertEquals(beginn, runBlocking { db.nachtDao().juengsteNacht()?.beginnUtc })
         db.close()
         assertEquals(listOf("boulder.db"), dbDateien())
+    }
+
+    private fun boulderSchema(fassung: Int): JsonObject =
+        Json.parseToJsonElement(File("schema/io.rebble.libpebblecommon.database.boulder.BoulderDatenbank/$fassung.json").readText())
+            .jsonObject.getValue("database").jsonObject
+
+    /**
+     * boulder.db 1 -> 2 (Spalte manuell): eine Datei von 0.50 bis 0.60.0, gebaut aus dem Export 1,
+     * behaelt jede Zeile, auch den Vermerk des Umzugs - fehlte er, zoege der Umzug noch einmal und
+     * scheiterte an den Naechten, die schon da sind. Room prueft nach der Migration das Schema.
+     */
+    @Test
+    fun boulderMigration1() {
+        val schema1 = boulderSchema(1)
+        roh(boulderDatei) { c ->
+            for (e in schema1.getValue("entities").jsonArray.map { it.jsonObject }) {
+                c.execSQL(e.getValue("createSql").jsonPrimitive.content.replace("\${TABLE_NAME}", e.tabelle))
+            }
+            schema1.getValue("setupQueries").jsonArray.forEach { c.execSQL(it.jsonPrimitive.content) }
+            c.execSQL("INSERT INTO boulder_nacht VALUES ($beginn, 7200, 30, 450, 400, 50, 40, 80, 71, 1, 3)")
+            c.execSQL("INSERT INTO boulder_nacht_abschnitt VALUES ($beginn, 30, 450, 1)")
+            c.execSQL("INSERT INTO boulder_nacht_hrv VALUES ($beginn, 60, 45, 52)")
+            c.execSQL("INSERT INTO boulder_umzug VALUES (1, 1, 1, 1, 1790000000000)")
+            c.execSQL("PRAGMA user_version = 1")
+        }
+
+        val db = getBoulderDatenbank(AppContext(TestKontext(ordner)))
+        val dao = db.nachtDao()
+        runBlocking {
+            // Was vor der Spalte kam, war keine Nacht von Hand.
+            assertEquals(listOf(NachtEntity(beginn, 7200, 30, 450, 400, 50, 40, 80, 71, true, 3, manuell = false)), dao.naechte(0, Long.MAX_VALUE))
+            assertEquals(listOf(NachtAbschnittEntity(beginn, 30, 450, 1)), dao.abschnitte(beginn))
+            assertEquals(listOf(45), dao.hrv(beginn).map { it.rmssd })
+            assertEquals(1L, db.umzugDao().vermerk()?.naechte)
+            // Danach nimmt sie eine Nacht von Hand, am naechsten Tag um 14 Uhr UTC begonnen.
+            val vonHand = NachtEntity(beginn + 20 * 3600, 7200, 0, 25, 25, 0, 0, manuell = true)
+            dao.speichereNachtTeil(vonHand, ersterTeil = true, emptyList())
+            assertEquals(vonHand, dao.nacht(vonHand.beginnUtc))
+        }
+        db.close()
+        roh(boulderDatei) { c ->
+            assertEquals(BOULDER_DB_VERSION.toLong(), c.zahl("PRAGMA user_version"))
+            assertEquals(
+                boulderSchema(BOULDER_DB_VERSION).getValue("identityHash").jsonPrimitive.content,
+                c.text("SELECT identity_hash FROM room_master_table WHERE id = 42"),
+            )
+        }
+        assertEquals(listOf("boulder.db"), dbDateien())
+        assertTrue(beiseite().isEmpty())
+    }
+
+    @Test
+    fun zurueckAufBoulderFassung1LiegtDieDateiMitDerNachtVonHandDaneben() {
+        // Der Rueckweg auf 0.60.0 oder aelter (ab 0.50): deren Schutz kennt boulder.db bis Fassung 1
+        // und legt die Datei von heute beiseite, bevor Room sie sieht - die Naechte bleiben darin.
+        schreibeNacht(manuell = true)
+        val jetzt = Instant.fromEpochMilliseconds(1_790_500_000_000)
+        DowngradeSchutz(BundledSQLiteDriver(), 1, object : Clock { override fun now() = jetzt })
+            .open(boulderDatei.absolutePath).close()
+        val kopie = beiseite().single { it.name.endsWith(".db") }
+        assertEquals("boulder-v$BOULDER_DB_VERSION-${jetzt.toEpochMilliseconds()}.db", kopie.name)
+        roh(kopie) { assertEquals(1, it.zahl("SELECT COUNT(*) FROM boulder_nacht WHERE manuell = 1")) }
     }
 
     // --- Migrationen ---

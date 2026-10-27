@@ -241,6 +241,7 @@ internal object Gesundheitsrechnung {
             abschnitte = abschnitte.map { Nacht.Abschnitt(zeit(it.von), zeit(it.bis), it.phase) },
             ruhepuls = e.ruhepuls.takeIf { it > 0 },
             hrv = e.hrv.takeIf { it > 0 },
+            manuell = e.manuell,
         )
     }
 

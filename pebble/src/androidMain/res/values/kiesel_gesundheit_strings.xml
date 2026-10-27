@@ -170,6 +170,8 @@
     <!-- Health 0.51: das Tagesband, das Sport-Feld und die Zeile Stack -->
     <string name="ks_tb_ruhe">resting %1$d</string>
     <string name="ks_tb_hrv">HRV %1$d</string>
+    <!-- Eine Nacht von Hand, klein wie die anderen Teile ihres Texts ("resting 55"). -->
+    <string name="ks_tb_manuell">manual</string>
     <string name="ks_tb_offen">%1$d open</string>
     <string name="ks_tb_buendel">+%1$d</string>
     <string name="ks_sf_letztes">%1$s %2$s · %3$s</string>
@@ -199,6 +201,7 @@
     <string name="ks_n_tiefster">lowest %1$s</string>
     <string name="ks_n_sieben">LAST NIGHTS</string>
     <string name="ks_n_schnitt_h">avg %1$s</string>
+    <string name="ks_n_manuell">Manual</string>
     <!-- Eintrag im Zeitstrahl bearbeiten (langer Druck) -->
     <string name="ks_b_loeschen">Delete</string>
     <string name="ks_b_speichern">Save</string>

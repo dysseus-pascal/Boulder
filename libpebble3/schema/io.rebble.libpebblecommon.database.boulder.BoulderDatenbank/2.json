@@ -1,0 +1,215 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 2,
+    "identityHash": "d114a5bb74d2167f8d627bf4760c2be7",
+    "entities": [
+      {
+        "tableName": "boulder_nacht",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`beginnUtc` INTEGER NOT NULL, `utcZuLokal` INTEGER NOT NULL, `einschlafen` INTEGER NOT NULL, `aufwachen` INTEGER NOT NULL, `schlafMinuten` INTEGER NOT NULL, `ruhepuls` INTEGER NOT NULL, `hrv` INTEGER NOT NULL, `akkuBeginn` INTEGER DEFAULT NULL, `akkuEnde` INTEGER DEFAULT NULL, `geladen` INTEGER NOT NULL DEFAULT 0, `messstufe` INTEGER DEFAULT NULL, `manuell` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`beginnUtc`))",
+        "fields": [
+          {
+            "fieldPath": "beginnUtc",
+            "columnName": "beginnUtc",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "utcZuLokal",
+            "columnName": "utcZuLokal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "einschlafen",
+            "columnName": "einschlafen",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "aufwachen",
+            "columnName": "aufwachen",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "schlafMinuten",
+            "columnName": "schlafMinuten",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ruhepuls",
+            "columnName": "ruhepuls",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hrv",
+            "columnName": "hrv",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "akkuBeginn",
+            "columnName": "akkuBeginn",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "akkuEnde",
+            "columnName": "akkuEnde",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "geladen",
+            "columnName": "geladen",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "messstufe",
+            "columnName": "messstufe",
+            "affinity": "INTEGER",
+            "defaultValue": "NULL"
+          },
+          {
+            "fieldPath": "manuell",
+            "columnName": "manuell",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "beginnUtc"
+          ]
+        }
+      },
+      {
+        "tableName": "boulder_nacht_abschnitt",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`beginnUtc` INTEGER NOT NULL, `von` INTEGER NOT NULL, `bis` INTEGER NOT NULL, `phase` INTEGER NOT NULL, PRIMARY KEY(`beginnUtc`, `von`))",
+        "fields": [
+          {
+            "fieldPath": "beginnUtc",
+            "columnName": "beginnUtc",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "von",
+            "columnName": "von",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bis",
+            "columnName": "bis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "phase",
+            "columnName": "phase",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "beginnUtc",
+            "von"
+          ]
+        }
+      },
+      {
+        "tableName": "boulder_nacht_hrv",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`beginnUtc` INTEGER NOT NULL, `minute` INTEGER NOT NULL, `rmssd` INTEGER NOT NULL, `puls` INTEGER NOT NULL, PRIMARY KEY(`beginnUtc`, `minute`))",
+        "fields": [
+          {
+            "fieldPath": "beginnUtc",
+            "columnName": "beginnUtc",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "minute",
+            "columnName": "minute",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rmssd",
+            "columnName": "rmssd",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "puls",
+            "columnName": "puls",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "beginnUtc",
+            "minute"
+          ]
+        }
+      },
+      {
+        "tableName": "boulder_umzug",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `naechte` INTEGER NOT NULL, `abschnitte` INTEGER NOT NULL, `hrv` INTEGER NOT NULL, `zeitMs` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "naechte",
+            "columnName": "naechte",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "abschnitte",
+            "columnName": "abschnitte",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hrv",
+            "columnName": "hrv",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "zeitMs",
+            "columnName": "zeitMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd114a5bb74d2167f8d627bf4760c2be7')"
+    ]
+  }
+}

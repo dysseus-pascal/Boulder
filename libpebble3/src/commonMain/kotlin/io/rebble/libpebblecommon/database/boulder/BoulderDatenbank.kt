@@ -1,5 +1,6 @@
 package io.rebble.libpebblecommon.database.boulder
 
+import androidx.room.AutoMigration
 import androidx.room.ConstructedBy
 import androidx.room.Dao
 import androidx.room.Entity
@@ -21,7 +22,8 @@ import kotlin.time.Clock
 internal const val BOULDER_DB_DATEINAME = "boulder.db"
 
 // Die Fassung dieser Datenbank, an einer Stelle - der Downgrade-Schutz vergleicht damit.
-internal const val BOULDER_DB_VERSION = 1
+// 2: boulder_nacht.manuell (Schlafmodus von Hand).
+internal const val BOULDER_DB_VERSION = 2
 
 /**
  * Boulders eigene Datenbank, neben libpebble3.db.
@@ -39,6 +41,10 @@ internal const val BOULDER_DB_VERSION = 1
     ],
     version = BOULDER_DB_VERSION,
     exportSchema = true,
+    // Room baut die Schritte aus den Exporten im Schema-Ordner: 1.json muss dort bleiben.
+    autoMigrations = [
+        AutoMigration(from = 1, to = 2),
+    ],
 )
 @ConstructedBy(BoulderDatenbankKonstruktor::class)
 abstract class BoulderDatenbank : RoomDatabase() {

@@ -245,6 +245,19 @@ class NachtBildTest {
         assertTrue(mitten.zipWithNext().all { (a, b) -> b > a }, "Spuren von oben nach unten liegen bei $mitten")
     }
 
+    /** Eine Nacht von Hand (Schlafmodus der Uhr): "Manual" hinter dem Urteil unter der Dauer, sonst nicht. */
+    @Test
+    fun eine_nacht_von_hand_sagt_es_hinter_dem_urteil() {
+        val manuell = context.getString(R.string.ks_n_manuell)
+        val urteile = listOf(R.string.ks_h_urteil_ausgeruht, R.string.ks_h_urteil_kurz, R.string.ks_h_urteil_sehr_kurz).map { context.getString(it) }
+        val nacht = Healthbeispiel.nachtAb(abend)
+        val gewoehnlich = zeichne("schlafansicht", detail(nacht)).texte
+        val urteil = gewoehnlich.single { it in urteile }
+        assertTrue(gewoehnlich.none { manuell in it }, "$gewoehnlich")
+        val vonHand = zeichne("schlafansicht-von-hand", detail(nacht.copy(manuell = true))).texte
+        assertTrue("$urteil · $manuell" in vonHand, "$vonHand")
+    }
+
     /** Eine Nacht ohne erkannte Phasen: die Karte mit der einen Bahn steht, eine Zeile voller Nullen nicht. */
     @Test
     fun ohne_phasen_keine_phasenzeile() {

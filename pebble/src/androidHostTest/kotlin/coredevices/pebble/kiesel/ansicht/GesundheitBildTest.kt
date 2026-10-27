@@ -237,6 +237,17 @@ class GesundheitBildTest {
         assertTrue(rot(9, 50) > 0 && rot(10, 30) > 0, "keine Linie vor oder nach der Luecke")
     }
 
+    /** Eine Nacht von Hand (Schlafmodus der Uhr) sagt es im Text der Nacht, gleich hinter der Dauer. */
+    @Test
+    @Config(sdk = [35], qualifiers = "w412dp-h600dp-xxhdpi")
+    fun eine_nacht_von_hand_heisst_im_band_manual() {
+        val b = Healthbeispiel
+        val vonHand = b.stand.copy(nacht = b.nacht.copy(manuell = true))
+        val satz = band(zeichne("tagesband-von-hand") { Tagesband(vonHand, emptyList(), b.jetzt, false, b.wege) {} })
+            .config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().single()
+        assertTrue("7:59 h · manual · resting 55 · HRV 50" in satz, satz)
+    }
+
     @Test
     @Config(sdk = [35], qualifiers = "w412dp-h600dp-xxhdpi")
     fun kein_alter_puls_neben_dem_jetzt() {

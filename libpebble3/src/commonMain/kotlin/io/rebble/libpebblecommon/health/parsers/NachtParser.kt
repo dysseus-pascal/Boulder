@@ -117,7 +117,8 @@ fun parseNachtData(
             nacht = nacht.copy(
                 akkuBeginn = akkuBeginn.takeIf { it != 0xFF },
                 akkuEnde = akkuEnde.takeIf { it != 0xFF },
-                geladen = flags and 1 != 0,
+                geladen = flags and FLAG_GELADEN != 0,
+                manuell = flags and FLAG_MANUELL != 0,
                 messstufe = stufe.takeIf { it in 1..5 },
             )
         }
@@ -137,6 +138,12 @@ private const val ABSCHNITT_BYTES = 5
 private const val ABSCHNITTE_JE_SATZ = 60
 private const val ANHANG_OFFSET = KOPF_BYTES + ABSCHNITTE_JE_SATZ * ABSCHNITT_BYTES
 private const val ANHANG_BYTES = 4
+// Die Bits von flags (NACHT_DLS_FLAG_GELADEN, NACHT_DLS_FLAG_MANUELL der Firmware). Ein neues
+// Bit kommt OHNE NEUE FASSUNG (MANUELL ab b40): eine aeltere App liest den Satz weiter und
+// sieht eine gewoehnliche Nacht. Darum verwirft dieser Leser keinen Satz wegen eines Bits,
+// das er nicht kennt.
+private const val FLAG_GELADEN = 0x01
+private const val FLAG_MANUELL = 0x02
 // Die Fassungen von NachtDlsRecord, deren Aufbau diese App kennt (NACHT_DLS_VERSION in
 // boulder/nacht.h). Eine neue Fassung kommt hier erst mit ihrem Leser dazu - und in die
 // Notizen ihres Firmware-Releases die Zeile "Mindest-App" (MindestApp in :pebble).

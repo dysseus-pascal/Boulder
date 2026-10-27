@@ -3,6 +3,7 @@ package coredevices.pebble.kiesel
 import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
 import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
+import androidx.health.connect.client.records.metadata.Metadata
 import coredevices.pebble.health.nachtAlsSaetze
 import io.rebble.libpebblecommon.database.entity.NachtAbschnittEntity
 import io.rebble.libpebblecommon.database.entity.NachtEntity
@@ -28,6 +29,24 @@ class NachtSaetzeTest {
         )
         assertEquals(51L, saetze.filterIsInstance<RestingHeartRateRecord>().single().beatsPerMinute)
         assertEquals(44.0, saetze.filterIsInstance<HeartRateVariabilityRmssdRecord>().single().heartRateVariabilityMillis)
+    }
+
+    @Test
+    fun schlaf_von_hand_ist_aktiv_aufgezeichnet_mit_derselben_kennung() {
+        val n = NachtEntity(b, 7200, einschlafen = 0, aufwachen = 40, schlafMinuten = 35, ruhepuls = 51, hrv = 44, manuell = true)
+        val abschnitte = listOf(NachtAbschnittEntity(b, 0, 40, 1))
+        val vonHand = nachtAlsSaetze(n, abschnitte)
+        val schlaf = vonHand.filterIsInstance<SleepSessionRecord>().single().metadata
+        assertEquals(Metadata.RECORDING_METHOD_ACTIVELY_RECORDED, schlaf.recordingMethod)
+        assertEquals("boulder-nacht-$b", schlaf.clientRecordId)
+        // Ruhepuls und HRV rechnet die Uhr auch hier selbst.
+        assertEquals(
+            listOf(Metadata.RECORDING_METHOD_AUTOMATICALLY_RECORDED, Metadata.RECORDING_METHOD_AUTOMATICALLY_RECORDED),
+            vonHand.drop(1).map { it.metadata.recordingMethod },
+        )
+        val gewoehnlich = nachtAlsSaetze(n.copy(manuell = false), abschnitte).filterIsInstance<SleepSessionRecord>().single().metadata
+        assertEquals(Metadata.RECORDING_METHOD_AUTOMATICALLY_RECORDED, gewoehnlich.recordingMethod)
+        assertEquals(schlaf.clientRecordId, gewoehnlich.clientRecordId)
     }
 
     @Test

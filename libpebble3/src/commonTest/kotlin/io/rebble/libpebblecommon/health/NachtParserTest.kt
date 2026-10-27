@@ -17,13 +17,16 @@ class NachtParserTest {
         beginn: Long = 1_790_445_600,
         teil: Int = 0,
         teile: Int = 1,
+        flags: Int = 0,
+        // Der Anhang (Akku, flags, Messstufe) wie in Fassung 3; true auch fuer eine Fassung, die verworfen werden soll.
+        anhang: Boolean = version and 2 != 0,
         abschnitte: List<Triple<Int, Int, Int>>,
     ): ByteArray {
         val b = mutableListOf<Byte>()
         fun u8(v: Int) { b += (v and 0xFF).toByte() }
         fun u16(v: Int) { u8(v); u8(v shr 8) }
         fun u32(v: Long) { for (i in 0 until 4) u8((v shr (8 * i)).toInt()) }
-        u16(version); u16(if (version and 2 != 0) 328 else 324)
+        u16(version); u16(if (anhang) 328 else 324)
         u32(beginn); u32(7200)
         u16(137); u16(660); u16(490)
         u8(52); u8(teil); u8(teile)
@@ -31,8 +34,8 @@ class NachtParserTest {
         u8(abschnitte.size)
         abschnitte.forEach { (von, bis, phase) -> u16(von); u16(bis); u8(phase) }
         repeat(60 - abschnitte.size) { repeat(5) { u8(0) } }
-        if (version and 2 != 0) {
-            u8(78); u8(69); u8(0); u8(3)
+        if (anhang) {
+            u8(78); u8(69); u8(flags); u8(3)
         }
         return b.toByteArray()
     }
@@ -75,8 +78,38 @@ class NachtParserTest {
         assertEquals(78, t.nacht.akkuBeginn)
         assertEquals(69, t.nacht.akkuEnde)
         assertEquals(false, t.nacht.geladen)
+        assertEquals(false, t.nacht.manuell)
         assertEquals(3, t.nacht.messstufe)
         assertEquals(1, t.abschnitte.size)
+    }
+
+    @Test
+    fun schlafVonHandIstBit1VonFlags() {
+        // Schlafmodus von Hand (b40): Bit 1, unabhaengig von Bit 0 (geladen); beginn ist der
+        // Beginn von Hand, hier 14:20 UTC.
+        fun nacht(flags: Int) = parseNachtData(
+            satz(version = 3, beginn = 1_790_518_800, flags = flags, abschnitte = listOf(Triple(137, 200, 1))),
+            328u,
+            vorwaerts = true,
+        ).single().nacht
+        assertEquals(listOf(true, false), nacht(0x02).let { listOf(it.manuell, it.geladen) })
+        assertEquals(listOf(false, true), nacht(0x01).let { listOf(it.manuell, it.geladen) })
+        assertEquals(listOf(true, true), nacht(0x03).let { listOf(it.manuell, it.geladen) })
+        assertEquals(1_790_518_800L, nacht(0x02).beginnUtc)
+        // Bits, die diese App nicht kennt, verwerfen den Satz nicht: die Firmware fuegt sie ohne neue Fassung an.
+        assertEquals(listOf(true, true, 78, 3), nacht(0xFF).let { listOf(it.manuell, it.geladen, it.akkuBeginn, it.messstufe) })
+    }
+
+    @Test
+    fun schlafVonHandBleibtFassung3() {
+        // Mit dem Bit kommt keine neue Fassung: unter den neuen Tags (vorwaerts) gilt weiter nur 3,
+        // eine andere landet auch mit dem Bit bei den verworfenen, statt geraten zu werden.
+        for (version in listOf(1, 2, 4, 5, 7)) {
+            val verworfen = mutableListOf<String>()
+            val satz = satz(version = version, flags = 0x02, anhang = true, abschnitte = listOf(Triple(137, 200, 1)))
+            assertTrue(parseNachtData(satz, 328u, vorwaerts = true) { verworfen += it }.isEmpty(), "Fassung $version")
+            assertEquals(listOf("Nacht: record 0 has unknown version $version"), verworfen)
+        }
     }
 
     @Test

@@ -55,7 +55,9 @@ internal fun nachtAlsSaetze(n: NachtEntity, abschnitte: List<NachtAbschnittEntit
         SleepSessionRecord(
             startTime = zeit(n.einschlafen), startZoneOffset = versatz(zeit(n.einschlafen)),
             endTime = aufwachen, endZoneOffset = versatz(aufwachen),
-            metadata = Metadata.autoRecorded(geraet, nachtKennung(n)),
+            // Von Hand begonnen und beendet: fuer die Akte eine aktiv aufgezeichnete Sitzung. Die
+            // Kennung bleibt dieselbe, damit die Akte die Nacht weiter ueber sie ersetzt.
+            metadata = if (n.manuell) Metadata.activelyRecorded(geraet, nachtKennung(n)) else Metadata.autoRecorded(geraet, nachtKennung(n)),
             stages = phasenImSchlaf(n, abschnitte)
                 .map { SleepSessionRecord.Stage(zeit(it.von), zeit(it.bis), schlafstufe(it.phase)) },
         )

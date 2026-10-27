@@ -150,7 +150,7 @@ class NachtUmzugTest {
         assertEquals(1, alt.spo2Dao().getSpo2Readings(0, Long.MAX_VALUE).size)
         assertTrue(alt.healthDao().getAllOverlayEntries().single().manual)
         assertEquals(DATENBANK_VERSION.toLong(), zahl(alt, "PRAGMA user_version"))
-        assertEquals(1L, zahl(neu, "PRAGMA user_version"))
+        assertEquals(BOULDER_DB_VERSION.toLong(), zahl(neu, "PRAGMA user_version"))
     }
 
     @Test
@@ -263,7 +263,7 @@ class NachtUmzugTest {
         // Der Datalogging-Weg: speichern wirft, also NichtGespeichert - kein ACK, die Uhr schickt erneut.
         legeAlteDbAn(50, ::fuelleNaechte)
         val neu = neu()
-        neu.useWriterConnection { t -> t.usePrepared("INSERT INTO boulder_nacht VALUES ($n2, 0, 0, 0, 0, 0, 0, NULL, NULL, 0, NULL)") { it.step() } }
+        neu.useWriterConnection { t -> t.usePrepared("INSERT INTO boulder_nacht VALUES ($n2, 0, 0, 0, 0, 0, 0, NULL, NULL, 0, NULL, 0)") { it.step() } }
         val alt = alt()
         val verarbeitung = HealthDataProcessor(
             LibPebbleCoroutineScope(CoroutineName("test")),

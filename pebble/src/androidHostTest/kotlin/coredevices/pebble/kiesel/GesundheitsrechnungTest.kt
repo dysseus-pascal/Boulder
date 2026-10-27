@@ -35,6 +35,13 @@ class GesundheitsrechnungTest {
         assertNull(n.ruhepuls)
         assertEquals(42, n.hrv)
         assertTrue(!n.mitPhasen)
+        assertTrue(!n.manuell)
+    }
+
+    @Test
+    fun die_nacht_von_hand_bleibt_von_hand() {
+        val e = NachtEntity(beginn, 7200, einschlafen = 0, aufwachen = 25, schlafMinuten = 25, ruhepuls = 0, hrv = 0, manuell = true)
+        assertTrue(Gesundheitsrechnung.nacht(e, emptyList()).manuell)
     }
 
     @Test

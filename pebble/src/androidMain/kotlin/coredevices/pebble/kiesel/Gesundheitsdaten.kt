@@ -42,6 +42,8 @@ internal data class Nacht(
     val abschnitte: List<Abschnitt>,
     val ruhepuls: Int?,
     val hrv: Int?,
+    /** Von Hand begonnen (Schlafmodus der Uhr), auch am Tag: Nachtansicht und Tagesband sagen es dazu. */
+    val manuell: Boolean = false,
 ) {
     data class Abschnitt(val von: Instant, val bis: Instant, val phase: Int)
     val mitPhasen: Boolean get() = Gesundheitsrechnung.mitPhasen(phasen)

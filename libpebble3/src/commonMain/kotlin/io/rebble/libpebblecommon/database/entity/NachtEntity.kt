@@ -35,6 +35,12 @@ data class NachtEntity(
     /** Die Messstufe dieser Nacht (1..5); null bei aelterer Firmware. */
     @ColumnInfo(defaultValue = "NULL")
     val messstufe: Int? = null,
+    /**
+     * Von Hand begonnen und beendet (Schlafmodus der Uhr, ab b40). [beginnUtc] ist dann der
+     * Beginn von Hand und kann zu jeder Tageszeit liegen, nicht nur am Abend.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val manuell: Boolean = false,
 )
 
 /**

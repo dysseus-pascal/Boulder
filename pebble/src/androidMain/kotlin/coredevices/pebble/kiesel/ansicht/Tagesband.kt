@@ -413,10 +413,11 @@ internal fun Tagesband(
     bearbeite?.let { b -> Bearbeitungsblatt(b, onDismiss = { bearbeite = null }) { bearbeite = null; geaendert() } }
 }
 
-/** "7:59 h · resting 55 · HRV 50" - was fehlt, entfaellt. */
+/** "7:59 h · resting 55 · HRV 50", von Hand "7:59 h · manual · …" - was fehlt, entfaellt. */
 @Composable
 private fun schlaftext(n: Nacht): String = listOfNotNull(
     Formate.dauer(n.schlafMinuten.toLong()),
+    if (n.manuell) stringResource(R.string.ks_tb_manuell) else null,
     n.ruhepuls?.let { stringResource(R.string.ks_tb_ruhe, it) },
     n.hrv?.let { stringResource(R.string.ks_tb_hrv, it) },
 ).joinToString(" · ")

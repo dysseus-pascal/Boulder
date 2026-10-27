@@ -107,17 +107,18 @@ internal fun NachtInhalt(d: Gesundheitsdaten.NachtDetail, blaettern: (Long) -> U
         Kasten {
             Column(Modifier.padding(INNEN), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 val urteil = Gesundheitsrechnung.schlafurteil(n.schlafMinuten, Gesundheitsziele.ziele(LocalContext.current).schlafMin)
+                val urteilText = stringResource(
+                    when (urteil) {
+                        Schlafurteil.AUSGERUHT -> R.string.ks_h_urteil_ausgeruht
+                        Schlafurteil.KURZ -> R.string.ks_h_urteil_kurz
+                        Schlafurteil.SEHR_KURZ -> R.string.ks_h_urteil_sehr_kurz
+                    }
+                )
                 // Das Urteil als Unterzeile des Hauptwerts in einem Ton, der Schrift traegt -
                 // das Pastell der Phase, das es vorher trug, kam hell auf 2,3:1.
                 Hauptwert(
                     Formate.stundenMinuten(n.schlafMinuten), "h", groesse = 52, einheitGroesse = 22,
-                    unter = stringResource(
-                        when (urteil) {
-                            Schlafurteil.AUSGERUHT -> R.string.ks_h_urteil_ausgeruht
-                            Schlafurteil.KURZ -> R.string.ks_h_urteil_kurz
-                            Schlafurteil.SEHR_KURZ -> R.string.ks_h_urteil_sehr_kurz
-                        }
-                    ),
+                    unter = listOfNotNull(urteilText, if (n.manuell) stringResource(R.string.ks_n_manuell) else null).joinToString(" · "),
                     unterFarbe = if (urteil == Schlafurteil.AUSGERUHT) Farben.schlaf.ton() else Farben.warnung.ton(),
                 )
                 Box(Modifier.padding(top = 6.dp)) {

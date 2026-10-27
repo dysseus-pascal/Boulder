@@ -64,6 +64,12 @@ die Regeln von Gravel, mit diesen Abweichungen:
   0.49 jede neue Nacht (0x4001/0x4002 nach dem ACK). Vorher `libpebble3.db` und
   `boulder.db` sichern und die Uhr zuerst auf b24 stellen. Im Code nicht zu
   beheben: das Leeren macht die alte Fassung.
+- Naechte von Hand (Schlafmodus der Uhr, ab Firmware b40): Bit 0x02 in `flags` des Nachtsatzes,
+  die Fassung bleibt 3. `boulder.db` ist darum Fassung 2 (Spalte `boulder_nacht.manuell`,
+  `AutoMigration(from = 1, to = 2)`). Rueckweg auf 0.60.0 oder aelter (bis 0.50): deren
+  `DowngradeSchutz` kennt nur Fassung 1 und legt die Datei nach `beiseite/boulder-v2-<ms>.db`;
+  Room beginnt eine neue, in die der Umzug nur die Naechte von vor 0.50 holt. Die uebrigen sind
+  dort unsichtbar, nicht geloescht - auch nach dem Wiederaufstieg holt sie nur Handarbeit zurueck.
 - Firmware kommt aus den Releases von `dysseus-pascal/boulder-firmware`
   (`vX.Y.Z-bN`, siehe `GithubReleases.kt`). Ihr Quellcode liegt oeffentlich in
   `dysseus-pascal/PebbleOS` (Standardzweig `v2`). Dort ist auch der Zweig `notizen` oeffentlich:

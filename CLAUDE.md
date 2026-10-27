@@ -74,6 +74,10 @@ die Regeln von Gravel, mit diesen Abweichungen:
   gemeinsame Git-Geschichte. Nicht uebernommen wurde Gravels Firmware-Auswahl
   (Changelog-Liste, Build-Picker, Firmware-Kanal): sie boete Core-Builds an und
   ersetzte die Boulder-Firmware. Neue Oberflaechentexte sagen "Boulder", nicht "Gravel".
+- Copyright: Der README-Abschnitt "Credits, copyright and license" nennt Core Devices, Gravel
+  (samt den uebernommenen Dateien), Boulder und die Schrift Inter; die GPL verlangt diese
+  Vermerke. Wer Code aus einem anderen Projekt uebernimmt, traegt ihn dort nach, und kein
+  Vermerk wird geloescht (0.1.0 hatte Gravels Zeile entfernt, Issue #1).
 - Texte nur in den Sprachen, die Gravel hat (derzeit Englisch).
 - Der Gravel-Teil unten ist Gravels Original (Stand 0.3.3); seine Regeln gelten weiter. Was
   dort F-Droid, `FdroidGuardrailsTest`, `version.properties` und `changelogs/`

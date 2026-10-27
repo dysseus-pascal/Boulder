@@ -198,8 +198,13 @@ The firmware is open source, just like the app: its code lives in [dysseus-pasca
 4. **Pick your add-ons** if you like: Drinktervall and SupCycle from the Pebble App Store.
 5. **Wear it.** Your first night tells you more than you'd think.
 
-## Credits
+## Credits, copyright and license
 
-Boulder is an independent, unofficial project. It is built on the open-source Pebble app by [Core Devices](https://github.com/coredevices/mobileapp) and grew out of Gravel and Kiesel-Helper. It is not affiliated with or endorsed by Core Devices. Pebble and Pebble Time are trademarks of their respective owners.
+Boulder is an independent, unofficial project. It is built on the open-source Pebble app by [Core Devices](https://github.com/coredevices/mobileapp) and grew out of [Gravel](https://github.com/david-cant-code/pebble-app-degoogled) and Kiesel-Helper. It is not affiliated with or endorsed by Core Devices. Pebble and Pebble Time are trademarks of their respective owners.
 
-Licensed under the GNU GPL v3, see [LICENSE](LICENSE). Want to build it yourself? See [BUILDING.md](BUILDING.md).
+- The Pebble app by Core Devices: Copyright 2026 Core Devices LLC, used under the GNU GPL v3.
+- Includes code from Gravel, © david-cant-code and contributors, GPLv3: the signed firmware install path (`VerifiedFirmwareInstaller`, `GithubReleases`, `FirmwareReleaseSelection`, `FirmwareArtifactExpectations`, `ForkFirmwareInstallUi`) and its tests, as well as [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and the Gravel part of [CLAUDE.md](CLAUDE.md).
+- Boulder's own code, including what came from Kiesel-Helper: © 2026 dysseus-pascal, GPLv3.
+- The Inter typeface (version 4.001): copyright 2016 The Inter Project Authors, SIL Open Font License 1.1, see [LICENSE-Inter-OFL](LICENSE-Inter-OFL).
+
+Boulder is licensed under the GNU GPL v3, see [LICENSE](LICENSE). Want to build it yourself? See [BUILDING.md](BUILDING.md).

@@ -49,6 +49,10 @@ die Regeln von Gravel, mit diesen Abweichungen:
   dem Neuanlegen des Repos mit anderen Kennungen darin; seit `d7292d166` ist Cores Commit
   `721670d28` die Merge-Basis, ein Merge geht wieder direkt. Danach in `tools/boulder/vorlage.txt`
   die Zeile `core` auf Cores Commit setzen (den zweiten Elternteil des Merges) und neu messen.
+- Core nimmt jede Firmware mit Suffix fuer einen Eigenbau (kein Update-Hinweis, kein
+  automatisches Update); Boulders Fassungen heissen immer `vX.Y.Z-bN`, darum fragt
+  `FirmwareUpdateUiTracker` ueber `istEigenbau()` (`Eigenbau.kt`). Neue Suffix-Pruefungen von Core
+  beim Merge ebenso darauf pruefen.
 - Nah an der Vorlage (Entscheid vom 25.10.2026): neue Boulder-Logik steht in eigenen Dateien, in
   Cores Dateien nur ein Haken mit `// Boulder:`, der sie ruft. `tools/boulder/vorlage.txt` haelt
   fest, wie viele Zeilen jede Core-Datei abweicht; `tools/boulder/vorlage_waechter.py` prueft das

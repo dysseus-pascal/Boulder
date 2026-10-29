@@ -80,7 +80,7 @@ pebble/src/commonMain/composeResources/drawable/workout.png geloescht
 pebble/src/commonMain/kotlin/coredevices/pebble/PebbleAppDelegate.kt 16
 pebble/src/commonMain/kotlin/coredevices/pebble/PebbleDeepLinkHandler.kt 87
 pebble/src/commonMain/kotlin/coredevices/pebble/firmware/FirmwareUpdateCheck.kt 11
-pebble/src/commonMain/kotlin/coredevices/pebble/firmware/FirmwareUpdateUiTracker.kt 13
+pebble/src/commonMain/kotlin/coredevices/pebble/firmware/FirmwareUpdateUiTracker.kt 15
 pebble/src/commonMain/kotlin/coredevices/pebble/health/HealthSyncTracker.kt 18
 pebble/src/commonMain/kotlin/coredevices/pebble/health/PlatformHealthSync.kt 251
 pebble/src/commonMain/kotlin/coredevices/pebble/ui/CalendarScreen.kt 4

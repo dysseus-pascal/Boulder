@@ -67,7 +67,7 @@ class RealFirmwareUpdateUiTracker(
                 showUpdateAction = false,
             )
         }
-        if (watch.watchInfo.runningFwVersion.suffix?.isNotEmpty() == true) {
+        if (watch.watchInfo.runningFwVersion.istEigenbau()) { // Boulder: -bN ist kein Eigenbau
             logger.d { "Not doing notification of auto-update because watch is running custom build" }
             return
         }

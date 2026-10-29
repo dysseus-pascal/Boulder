@@ -156,6 +156,12 @@ object PebbleNavBarRoutes {
     data object WeatherRoute : NavBarRoute
 
     @Serializable
+    data object ComplicationsRoute : NavBarRoute
+
+    @Serializable
+    data object PreferredSourcesRoute : NavBarRoute
+
+    @Serializable
     data object CannedRepliesRoute : NavBarRoute
 
     @Serializable
@@ -170,6 +176,9 @@ object PebbleNavBarRoutes {
 
     @Serializable
     data class MyCollectionRoute(val appType: String) : NavBarRoute
+
+    @Serializable
+    data class TopChartsRoute(val sourceId: Int, val appType: String) : NavBarRoute
 
     @Serializable
     data object OfflineModelsRoute : NavBarRoute
@@ -359,6 +368,15 @@ fun NavGraphBuilder.addNavBarRoutes(
             appType = route.appType?.let { AppType.fromString(it) },
         )
     }
+    composableWithAnimations<PebbleNavBarRoutes.TopChartsRoute>(viewModel) {
+        val route: PebbleNavBarRoutes.TopChartsRoute = it.toRoute()
+        TopChartsScreen(
+            navBarNav = nav,
+            topBarParams = topBarParams,
+            sourceId = route.sourceId,
+            type = AppType.fromString(route.appType) ?: AppType.Watchface,
+        )
+    }
     composableWithAnimations<PebbleNavBarRoutes.MyCollectionRoute>(viewModel) {
         val route: PebbleNavBarRoutes.MyCollectionRoute = it.toRoute()
         MyCollectionScreen(
@@ -372,6 +390,12 @@ fun NavGraphBuilder.addNavBarRoutes(
     }
     composable<PebbleNavBarRoutes.WeatherRoute> {
         WeatherScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.ComplicationsRoute> {
+        ComplicationsScreen(nav, topBarParams)
+    }
+    composable<PebbleNavBarRoutes.PreferredSourcesRoute> {
+        PreferredSourcesScreen(nav, topBarParams)
     }
     composable<PebbleNavBarRoutes.CannedRepliesRoute> {
         CannedRepliesScreen(nav, topBarParams)

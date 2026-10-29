@@ -13,6 +13,7 @@ import io.rebble.libpebblecommon.connection.bt.ble.pebble.ReversePpogVersion
 import io.rebble.libpebblecommon.connection.endpointmanager.FirmwareUpdater
 import io.rebble.libpebblecommon.connection.endpointmanager.InstalledLanguagePack
 import io.rebble.libpebblecommon.connection.endpointmanager.LanguagePackInstallState
+import io.rebble.libpebblecommon.connection.endpointmanager.WatchLanguagePack
 import io.rebble.libpebblecommon.connection.endpointmanager.musiccontrol.MusicTrack
 import io.rebble.libpebblecommon.connection.endpointmanager.timeline.CustomTimelineActionHandler
 import io.rebble.libpebblecommon.database.asMillisecond
@@ -62,6 +63,7 @@ import io.rebble.libpebblecommon.plugin.ConfigMessageTarget
 import io.rebble.libpebblecommon.plugin.IconPixelSize
 import io.rebble.libpebblecommon.permissions.AppPermissionStatus
 import io.rebble.libpebblecommon.permissions.InstallReview
+import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
 import io.rebble.libpebblecommon.plugin.PluginCaller
 import io.rebble.libpebblecommon.plugin.NativePlugin
@@ -129,6 +131,9 @@ class FakeLibPebble : LibPebble {
     override suspend fun markNotificationRead(itemId: Uuid) {
         // No-op
     }
+
+    override suspend fun replyToDisplayedNotification(text: String, at: Instant) =
+        DisplayedNotificationReplyResult.Unsupported
 
     override suspend fun sendPing(cookie: UInt) {
         // No-op
@@ -208,7 +213,7 @@ class FakeLibPebble : LibPebble {
         return locker
     }
 
-    override fun appPermissionStatuses(id: Uuid): Flow<List<AppPermissionStatus>> = flowOf(emptyList())
+    override fun appPermissionStatuses(id: Uuid): Flow<List<AppPermissionStatus>?> = flowOf(emptyList())
 
     override fun getLockerApp(id: Uuid): Flow<LockerWrapper?> {
         return flow { emit(fakeLockerEntries.first()) }
@@ -235,8 +240,15 @@ class FakeLibPebble : LibPebble {
     override suspend fun addAppToLocker(app: LockerEntry, granted: Map<String, Boolean?>) {
     }
 
-    override suspend fun addAppsToLocker(apps: List<LockerEntry>) {
+    override suspend fun addAppsToLocker(apps: List<LockerEntry>, permissions: Map<Uuid, Map<String, PermissionDecisionRecord>>) {
     }
+
+    override suspend fun clearSideloaded(id: Uuid) {
+    }
+
+    override suspend fun mayLoadInConfigPage(uuid: Uuid, url: String): Boolean = true
+
+    override suspend fun configPageDomains(uuid: Uuid): List<String>? = null
 
     override fun restoreSystemAppOrder() {
     }
@@ -532,10 +544,17 @@ class FakeLibPebble : LibPebble {
 
     override fun pluginPermissions(): Flow<Map<String, PluginDefinedPermission>> = flowOf(emptyMap())
 
+    override fun permissionDecisions(): Flow<List<LockerAppPermission>> = flowOf(emptyList())
 
     override fun nativePlugins(): Flow<List<PluginMetadata>> = flowOf(emptyList())
 
     override fun configMessageTarget(pluginUuid: String): ConfigMessageTarget? = null
+
+    override val preferredSourcePlugins: StateFlow<Map<String, Uuid>> = MutableStateFlow(emptyMap())
+
+    override fun setPreferredSourcePlugin(category: String, item: String, pluginUuid: Uuid?) {}
+
+    override fun sourcePlugin(category: String, item: String): PluginMetadata? = null
 
     override suspend fun pluginFileHandles(appUuid: Uuid): List<FileHandleInfo> = emptyList()
 
@@ -827,10 +846,16 @@ class FakeConnectedDevice(
         return ImageBitmap(width, height).apply { readPixels(buffer) }
     }
 
-    override fun installLanguagePack(path: Path, name: String) {
+    override suspend fun setActiveLanguage(pack: WatchLanguagePack?): Boolean = false
+
+    override suspend fun listLanguagePacks(): List<WatchLanguagePack> = emptyList()
+
+    override suspend fun removeLanguagePack(pack: WatchLanguagePack): Boolean = false
+
+    override fun installLanguagePack(path: Path, name: String, activate: Boolean) {
     }
 
-    override fun installLanguagePack(url: String, name: String) {
+    override fun installLanguagePack(url: String, name: String, activate: Boolean) {
     }
 
     override val languagePackInstallState: LanguagePackInstallState =

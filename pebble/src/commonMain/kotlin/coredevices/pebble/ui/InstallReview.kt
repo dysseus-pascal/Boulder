@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -29,6 +30,7 @@ import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.ViewTimeline
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Watch
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.AlertDialog
@@ -36,8 +38,9 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedIconButton
-import androidx.compose.material3.Switch
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -62,6 +65,7 @@ import coredevices.util.relativeTime
 import io.rebble.libpebblecommon.permissions.AppPermissionStatus
 import io.rebble.libpebblecommon.permissions.InstallReview
 import io.rebble.libpebblecommon.permissions.PermissionKind
+import io.rebble.libpebblecommon.permissions.PermissionPolicy
 import io.rebble.libpebblecommon.permissions.PermissionStatus
 import io.ktor.http.decodeURLPart
 import io.rebble.libpebblecommon.permissions.domainOf
@@ -80,6 +84,7 @@ import kotlin.uuid.Uuid
 fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?) -> Unit) {
     val defined = rememberPluginPermissions()
     val decisions = remember(review) { mutableStateMapOf<String, Boolean>() }
+    val policy = rememberLibPebble().config.collectAsState().value.watchConfig.permissionPolicy
     // Allowing WriteFiles includes reading, so ReadFiles follows it.
     fun decisionOf(key: String): Boolean? =
         if (key == PluginPermissions.READ_FILES && decisions[PluginPermissions.WRITE_FILES] == true) true else decisions[key]
@@ -88,32 +93,70 @@ fun InstallReviewDialog(review: InstallReview, onAnswer: (Map<String, Boolean>?)
         title = { Text("Install ${review.appName}?") },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                Text("It wants to:", style = MaterialTheme.typography.bodyMedium)
-                review.toReview.forEach { key ->
-                    PermissionRow(key, defined) {
-                        val decision = decisionOf(key)
-                        when {
-                            decision == null -> UndecidedChoice { decisions[key] = it }
-                            decision != decisions[key] -> Switch(checked = true, onCheckedChange = {}, enabled = false)
-                            else -> Switch(checked = decision, onCheckedChange = { decisions[key] = it })
+                if (review.toReview.isNotEmpty()) {
+                    Text("It wants to:", style = MaterialTheme.typography.bodyMedium)
+                    review.toReview.byKind(defined).forEach { key ->
+                        PermissionRow(key, defined) {
+                            val decision = decisionOf(key)
+                            DecisionChoice(decision, enabled = decision == decisions[key]) { decisions[key] = it }
+                        }
+                    }
+                    // At the end of the list, so it's only reached after scrolling past every permission.
+                    TextButton(
+                        onClick = { review.toReview.forEach { decisions[it] = true } },
+                        modifier = Modifier.align(Alignment.End),
+                    ) { Text("Allow all") }
+                }
+                if (review.automatic.isNotEmpty()) {
+                    var expanded by remember(review) { mutableStateOf(false) }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).clickable { expanded = !expanded },
+                    ) {
+                        Text(
+                            "Allowed automatically (${review.automatic.size})",
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Icon(
+                            if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                            contentDescription = if (expanded) "Collapse" else "Expand",
+                        )
+                    }
+                    if (expanded) {
+                        Text(
+                            automaticExplanation(review.appName, policy),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                        review.automatic.byKind(defined).forEach { key ->
+                            PermissionRow(key, defined) {
+                                DecisionChoice(decisions[key], enabled = true) { decisions[key] = it }
+                            }
                         }
                     }
                 }
-                // At the end of the list, so it's only reached after scrolling past every permission.
-                TextButton(
-                    onClick = { review.toReview.forEach { decisions[it] = true } },
-                    modifier = Modifier.align(Alignment.End),
-                ) { Text("Allow all") }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onAnswer(review.toReview.associateWith { decisionOf(it)!! }) },
+                onClick = {
+                    val automatic = review.automatic.mapNotNull { key -> decisions[key]?.let { key to it } }
+                    onAnswer(review.toReview.associateWith { decisionOf(it)!! } + automatic)
+                },
                 enabled = review.toReview.all { decisionOf(it) != null },
             ) { Text("Install") }
         },
         dismissButton = { TextButton(onClick = { onAnswer(null) }) { Text("Cancel") } },
     )
+}
+
+private fun automaticExplanation(appName: String, policy: PermissionPolicy) = when (policy) {
+    PermissionPolicy.NeverAsk ->
+        "You don't need to do anything here: your settings allow these. Deny any you'd rather $appName didn't use."
+    else ->
+        "You don't need to do anything here. $appName can't send data off your phone, so these are allowed under your current settings. Deny any you'd rather it didn't use."
 }
 
 @Composable
@@ -139,30 +182,52 @@ private fun PermissionRow(
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (permissionKind(key, defined) == PermissionKind.Exfiltrating) ExfiltratingInfo()
+        when (permissionKind(key, defined)) {
+            PermissionKind.Exfiltrating ->
+                KindInfo(Icons.Outlined.Info, "Sends data off your phone", exfiltratingExplanation(key))
+            PermissionKind.Dangerous ->
+                KindInfo(Icons.Filled.Warning, "Sensitive", "Sensitive permissions always need your approval, whatever your settings.")
+            else -> {}
+        }
         control()
     }
 }
 
 @Composable
-private fun ExfiltratingInfo() {
+private fun KindInfo(icon: ImageVector, title: String, explanation: String) {
     var explaining by remember { mutableStateOf(false) }
     Icon(
-        Icons.Outlined.Info,
-        contentDescription = "Can send data off your phone",
+        icon,
+        contentDescription = title,
         tint = MaterialTheme.colorScheme.error,
         modifier = Modifier.padding(end = 8.dp).size(18.dp).clickable { explaining = true },
     )
     if (explaining) {
         AlertDialog(
             onDismissRequest = { explaining = false },
-            title = { Text("Sends data off your phone") },
-            text = {
-                Text("This allows the app to send data off your device - limited to the listed location")
-            },
+            title = { Text(title) },
+            text = { Text(explanation) },
             confirmButton = { TextButton(onClick = { explaining = false }) { Text("OK") } },
         )
     }
+}
+
+private fun kindRank(key: String, defined: Map<String, PluginDefinedPermission>) = when (permissionKind(key, defined)) {
+    PermissionKind.Dangerous -> 0
+    PermissionKind.Exfiltrating -> 1
+    PermissionKind.Write -> 2
+    PermissionKind.Read -> 3
+    null -> 4
+}
+
+private fun List<String>.byKind(defined: Map<String, PluginDefinedPermission>) = sortedBy { kindRank(it, defined) }
+
+private fun exfiltratingExplanation(key: String) = when (permissionOf(key)) {
+    PluginPermissions.GLOBAL_INTERNET ->
+        "Allow this app to connect to any site on the internet, because it was built before the permissions system was created."
+    PluginPermissions.LEGACY_PEBBLEKIT, PluginPermissions.PEBBLEKIT_2 ->
+        "This allows the app to send data to its phone app, which can send it anywhere."
+    else -> "This allows the app to send data off your device - limited to the specified location"
 }
 
 private fun permissionIcon(key: String, defined: Map<String, PluginDefinedPermission>): ImageVector = when (permissionOf(key)) {
@@ -191,7 +256,7 @@ fun permissionLabel(key: String, defined: Map<String, PluginDefinedPermission>):
     PluginPermissions.GLOBAL_INTERNET -> "Connect to any website or local device"
     PluginPermissions.LOCATION -> "Use your location"
     PluginPermissions.WATCH_MICROPHONE -> "Use your watch microphone"
-    PluginPermissions.NOTIFICATIONS -> "Read your notifications"
+    PluginPermissions.NOTIFICATIONS -> packageOf(key)?.let { "Read your notifications from $it" } ?: "Read all your notifications"
     PluginPermissions.CALENDAR -> "Read your calendar"
     PluginPermissions.CONTACTS -> "Read your contacts"
     PluginPermissions.TIMELINE -> "Add pins to your timeline"
@@ -269,14 +334,15 @@ fun AppPermissionsSection(appUuid: Uuid) {
     val config by libPebble.config.collectAsState()
     if (!config.watchConfig.enablePlugins) return
     val defined = rememberPluginPermissions()
-    val statuses by remember(appUuid) {
-        libPebble.appPermissionStatuses(appUuid).map { all -> all.sortedBy { it.status != PermissionStatus.Waiting } }
-    }.collectAsState(emptyList())
+    // Null while loading.
+    val loaded by remember(appUuid) {
+        libPebble.appPermissionStatuses(appUuid).map { all -> LoadedStatuses(all?.sortedBy { it.status != PermissionStatus.Waiting }) }
+    }.collectAsState(null)
     // Leaving the page stops asking about anything still waiting.
-    val current by rememberUpdatedState(statuses)
+    val current by rememberUpdatedState(loaded?.statuses)
     DisposableEffect(appUuid) {
         onDispose {
-            val unanswered = current.filter { it.status == PermissionStatus.Waiting }.map { it.permission }
+            val unanswered = current.orEmpty().filter { it.status == PermissionStatus.Waiting }.map { it.permission }
             if (unanswered.isNotEmpty()) {
                 GlobalScope.launch { libPebble.markPermissionRequestsSeen(appUuid, unanswered) }
             }
@@ -286,7 +352,19 @@ fun AppPermissionsSection(appUuid: Uuid) {
         libPebble.getLockerApp(appUuid).map { it?.properties?.legacy == true }
     }.collectAsState(false)
     var expanded by remember(appUuid) { mutableStateOf(false) }
-    if (statuses.isEmpty()) return
+    val statuses = (loaded ?: return).statuses
+    if (statuses.isNullOrEmpty()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text("Permissions", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp))
+            Text(
+                if (statuses == null) "Shown once the app has been installed on your watch."
+                else "This app doesn't use any permissions.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
+    }
     val scope = rememberCoroutineScope()
     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         if (legacy) {
@@ -317,7 +395,7 @@ fun AppPermissionsSection(appUuid: Uuid) {
         } else {
             Text("Permissions", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(bottom = 4.dp))
         }
-        statuses.forEach { row ->
+        statuses.sortedBy { kindRank(it.permission, defined) }.forEach { row ->
             val lastUsedAtMs = row.lastUsedAtMs
             val used = if (lastUsedAtMs == null) "Not used yet" else "Used ${relativeTime(Instant.fromEpochMilliseconds(lastUsedAtMs))}"
             val note = if (row.status == PermissionStatus.AllowedAutomatically) "Allowed automatically · $used" else used
@@ -338,16 +416,24 @@ fun AppPermissionsSection(appUuid: Uuid) {
             val bareDenied = fileScopeOf(row.permission) != null && statuses.deniesBareFilePermission(permissionOf(row.permission))
             PermissionRow(row.permission, defined, note) {
                 when {
-                    impliedByWrite -> Switch(checked = true, onCheckedChange = {}, enabled = false)
-                    bareDenied -> Switch(checked = false, onCheckedChange = {}, enabled = false)
-                    row.status == PermissionStatus.Granted || row.status == PermissionStatus.Denied ->
-                        Switch(checked = row.status == PermissionStatus.Granted, onCheckedChange = decide)
-                    else -> UndecidedChoice(decide)
+                    impliedByWrite -> DecisionChoice(true, enabled = false) {}
+                    bareDenied -> DecisionChoice(false, enabled = false) {}
+                    else -> DecisionChoice(
+                        when (row.status) {
+                            PermissionStatus.Granted -> true
+                            PermissionStatus.Denied -> false
+                            else -> null
+                        },
+                        onDecide = decide,
+                    )
                 }
             }
         }
     }
 }
+
+/** [statuses] is null until the app's permissions are known. */
+private class LoadedStatuses(val statuses: List<AppPermissionStatus>?)
 
 /** Whether the bare file permission reads as denied, with `WriteFiles` standing in for a `ReadFiles` the app never declared. */
 private fun List<AppPermissionStatus>.deniesBareFilePermission(bare: String): Boolean {
@@ -357,14 +443,22 @@ private fun List<AppPermissionStatus>.deniesBareFilePermission(bare: String): Bo
         any { it.permission == PluginPermissions.WRITE_FILES && it.status == PermissionStatus.Denied }
 }
 
+/** Nothing is selected while [granted] is null. */
 @Composable
-private fun UndecidedChoice(onDecide: (Boolean) -> Unit) {
-    Row {
-        OutlinedIconButton(onClick = { onDecide(false) }) {
-            Icon(Icons.Filled.Close, contentDescription = "Deny", tint = MaterialTheme.colorScheme.error)
-        }
-        OutlinedIconButton(onClick = { onDecide(true) }) {
-            Icon(Icons.Filled.Check, contentDescription = "Allow", tint = MaterialTheme.colorScheme.primary)
+private fun DecisionChoice(granted: Boolean?, enabled: Boolean = true, onDecide: (Boolean) -> Unit) {
+    val options = listOf(Triple(false, Icons.Filled.Close, "Deny"), Triple(true, Icons.Filled.Check, "Allow"))
+    SingleChoiceSegmentedButtonRow {
+        options.forEachIndexed { index, (value, icon, label) ->
+            SegmentedButton(
+                selected = granted == value,
+                onClick = { onDecide(value) },
+                shape = SegmentedButtonDefaults.itemShape(index, options.size),
+                enabled = enabled,
+                icon = {},
+                modifier = Modifier.width(48.dp),
+            ) {
+                Icon(icon, contentDescription = label, modifier = Modifier.size(18.dp))
+            }
         }
     }
 }
@@ -387,7 +481,7 @@ fun StorePermissionsSection(requested: RequestedPermissions) {
             }
             Text(text, style = MaterialTheme.typography.bodyMedium)
         } else {
-            keys.forEach { PermissionRow(it, defined) {} }
+            keys.byKind(defined).forEach { PermissionRow(it, defined) {} }
         }
     }
 }

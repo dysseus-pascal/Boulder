@@ -6,17 +6,17 @@
 # "core" auf Cores Commit setzen (den zweiten Elternteil des Merges) und neu messen.
 # binaer: ersetzte Datei ohne Zeilen; geloescht: von Boulder entfernt; eigen: Boulders Dokument.
 
-core 721670d282538415985474e36ab8aa65b32ae04d
+core 685529c8f2fed09afc93998c2f6349d72766bd86
 
 .github/dependabot.yml geloescht
 .github/workflows/build.yml eigen
 .github/workflows/release.yml geloescht
-.gitignore 8
+.gitignore 7
 CLAUDE.md eigen
 CONTRIBUTING.md eigen
 LICENSE-COMMERCIAL geloescht
 README.md eigen
-androidApp/build.gradle.kts 196
+androidApp/build.gradle.kts 199
 androidApp/src/main/AndroidManifest.xml 8
 androidApp/src/main/res/values/strings.xml 2
 androidApp/src/main/res/xml/backup_rules.xml 10
@@ -89,6 +89,7 @@ pebble/src/commonMain/kotlin/coredevices/pebble/ui/HealthCharts.kt geloescht
 pebble/src/commonMain/kotlin/coredevices/pebble/ui/HealthScreen.kt geloescht
 pebble/src/commonMain/kotlin/coredevices/pebble/ui/HealthStatsDialog.kt geloescht
 pebble/src/commonMain/kotlin/coredevices/pebble/ui/HealthViewModel.kt geloescht
+pebble/src/commonMain/kotlin/coredevices/pebble/ui/LanguagePackDialogs.kt 4
 pebble/src/commonMain/kotlin/coredevices/pebble/ui/LockerAppScreen.kt 6
 pebble/src/commonMain/kotlin/coredevices/pebble/ui/LockerScreen.kt 3
 pebble/src/commonMain/kotlin/coredevices/pebble/ui/LockerUtil.kt 4
@@ -96,8 +97,8 @@ pebble/src/commonMain/kotlin/coredevices/pebble/ui/PebbleRoutes.kt 121
 pebble/src/commonMain/kotlin/coredevices/pebble/ui/Vibrations.kt 4
 pebble/src/commonMain/kotlin/coredevices/pebble/ui/WatchHomeScreen.kt 64
 pebble/src/commonMain/kotlin/coredevices/pebble/ui/WatchPrefsScreen.kt 23
-pebble/src/commonMain/kotlin/coredevices/pebble/ui/WatchSettingsScreen.kt 217
-pebble/src/commonMain/kotlin/coredevices/pebble/ui/WatchesScreen.kt 133
+pebble/src/commonMain/kotlin/coredevices/pebble/ui/WatchSettingsScreen.kt 221
+pebble/src/commonMain/kotlin/coredevices/pebble/ui/WatchesScreen.kt 128
 pebble/src/commonMain/kotlin/coredevices/pebble/watchModule.kt 30
 pebble/src/commonTest/kotlin/coredevices/pebble/health/PlatformHealthSyncTest.kt 11
 pebble/src/commonTest/kotlin/coredevices/pebble/ui/HealthUtilsTest.kt geloescht

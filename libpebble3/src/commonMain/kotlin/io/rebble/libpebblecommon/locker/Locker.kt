@@ -38,6 +38,7 @@ import io.rebble.libpebblecommon.plugin.files.PluginFileAccess
 import io.rebble.libpebblecommon.storage.pluginSecureStorage
 import io.rebble.libpebblecommon.permissions.InstallReview
 import io.rebble.libpebblecommon.permissions.NetworkGate
+import io.rebble.libpebblecommon.permissions.PermissionDecisionRecord
 import io.rebble.libpebblecommon.permissions.RequestedPermissions
 import io.rebble.libpebblecommon.permissions.isLegacy
 import io.rebble.libpebblecommon.permissions.requestedPermissions
@@ -47,18 +48,22 @@ import io.rebble.libpebblecommon.plugin.PluginNetworkVerdict
 import io.rebble.libpebblecommon.plugin.PluginManifest
 import io.rebble.libpebblecommon.web.LockerModelWrapper
 import io.rebble.libpebblecommon.web.WebSyncManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -120,6 +125,7 @@ class Locker(
     private val timelinePinDao = database.timelinePinDao()
     private val timelineReminderDao = database.timelineReminderDao()
     private val appPermissionDao = database.lockerAppPermissionDao()
+    private val watchPrefDao = database.watchPrefDao()
 
     companion object {
         private val logger = Logger.withTag("Locker")
@@ -178,7 +184,13 @@ class Locker(
         return lockerEntryDao.getEntryFlow(id).map { it?.wrap(config) }
     }
 
-    override fun appPermissionStatuses(id: Uuid): Flow<List<AppPermissionStatus>> = permissions.statuses(id)
+    override fun appPermissionStatuses(id: Uuid): Flow<List<AppPermissionStatus>?> =
+        combine(permissions.statuses(id), lockerEntryDao.getEntryFlow(id)) { statuses, entry ->
+            statuses.takeIf {
+                it.isNotEmpty() || entry == null || entry.systemApp ||
+                    lockerPBWCache.cachedPBWFileForApp(id, entry.version) != null
+            }
+        }.flowOn(Dispatchers.IO)
 
     private suspend fun pbwFor(uuid: Uuid): PbwApp? {
         val version = lockerEntryDao.getEntryFlow(uuid).first()?.version ?: return null
@@ -207,6 +219,15 @@ class Locker(
         // A bundled page still needs its HTML from the pbw, delivered as a data URL.
         return pbwFor(uuid)?.getTextFile(page)?.let { "data:text/html;charset=utf-8,${it.encodeURLPathPart()}" }
     }
+
+    override suspend fun mayLoadInConfigPage(uuid: Uuid, url: String): Boolean {
+        val title = lockerEntryDao.getEntry(uuid)?.title ?: return false
+        val verdict = NetworkGate(permissions, title, uuid).check(url, wait = false)
+        if (verdict is PluginNetworkVerdict.Denied) logger.w { "Blocked $title's config page loading $url: ${verdict.reason}" }
+        return verdict is PluginNetworkVerdict.Allowed
+    }
+
+    override suspend fun configPageDomains(uuid: Uuid): List<String>? = permissions.grantedDomains(uuid)
 
     override suspend fun getAppFile(uuid: Uuid, name: String): String? = pbwFor(uuid)?.getTextFile(name)
 
@@ -281,14 +302,16 @@ class Locker(
     }
 
     override suspend fun reviewInstall(appUuid: Uuid, appName: String, requested: RequestedPermissions): InstallReview? {
+        if (!config.value.enablePlugins) return null
         val toReview = permissions.toReview(appUuid, requested)
-        return if (toReview.isEmpty()) null else InstallReview(appUuid, appName, toReview)
+        val automatic = permissions.automaticallyGranted(appUuid, requested)
+        return if (toReview.isEmpty() && automatic.isEmpty()) null else InstallReview(appUuid, appName, toReview, automatic)
     }
 
     internal suspend fun recordDeclaredPermissions(appId: Uuid, pbwPath: Path) {
         val entry = lockerEntryDao.getEntry(appId)
         val pbw = PbwApp(pbwPath)
-        permissions.recordRequested(appId, pbw.info.requestedPermissions(pbw.hasPKJS, companionsOf = entry).all)
+        permissions.recordRequested(appId, pbw.info.requestedPermissions(pbw.hasPKJS, companionsOf = entry))
     }
 
     /** For apps installed before declarations were recorded, whose pbws won't be fetched again. */
@@ -311,17 +334,35 @@ class Locker(
         permissions.setDecisions(Uuid.parse(app.uuid), granted)
     }
 
-    override suspend fun addAppsToLocker(apps: List<io.rebble.libpebblecommon.web.LockerEntry>) {
+    override suspend fun addAppsToLocker(
+        apps: List<io.rebble.libpebblecommon.web.LockerEntry>,
+        permissions: Map<Uuid, Map<String, PermissionDecisionRecord>>,
+    ) {
+        // Before the apps exist, so none starts without the answers the user already gave.
+        mergeDecisions(permissions)
         lockerEntryDao.insertOrReplaceAndOrder(apps.map { app ->
             val orderIndex = orderIndexForInsert(AppType.fromString(app.type) ?: AppType.Watchface)
             app.asEntity(orderIndex)
         }, config.value.lockerSyncLimitV2)
     }
 
+    override suspend fun clearSideloaded(id: Uuid) {
+        val entry = lockerEntryDao.getEntry(id) ?: return
+        if (!entry.sideloaded) return
+        // The store copy can share the sideloaded pbw's version, which would keep the cached one.
+        lockerPBWCache.deleteApp(id)
+        lockerEntryDao.insertOrReplace(entry.copy(sideloaded = false))
+    }
+
     suspend fun getApp(uuid: Uuid): LockerEntry? = lockerEntryDao.getEntry(uuid)
+
+    private suspend fun mergeDecisions(byApp: Map<Uuid, Map<String, PermissionDecisionRecord>>) {
+        byApp.forEach { (uuid, decisions) -> permissions.mergePermissionDecisions(uuid, decisions) }
+    }
 
     suspend fun update(locker: LockerModelWrapper) {
         logger.d("update: ${locker.locker.applications.size}")
+        mergeDecisions(locker.permissions)
         val existingApps = lockerEntryDao.getAll().associateBy { it.id }.toMutableMap()
         val toInsert = locker.locker.applications.mapNotNull { new ->
             val newEntity = new.asEntity(orderIndexForInsert(AppType.fromString(new.type) ?: AppType.Watchface))
@@ -393,7 +434,8 @@ class Locker(
         pbwApp.source().buffered().use {
             lockerPBWCache.addPBWFileForApp(lockerEntry.id, pbwApp.info.versionLabel, it)
         }
-        val tasks = if (loadOnWatch) {
+        // A plugin-only pbw never reaches the watch.
+        val tasks = if (loadOnWatch && type != AppType.Plugin) {
             watchManager.watches.value.filterIsInstance<ConnectedPebbleDevice>().map {
                 libPebbleCoroutineScope.async {
                     val entryStatus = lockerEntryDao.existsOnWatch(
@@ -411,7 +453,7 @@ class Locker(
         }
         lockerEntryDao.insertOrReplaceAndOrder(lockerEntry, config.value.lockerSyncLimitV2)
         // After the insert: requests are only shown for installed apps.
-        permissions.recordRequested(lockerEntry.id, pbwApp.requestedPermissions().all)
+        permissions.recordRequested(lockerEntry.id, pbwApp.requestedPermissions())
         permissions.setDecisions(lockerEntry.id, granted)
         performCacheCleanup()
         return try {
@@ -481,6 +523,12 @@ class Locker(
                 backfillDeclaredPermissions()
                 settings[PREF_KEY_HAVE_BACKFILLED_DECLARED_PERMISSIONS] = true
             }
+        }
+        coroutineScope.launch {
+            watchPrefDao.getAllFlow()
+                .map { prefs -> prefs.filter { it.id.startsWith("ql") }.map { it.value } }
+                .distinctUntilChanged()
+                .collect { lockerEntryDao.updateSync(config.value.lockerSyncLimitV2) }
         }
         coroutineScope.launch {
             libPebble.watches.map { watches -> watches.filterIsInstance<ConnectedPebbleDevice>().firstOrNull() }
@@ -572,6 +620,7 @@ fun LockerEntry.wrap(config: WatchConfigFlow): LockerWrapper? {
                     watchType = platform,
                     screenshotImageUrl = it.screenshotImageUrl,
                     listImageUrl = it.listImageUrl,
+                    listImageTintable = it.listImageTintable,
                     iconImageUrl = it.iconImageUrl,
                     description = it.description,
                 )
@@ -628,6 +677,7 @@ fun io.rebble.libpebblecommon.web.LockerEntry.asEntity(orderIndex: Int): LockerE
                 name = platform.name,
                 screenshotImageUrl = platform.images.screenshot,
                 listImageUrl = platform.images.list,
+                listImageTintable = iconTintable,
                 iconImageUrl = platform.images.icon,
                 pbwIconResourceId = pbw?.iconResourceId ?: 0,
                 description = platform.description,

@@ -75,6 +75,7 @@ import io.rebble.libpebblecommon.connection.qemu.QemuTransport
 import io.rebble.libpebblecommon.connection.devconnection.CloudpebbleProxyProtocolVersion
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionCloudpebbleProxy
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionManager
+import io.rebble.libpebblecommon.connection.devconnection.DevConnectionResumer
 import io.rebble.libpebblecommon.connection.devconnection.DevConnectionServer
 import io.rebble.libpebblecommon.connection.endpointmanager.AppFetchProvider
 import io.rebble.libpebblecommon.connection.endpointmanager.AppOrderManager
@@ -130,8 +131,8 @@ import io.rebble.libpebblecommon.locker.getLockerPBWCacheDirectory
 import io.rebble.libpebblecommon.metadata.WatchColor
 import io.rebble.libpebblecommon.notification.ContactsApi
 import io.rebble.libpebblecommon.notification.NotificationApi
+import io.rebble.libpebblecommon.notification.RespectDoNotDisturbMigrator
 import io.rebble.libpebblecommon.packets.ProtocolCapsFlag
-import io.rebble.libpebblecommon.plugin.BundledAppInstaller
 import io.rebble.libpebblecommon.plugin.JsPluginFactory
 import io.rebble.libpebblecommon.plugin.CalendarPlugin
 import io.rebble.libpebblecommon.plugin.FindMyPhonePlugin
@@ -147,6 +148,7 @@ import io.rebble.libpebblecommon.plugin.PluginOAuthApi
 import io.rebble.libpebblecommon.plugin.PluginClient
 import io.rebble.libpebblecommon.plugin.PluginLogs
 import io.rebble.libpebblecommon.plugin.PluginRegistry
+import io.rebble.libpebblecommon.plugin.PluginSources
 import io.rebble.libpebblecommon.plugin.files.PluginFileAccess
 import io.rebble.libpebblecommon.plugin.files.PluginFileSystem
 import io.rebble.libpebblecommon.plugin.files.platformPluginFileSystem
@@ -401,6 +403,7 @@ fun initKoin(
                 single { get<Database>().weatherAppDao() }
                 single { get<Database>().appPrefsDao() }
                 singleOf(::LegacyBtClassicMigrator)
+                singleOf(::RespectDoNotDisturbMigrator)
                 singleOf(::WatchManager) binds arrayOf(WatchConnector::class, Watches::class)
                 single { bleScanner(get()) }
                 singleOf(::RealScanning) bind Scanning::class
@@ -422,8 +425,9 @@ fun initKoin(
                         get(),
                         get(),
                         get(),
-                        get(),
                         get(), // lockerPluginLoader
+                        get(),
+                        get(),
                         get(),
                         get(),
                         get(),
@@ -462,6 +466,7 @@ fun initKoin(
                 singleOf(::RealBluetoothStateProvider) bind BluetoothStateProvider::class
                 singleOf(::RealTimeProvider) bind TimeProvider::class
                 singleOf(::DevConnectionServer)
+                singleOf(::DevConnectionResumer)
                 singleOf(::RealBlobDbDatabaseManager) bind BlobDbDatabaseManager::class
                 single {
                     DevConnectionCloudpebbleProxy(
@@ -502,8 +507,17 @@ fun initKoin(
                 single<PluginFileSystem> { platformPluginFileSystem(get(), get()) }
                 singleOf(::PluginFileAccess)
                 singleOf(::PluginLogs)
-                single { JsPluginFactory(get(), get(), get(), get(), get(), get(), get(), get(), get(), pluginOAuthApi) }
-                singleOf(::BundledAppInstaller)
+                single {
+                    PluginSources(
+                        get(),
+                        { get<AppPermissions>().subjectOf(it) },
+                        { app, permission -> get<AppPermissions>().callerKeys(app, permission) },
+                        { caller, plugin, request ->
+                            get<PluginClient>().observe(caller, plugin, request.category, request.item, request.properties, request.iconPixelSize)
+                        },
+                    )
+                }
+                single { JsPluginFactory(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), pluginOAuthApi) }
                 singleOf(::LockerPluginLoader)
                 singleOf(::FirmwareDownloader)
                 singleOf(::InterruptedFirmwareUpdates)
@@ -645,6 +659,7 @@ fun initKoin(
                             protocolHandler = get(),
                             companionAppLifecycleManager = get(),
                             pluginLogs = get(),
+                            resumer = get(),
                             scope = get(),
                         )
                     }

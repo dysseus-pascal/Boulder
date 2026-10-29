@@ -28,6 +28,7 @@ import coredevices.ring.agent.builtin_servlets.calendar.TargetCalendarSeeder
 import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderFeedItems
 import coredevices.ring.agent.builtin_servlets.reminders.BuiltInReminderIntegration
 import coredevices.pebble.ui.IndexTabBadge
+import coredevices.ring.agent.integrations.providers.DefaultDestinationPrompter
 import coredevices.ring.agent.integrations.providers.IntegrationProviderRepository
 import coredevices.ring.agent.integrations.providers.LegacyDestinations
 import coredevices.ring.agent.integrations.providers.pluginsEnabled
@@ -45,6 +46,7 @@ import coredevices.ring.database.Preferences
 import coredevices.ring.database.PreferencesImpl
 import coredevices.ring.database.room.Migrate33To34
 import coredevices.ring.database.room.Migrate36To37
+import coredevices.ring.database.room.Migrate43To44
 import coredevices.ring.database.room.RingDatabase
 import coredevices.ring.database.room.SeedDefaultPluginGrants
 import coredevices.ring.database.room.repository.McpServerRepository
@@ -55,6 +57,7 @@ import coredevices.ring.database.room.repository.ListRepository
 import coredevices.ring.database.room.repository.RecordingRepository
 import coredevices.ring.reminders.ReminderCompleter
 import coredevices.ring.reminders.ReminderDeepLinkResolver
+import coredevices.ring.reminders.ReminderReconciler
 import coredevices.ring.service.indexfeed.DefaultListsBootstrap
 import coredevices.ring.service.indexfeed.IndexFeedSyncService
 import coredevices.ring.service.indexfeed.ItemFactory
@@ -133,6 +136,7 @@ val experimentalModule = module {
             .addMigrations(
                 Migrate33To34(isAndroid = get<Platform>().isAndroid),
                 Migrate36To37(isAndroid = get<Platform>().isAndroid),
+                Migrate43To44(),
             )
             .addCallback(SeedDefaultPluginGrants)
             .fallbackToDestructiveMigrationOnDowngrade(true)
@@ -201,9 +205,9 @@ val experimentalModule = module {
         val builtInReminders = get<BuiltInReminderIntegration>()
         ItemRepository(
             get(),
-            cancelReminder = { builtInReminders.cancelReminder(it) },
-            rescheduleReminder = { id, recordingId, newTime ->
-                builtInReminders.rescheduleReminder(id, recordingId, newTime)
+            cancelReminder = { itemId -> builtInReminders.cancelReminder(itemId) },
+            rescheduleReminder = { itemId, message, newTime, notifyBefore ->
+                builtInReminders.syncReminder(itemId, message, newTime, notifyBefore)
             },
         )
     }
@@ -213,6 +217,7 @@ val experimentalModule = module {
     singleOf(::ItemFactory)
     singleOf(::ReminderDeepLinkResolver)
     singleOf(::ReminderCompleter)
+    singleOf(::ReminderReconciler)
     singleOf(::PreferencesImpl) binds arrayOf(Preferences::class, BasePreferences::class)
     singleOf(::RingTraceSession)
     singleOf(::TraceSessionExporter)
@@ -290,6 +295,7 @@ val experimentalModule = module {
     singleOf(::BuiltInReminderFeedItems)
     singleOf(::DelegatedIntegrationItems)
     single { IntegrationProviderRepository(get(), get(), get(), get()) }
+    single { DefaultDestinationPrompter(get(), get()) }
     single { LegacyDestinations(get(), get(), get<LibPebble>().pluginsEnabled()) } bind IndexTabBadge::class
     singleOf(::ShortcutActionHandler)
     singleOf(::ShareActionHandler)

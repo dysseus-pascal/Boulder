@@ -44,11 +44,12 @@ die Regeln von Gravel, mit diesen Abweichungen:
   `AutoMigration(from = 49, to = 50)` wird `from = UPSTREAM_VERSATZ + 49, to =
   UPSTREAM_VERSATZ + 50`. `SchemaWaechterTest` vergleicht mit Upstream 50 (und mit 45, dem
   Stand von 0.50 bis 0.53).
-- Core-Stand: 1.16.0.1 (Merge `d7292d166`). Cores Fassungen kommen per `git merge` ihres Tags
+- Core-Stand: 1.16.0.4 (Merge `7d5c9cd66`). Cores Fassungen kommen per `git merge` ihres Tags
   vom Remote `core` (`coredevices/mobileapp`, nie dorthin pushen). Cores Geschichte steckt seit
-  dem Neuanlegen des Repos mit anderen Kennungen darin; seit `d7292d166` ist Cores Commit
-  `721670d28` die Merge-Basis, ein Merge geht wieder direkt. Danach in `tools/boulder/vorlage.txt`
-  die Zeile `core` auf Cores Commit setzen (den zweiten Elternteil des Merges) und neu messen.
+  dem Neuanlegen des Repos mit anderen Kennungen darin; seit `d7292d166` (1.16.0.1) geht ein Merge
+  wieder direkt, die Merge-Basis ist heute Cores Commit `685529c8f`. Danach in
+  `tools/boulder/vorlage.txt` die Zeile `core` auf Cores Commit setzen (den zweiten Elternteil des
+  Merges) und neu messen.
 - Core nimmt jede Firmware mit Suffix fuer einen Eigenbau (kein Update-Hinweis, kein
   automatisches Update); Boulders Fassungen heissen immer `vX.Y.Z-bN`, darum fragt
   `FirmwareUpdateUiTracker` ueber `istEigenbau()` (`Eigenbau.kt`). Neue Suffix-Pruefungen von Core
